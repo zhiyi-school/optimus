@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
-import { useAuth } from "@/auth/AuthProvider";
+import { useAuth } from "@/auth/useAuth";
 import { PageHeader, LoadingState, ErrorState } from "@/components/common";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatusBadge, TicketBadge, PlatformBadge } from "@/components/data-display";

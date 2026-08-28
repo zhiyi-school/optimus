@@ -1,13 +1,13 @@
 # Automation API Integration
 
-The dashboard talks to the automation backend's existing FastAPI endpoints
+The dashboard talks to the automation backend's FastAPI endpoints
 (`mobile_playbook/api/app.py`, documented in that project's `docs/api.md`):
 `GET /platforms/{platform}/risks` (test catalogue), `GET /config/{platform}/apps`
 (configured app roster, used to populate the app multi-select when starting a
 run), `POST /runs` / `GET /runs/{id}` (start/poll a run), `GET /reports` /
 `GET /reports/{run_timestamp}/summary` (results), and
-`GET /reports/{run_timestamp}/files/{path}` (evidence files). No changes
-were made to that backend.
+`GET /reports/{run_timestamp}/files/{path}` / `GET /reports/{run_timestamp}/evidence-file`
+(evidence files).
 
 ## Starting a run
 
@@ -62,7 +62,7 @@ is registered against the `intake_ipa` artifact source with **no identity at
 all**:
 
 ```json
-{ "name": "CPF Mobile", "version": "6.28.1",
+{ "name": "Example App", "version": "1.2.3",
   "artifact": { "source": "intake_ipa" },
   "risks": { "ios-feature-01-risk-01": { "enabled": true } } }
 ```
@@ -250,26 +250,4 @@ backend-side configuration.
 
 ## Known gaps / recommended backend additions
 
-1. **Verdict not in the summary endpoint.** The authoritative 3-way verdict
-   (`"At Risk"` / `"Reduced Risk"` / `"Inconclusive"`) is not included in
-   `dashboard_results.json` — it only exists inside each risk's own
-   `report.json`
-   (`<run_timestamp>/<platform>/<app_id>/<risk_id>/<test_case>/report.json`).
-   The dashboard fetches that file per result row to read `verdict`
-   (`src/api/automation-services.ts#getResultDetail`,
-   `src/data/sync.ts#mapVerdictToFindingStatus`). This works today, but
-   means the sync does one extra HTTP request per test result. Adding
-   `verdict` directly to `dashboard_results.json` would remove that
-   overhead.
-2. **No cross-run test history endpoint.** There is no endpoint to fetch
-   "history of one test across runs" — the dashboard fans out across the
-   most recent 20 `reports/` entries and filters client-side
-   (`src/hooks/queries.ts#useTestRunHistory`). A dedicated
-   `GET /apps/{app_id}/risks/{risk_id}/history` endpoint would remove that
-   fan-out.
-3. **Evidence outside `reports/`.** Evidence paths recorded under `work/`
-   (as opposed to inside a `reports/<run_timestamp>/` directory) are not
-   retrievable through the current `/reports/{run_timestamp}/files/{path}`
-   endpoint at all.
-4. **No authentication on the automation API.** Fine for local/trusted-network
-   use, but anything beyond that needs a reverse proxy or backend change.
+1. **No authentication on the automation API.** Fine for local/trusted-network use, but anything beyond that needs a reverse proxy or backend change.

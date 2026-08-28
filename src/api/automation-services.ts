@@ -12,7 +12,6 @@ import type {
   StartRunRequest,
 } from "@/api/automation-types";
 
-/** The backend's standard per-platform config file layout — never user-entered. */
 export function defaultConfigPath(platform: AutomationPlatform): string {
   return `configs/${platform}.yaml`;
 }
@@ -36,8 +35,6 @@ export const configApi = {
   },
 };
 
-// Read structurally rather than via `instanceof`: under HMR the error class can
-// be loaded twice, and an identity check would then silently misclassify.
 interface ApiErrorShape {
   status?: number;
   detail?: unknown;
@@ -50,7 +47,6 @@ function asApiError(err: unknown): ApiErrorShape | null {
   return "status" in candidate || "detail" in candidate ? candidate : null;
 }
 
-/** Config-editor validation failures arrive as `detail: [...]`, which the interceptor can't flatten. */
 export function describeAutomationError(err: unknown): string {
   const apiError = asApiError(err);
   if (apiError) {
@@ -63,14 +59,12 @@ export function describeAutomationError(err: unknown): string {
   return err instanceof Error ? err.message : "Automation API request failed.";
 }
 
-/** The backend's id for an app that's already in its config, from a 409. */
 export function conflictingAppId(err: unknown): string | null {
   const apiError = asApiError(err);
   if (apiError?.status !== 409) return null;
   return (apiError.detail as { app_id?: string } | null)?.app_id ?? null;
 }
 
-/** Unreachable or endpoint missing — as opposed to a real 4xx rejection, which is surfaced. */
 export function isBackendUnavailable(err: unknown): boolean {
   const apiError = asApiError(err);
   if (!apiError) return false;
@@ -78,9 +72,7 @@ export function isBackendUnavailable(err: unknown): boolean {
   return status === undefined || status === 404 || status === 405 || status === 501;
 }
 
-/** See docs/AUTOMATION_API.md#app-provisioning. */
 export const provisioningApi = {
-  /** Writes the app into configs/<platform>.yaml. Returns the backend's app_id. */
   async registerApp(
     platform: AutomationPlatform,
     body: RegisterAppRequest,
@@ -143,7 +135,6 @@ export const assessmentApi = {
     return data;
   },
 
-  /** Bare run_timestamp directory names under reports/, newest first. */
   async listReports(): Promise<string[]> {
     const { data } = await automationClient.get("/reports");
     return data;
@@ -166,9 +157,27 @@ export const assessmentApi = {
     return data;
   },
 
+  async getTestHistory(
+    appId: string,
+    riskId: string,
+    limit = 20,
+  ): Promise<AutomationResultRow[]> {
+    const { data } = await automationClient.get(
+      `/apps/${encodeURIComponent(appId)}/risks/${encodeURIComponent(riskId)}/history`,
+      { params: { limit } },
+    );
+    return data;
+  },
+
   reportFileUrl(runTimestamp: string, filePath: string): string {
     const base = automationClient.defaults.baseURL ?? "";
     return `${base}/reports/${encodeURIComponent(runTimestamp)}/files/${filePath}`;
+  },
+
+  evidenceFileUrl(runTimestamp: string, filePath: string): string {
+    const base = automationClient.defaults.baseURL ?? "";
+    const params = new URLSearchParams({ path: filePath });
+    return `${base}/reports/${encodeURIComponent(runTimestamp)}/evidence-file?${params}`;
   },
 
   eventsUrl(runId: string): string {

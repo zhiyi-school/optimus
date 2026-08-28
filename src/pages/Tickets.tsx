@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useAuth } from "@/auth/AuthProvider";
+import { useAuth } from "@/auth/useAuth";
 import { primaryRole } from "@/auth/permissions";
 import { PageHeader, FilterBar, LoadingState, ErrorState, EmptyState } from "@/components/common";
 import { Select } from "@/components/ui/input";

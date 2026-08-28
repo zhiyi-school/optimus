@@ -1006,6 +1006,9 @@ export interface DashboardMetrics {
 
 export const metricsData = {
   async getOverview(): Promise<DashboardMetrics> {
+    const { data: rpcData, error: rpcError } = await supabase.rpc("dashboard_metrics");
+    if (!rpcError && rpcData) return rpcData as DashboardMetrics;
+
     const [findingsRes, ticketsRes, appsRes, assessmentsRes] = await Promise.all([
       supabase.from("findings").select("status,severity"),
       supabase.from("tickets").select("type,status"),

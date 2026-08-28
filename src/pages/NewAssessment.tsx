@@ -64,11 +64,13 @@ export default function NewAssessment() {
   const [error, setError] = useState<string | null>(null);
   const [pendingScrollStep, setPendingScrollStep] = useState<number | null>(null);
 
-  const sectionRefs = {
-    1: useRef<HTMLDivElement>(null),
-    2: useRef<HTMLDivElement>(null),
-    3: useRef<HTMLDivElement>(null),
-  };
+  const stepOneRef = useRef<HTMLDivElement>(null);
+  const stepTwoRef = useRef<HTMLDivElement>(null);
+  const stepThreeRef = useRef<HTMLDivElement>(null);
+  const sectionRefs = useMemo(
+    () => ({ 1: stepOneRef, 2: stepTwoRef, 3: stepThreeRef }),
+    [stepOneRef, stepTwoRef, stepThreeRef],
+  );
 
   function goToStep(key: number) {
     if (key === 4) {
@@ -87,8 +89,7 @@ export default function NewAssessment() {
     if (screen !== "form" || pendingScrollStep === null) return;
     sectionRefs[pendingScrollStep as 1 | 2 | 3].current?.scrollIntoView({ behavior: "smooth", block: "start" });
     setPendingScrollStep(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [screen, pendingScrollStep]);
+  }, [screen, pendingScrollStep, sectionRefs]);
 
   function updateEmail(i: number, value: string) {
     setEmails((prev) => prev.map((e, idx) => (idx === i ? value : e)));
@@ -118,11 +119,6 @@ export default function NewAssessment() {
         queryClient.invalidateQueries({ queryKey: ["dashboardMetrics"] }),
       ]);
 
-      // Land on the new assessment itself, not the list — this is the point
-      // in the flow where there's a real wait (the environment/app has to be
-      // provisioned), and that page is what shows the setup progress. No
-      // ticket means the backend already has this app's build ready to go,
-      // so there's nothing to show here.
       navigate(`/assessments/${assessment.id}`, {
         state: ticket ? { provisioningTicket: { id: ticket.id, title: ticket.title } } : {},
       });

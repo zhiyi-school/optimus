@@ -26,7 +26,6 @@ import { UserFacingError } from "@/lib/utils";
 const RUN_POLL_INTERVAL_MS = 3000;
 const RUN_POLL_MAX_ATTEMPTS = 120;
 
-/** Lets a caller give up on watching a run without pretending to cancel it on the backend. */
 export interface RunCancelToken {
   cancelled: boolean;
 }
@@ -153,15 +152,12 @@ function provisioningTicketCopy(
   };
 }
 
-/** See docs/AUTOMATION_API.md#app-provisioning. */
 function buildRegisterAppRequest(
   input: { name: string; platform: AutomationPlatform; version?: string; identifier?: string },
   risks: RiskDefinition[],
 ): RegisterAppRequest {
   const body: RegisterAppRequest = {
     name: input.name,
-    // Every risk in scope is listed, manual-only ones included, matching the
-    // existing roster. The backend's runners skip the ones with no automation.
     risks: Object.fromEntries(risks.map((r) => [r.risk_id, { enabled: true }])),
   };
   if (input.version?.trim()) body.version = input.version.trim();
@@ -176,11 +172,6 @@ function buildRegisterAppRequest(
 }
 
 export const syncService = {
-  /**
-   * Registers a new app with the automation backend and in Supabase, with a
-   * placeholder assessment and an `app_provisioning` ticket.
-   * See docs/AUTOMATION_API.md#app-provisioning.
-   */
   async addApp(input: {
     name: string;
     platform: AutomationPlatform;
@@ -193,9 +184,6 @@ export const syncService = {
     developerContactName?: string;
     developerContactEmail?: string;
   }): Promise<{ application: Application; assessment: Assessment; ticket: Ticket | null }> {
-    // An application row with no assessment is invisible on the Assessments
-    // page, so blocking on it would be an error the user can't act on. Only a
-    // row that already has an assessment is a real duplicate.
     const existing = await applicationData.findByNameAndPlatform(input.name, input.platform);
     if (existing && (await assessmentData.findForApplication(existing.id))) {
       throw new UserFacingError(
@@ -220,11 +208,6 @@ export const syncService = {
       backendAppId = registered.id;
       backendAppFreshlyRegistered = true;
     } catch (err) {
-      // The backend app can validly exist before this assessment does — set up
-      // through the config API/YAML ahead of time, artifact and all. Reuse that
-      // registration rather than treating "already exists" as a failure. The id
-      // comes from the backend's own conflict response, so nothing here decides
-      // which config entry an app name belongs to.
       backendAppId = conflictingAppId(err);
       if (!backendAppId && (err as { status?: number } | null)?.status === 409) {
         const existingApps = await configApi.listApps(input.platform).catch(() => []);
@@ -246,11 +229,6 @@ export const syncService = {
       }
     }
 
-    // The backend already knows whether this app is actually ready to test (its IPA/APK
-    // present on disk, matched by bundle ID) — ask it rather than guessing from whether
-    // registration was fresh or reused, so a pre-provisioned app never gets a needless
-    // "go fetch the build" ticket, and a freshly-registered one only skips it if its
-    // artifact genuinely already happens to be sitting in the intake folder.
     let provisioningStatus: Application["provisioning_status"] = backendAppId ? "pending" : null;
     let needsProvisioningTicket = !!backendAppId;
     let provisioningInfo: AppProvisioning | null = null;
@@ -277,8 +255,6 @@ export const syncService = {
       developer_contact_email: input.developerContactEmail || null,
     };
 
-    // Only roll back what this call created — a reused backend app, or an
-    // application row that already existed, must survive a failure here.
     async function rollback() {
       if (backendAppId && backendAppFreshlyRegistered) {
         await provisioningApi
@@ -307,8 +283,6 @@ export const syncService = {
         completed_tests: 0,
       });
     } catch (err) {
-      // Without this the application row survives with no assessment — invisible
-      // on the Assessments page but still blocking a retry.
       if (!existing) {
         await applicationData
           .remove(application.id, application.name)
@@ -342,18 +316,10 @@ export const syncService = {
     return { application, assessment, ticket };
   },
 
-  /**
-   * Runs every security test for an app, once. Claims the assessment first so
-   * concurrent viewers can't each start their own run; returns false when
-   * another caller already claimed it. A failure to start releases the claim —
-   * back to `queued` when the backend is merely busy with another run for this
-   * platform, so a later attempt retries, and `failed` otherwise.
-   */
   async runAllTests(input: {
     assessmentId: string;
     platform: AutomationPlatform;
     appExternalId: string;
-    /** Omit to let the backend run everything it has configured. */
     riskIds?: string[];
     triggeredBy?: string | null;
   }): Promise<boolean> {
@@ -370,9 +336,6 @@ export const syncService = {
         },
         input.triggeredBy ?? null,
       );
-      // A successful sync already moved the assessment to completed. A run that
-      // outlived the poll window is genuinely still running, so it keeps that
-      // status rather than being reset into a retry loop.
       if (!synced && run.status === "failed") {
         await assessmentData.setStatus(input.assessmentId, "failed");
       }
@@ -403,7 +366,6 @@ export const syncService = {
     for (const [appId, appRows] of byApp) {
       const first = appRows[0];
 
-      // Adopt a manually-added row rather than creating a duplicate.
       const unlinked = await applicationData.findUnlinkedByNameAndPlatform(
         first.app_name,
         first.platform,
@@ -431,10 +393,6 @@ export const syncService = {
       const totalTests = catalogueCache.get(first.platform) ?? appRows.length;
       const distinctTestIds = new Set(appRows.map((r) => r.test_id));
 
-      // Adopt the placeholder created from the dashboard so the assessment
-      // someone is already looking at completes, instead of a second row
-      // appearing beside it. Re-keying it to the run means a re-sync of the
-      // same run updates this row, and a later run gets its own.
       const runKey = `${runTimestamp}::${appId}`;
       const assessmentFields = {
         application_id: application.id,
@@ -454,32 +412,15 @@ export const syncService = {
             ? await assessmentData.update(placeholder.id, { ...assessmentFields, external_id: runKey })
             : await assessmentData.upsertByExternalId({ ...assessmentFields, external_id: runKey });
         } catch (err) {
-          // A concurrent sync of the same run claimed the key first; external_id
-          // is unique, so fall back to updating whatever now holds it.
           console.warn(`Falling back to upsert for run ${runKey}.`, err);
           assessment = await assessmentData.upsertByExternalId({ ...assessmentFields, external_id: runKey });
         }
       }
 
-      const details = await Promise.all(
-        appRows.map((row) =>
-          assessmentApi
-            .getResultDetail(row.run_timestamp, row.report_path)
-            .catch((err) => {
-              console.warn(
-                `Could not fetch verdict for ${row.report_path}; defaulting to Inconclusive.`,
-                err,
-              );
-              return null;
-            }),
-        ),
-      );
-
       for (let i = 0; i < appRows.length; i += 1) {
-        const verdict = details[i]?.verdict ?? "Inconclusive";
         await upsertFindingFromResult(
           appRows[i],
-          verdict,
+          appRows[i].verdict ?? "Inconclusive",
           application.id,
           assessment.id,
           triggeredBy,
@@ -491,13 +432,6 @@ export const syncService = {
     return { applications: byApp.size, findings: findingCount };
   },
 
-  /**
-   * Starts a run against the automation backend, polls until it leaves the
-   * "running" state, and syncs the result into Supabase if it completed.
-   * Shared by every place that triggers automation runs from the dashboard
-   * (Assessments, Test Workspace, ticket retest) so the run/poll/sync
-   * sequence exists in exactly one place.
-   */
   async runAndSync(
     payload: StartRunRequest,
     triggeredBy: string | null = null,

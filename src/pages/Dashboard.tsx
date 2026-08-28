@@ -1,6 +1,6 @@
 import { Navigate } from "react-router-dom";
 import { AlertTriangle, ListChecks, Settings, Ticket } from "lucide-react";
-import { useAuth } from "@/auth/AuthProvider";
+import { useAuth } from "@/auth/useAuth";
 import { primaryRole } from "@/auth/permissions";
 import { PageHeader, StatCard, LoadingState, ErrorState } from "@/components/common";
 import { CtaCard } from "@/components/cta-card";

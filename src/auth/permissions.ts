@@ -50,7 +50,6 @@ export const roleCapabilities: Record<UserRole, Capability[]> = {
   admin: ["view_dashboard", "access_admin"],
 };
 
-/** A user can hold more than one role — capability is granted if any role grants it. */
 export function roleCan(roles: UserRole[] | undefined, capability: Capability): boolean {
   if (!roles) return false;
   return roles.some((role) => roleCapabilities[role].includes(capability));
@@ -58,7 +57,6 @@ export function roleCan(roles: UserRole[] | undefined, capability: Capability): 
 
 const rolePrecedence: UserRole[] = ["security", "cio", "developer", "admin"];
 
-/** For the few UI spots that must pick one representative role (e.g. which dashboard to show). */
 export function primaryRole(roles: UserRole[] | undefined): UserRole | undefined {
   if (!roles || roles.length === 0) return undefined;
   return rolePrecedence.find((role) => roles.includes(role)) ?? roles[0];

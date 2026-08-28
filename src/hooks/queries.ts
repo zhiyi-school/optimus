@@ -124,19 +124,10 @@ export function useReportSummary(runTimestamp: string | undefined) {
   });
 }
 
-/** One row per (app, risk) tested in a run, with its real verdict attached. */
 export function useRunResults(runTimestamp: string | undefined, enabled = true) {
   return useQuery({
     queryKey: ["runResults", runTimestamp],
-    queryFn: async () => {
-      const rows = await assessmentApi.getReportSummary(runTimestamp as string);
-      const details = await Promise.all(
-        rows.map((row) =>
-          assessmentApi.getResultDetail(row.run_timestamp, row.report_path).catch(() => null),
-        ),
-      );
-      return rows.map((row, i) => ({ ...row, verdict: details[i]?.verdict ?? "Inconclusive" }));
-    },
+    queryFn: () => assessmentApi.getReportSummary(runTimestamp as string),
     enabled: !!runTimestamp && enabled,
   });
 }
@@ -145,23 +136,7 @@ export function useTestRunHistory(appExternalId: string | undefined, testId: str
   return useQuery({
     queryKey: ["testRunHistory", appExternalId, testId],
     enabled: !!appExternalId && !!testId,
-    queryFn: async () => {
-      const reports = await assessmentApi.listReports();
-      const recent = reports.slice(0, 20);
-      const matches = [];
-      for (const runTimestamp of recent) {
-        const summary = await assessmentApi.getReportSummary(runTimestamp);
-        const match = summary.find(
-          (row) => row.app_id === appExternalId && row.test_id === testId,
-        );
-        if (!match) continue;
-        const detail = await assessmentApi
-          .getResultDetail(match.run_timestamp, match.report_path)
-          .catch(() => null);
-        matches.push({ ...match, verdict: detail?.verdict ?? "Inconclusive" });
-      }
-      return matches.sort((a, b) => b.run_timestamp.localeCompare(a.run_timestamp));
-    },
+    queryFn: () => assessmentApi.getTestHistory(appExternalId as string, testId as string),
   });
 }
 

@@ -1,6 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import type { ReactNode } from "react";
-import { useAuth } from "@/auth/AuthProvider";
+import { useAuth } from "@/auth/useAuth";
 import type { Capability } from "@/auth/permissions";
 import { Layout } from "@/components/Layout";
 import { LoadingState } from "@/components/common";

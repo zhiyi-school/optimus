@@ -47,7 +47,7 @@ docker run -p 3000:80 mobile-security-dashboard
   reports" on the Assessments page (Security Team only) to pull in
   existing automation reports.
 - **RLS errors ("new row violates row-level security policy")** — check
-  the user's `profiles.role` and, for developers, `applications.developer_team_id`
+  the user's `profiles.roles` and, for developers, `applications.developer_team_id`
   / `profiles.team_id` — developer access is scoped to their own team's
   applications.
 - **Developer can't see any findings** — their `profiles.team_id` and the

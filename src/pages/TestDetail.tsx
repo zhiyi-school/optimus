@@ -23,7 +23,7 @@ import {
 } from "@/hooks/queries";
 import { assessmentApi, defaultConfigPath } from "@/api/automation-services";
 import { syncService, mapVerdictToFindingStatus, type RunCancelToken } from "@/data/sync";
-import { useAuth } from "@/auth/AuthProvider";
+import { useAuth } from "@/auth/useAuth";
 import { riskIcon } from "@/lib/entity-icons";
 import { hasAutomation } from "@/lib/risk-automation";
 import { cn, errorMessage, formatDate, formatDuration } from "@/lib/utils";
@@ -301,7 +301,7 @@ export default function TestDetail() {
                                   id: `${run.run_timestamp}-${i}`,
                                   name: e.label,
                                   kind: e.kind,
-                                  url: assessmentApi.reportFileUrl(run.run_timestamp, e.path),
+                                  url: assessmentApi.evidenceFileUrl(run.run_timestamp, e.path),
                                   source: "Automation backend",
                                 }),
                               )}

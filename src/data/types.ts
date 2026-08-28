@@ -61,7 +61,6 @@ export interface Application {
   owner_email: string | null;
   developer_contact_name: string | null;
   developer_contact_email: string | null;
-  /** Mirrored from the automation backend; null when it isn't tracking this app. */
   provisioning_status: "pending" | "ready" | "failed" | null;
   provisioning_error: string | null;
   created_at: string;
@@ -108,9 +107,6 @@ export interface FindingHistory {
 
 export interface Ticket {
   id: string;
-  /** Null only for `app_provisioning` tickets, which track getting a new
-   *  app onto a device (and Apple ID, for iOS) before any assessment has
-   *  run — every other ticket type is created from an existing finding. */
   finding_id: string | null;
   application_id: string;
   type: TicketType;

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "@/auth/AuthProvider";
+import { useAuth } from "@/auth/useAuth";
 import { syncService } from "@/data/sync";
 import { errorMessage } from "@/lib/utils";
 import { automatedRiskIds } from "@/lib/risk-automation";
@@ -56,13 +56,14 @@ export default function AssessmentDetail() {
 
   // Mirrored into Supabase so other sessions see it without polling too.
   const updateApplication = useUpdateApplication();
+  const updateApplicationStatus = updateApplication.mutate;
   const reconciledRef = useRef<string | null>(null);
   useEffect(() => {
     if (!application || !provisioning) return;
     if (provisioning.status === application.provisioning_status) return;
     if (reconciledRef.current === `${application.id}:${provisioning.status}`) return;
     reconciledRef.current = `${application.id}:${provisioning.status}`;
-    updateApplication.mutate({
+    updateApplicationStatus({
       applicationId: application.id,
       patch: {
         provisioning_status: provisioning.status,
@@ -70,8 +71,7 @@ export default function AssessmentDetail() {
         ...(provisioning.bundle_id ? { identifier: provisioning.bundle_id } : {}),
       },
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [provisioning, application?.id, application?.provisioning_status]);
+  }, [provisioning, application, updateApplicationStatus]);
 
   // Trigger 1: start the full test run as soon as setup completes. A stage
   // reported "unknown" was never actually verified (no device connected, for
@@ -86,8 +86,6 @@ export default function AssessmentDetail() {
     if (!can("run_test") || autoStartedRef.current) return;
     if (!verifiedReady || !assessment || assessment.status !== "queued") return;
     if (!platform || !application?.external_id) return;
-    // Wait for the catalogue: an empty risk list would mean "run everything",
-    // which would include the tests that have no automation.
     if (runnableRiskIds.length === 0) return;
     autoStartedRef.current = true;
     void syncService
@@ -103,8 +101,17 @@ export default function AssessmentDetail() {
         autoStartedRef.current = false;
         setAutoStartError(errorMessage(err, "Automated testing could not be started."));
       });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [verifiedReady, assessment?.status, assessment?.id, platform, application?.external_id, runnableRiskIds]);
+  }, [
+    verifiedReady,
+    assessment,
+    platform,
+    application?.external_id,
+    runnableRiskIds,
+    can,
+    profile?.id,
+    queryClient,
+    assessmentId,
+  ]);
 
   const [justCreated, setJustCreated] = useState(
     () => (location.state as ProvisioningTicketState | null)?.provisioningTicket,
@@ -113,8 +120,7 @@ export default function AssessmentDetail() {
   useEffect(() => {
     if (!(location.state as ProvisioningTicketState | null)?.provisioningTicket) return;
     navigate(location.pathname, { replace: true, state: {} });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [location.pathname, location.state, navigate]);
 
   const findingByTestId = useMemo(() => {
     const map = new Map<string, Finding & { application: Application | null }>();

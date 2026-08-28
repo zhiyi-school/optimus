@@ -1,6 +1,6 @@
 import { Link, NavLink, Outlet } from "react-router-dom";
 import { ShieldCheck, LogOut, Settings as SettingsIcon } from "lucide-react";
-import { useAuth } from "@/auth/AuthProvider";
+import { useAuth } from "@/auth/useAuth";
 import { useTeams } from "@/hooks/queries";
 import { initialsOf } from "@/lib/people";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";

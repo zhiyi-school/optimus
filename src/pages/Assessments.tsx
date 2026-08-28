@@ -22,7 +22,7 @@ import {
   useDeleteApplication,
   useSyncReport,
 } from "@/hooks/queries";
-import { useAuth } from "@/auth/AuthProvider";
+import { useAuth } from "@/auth/useAuth";
 import { appTypeIcon } from "@/lib/entity-icons";
 import { latestAssessmentPerApp } from "@/lib/assessments";
 import { errorMessage, formatDate } from "@/lib/utils";
@@ -46,6 +46,7 @@ export default function Assessments() {
   } = useAutomationReports();
   const { data: runs } = useAutomationRuns();
   const sync = useSyncReport();
+  const syncReport = sync.mutateAsync;
   const deleteApp = useDeleteApplication();
   const syncingRef = useRef<Set<string>>(new Set());
   const [syncError, setSyncError] = useState<string | null>(null);
@@ -102,13 +103,6 @@ export default function Assessments() {
     }
   }
 
-  // Auto-sync a run into Supabase the moment the live-polled run list sees
-  // it turn "completed" — this is what lets tests started elsewhere (Test
-  // Detail's "Run Automated Test", or the backend directly) show up here
-  // without anyone having to manually sync. `syncingRef` tracks in-flight/
-  // succeeded run_timestamps so a run isn't re-triggered every 5s poll; a
-  // failure removes it so the next poll retries instead of giving up
-  // permanently.
   useEffect(() => {
     if (!can("run_test")) return;
     for (const run of runs ?? []) {
@@ -120,15 +114,14 @@ export default function Assessments() {
       if (alreadySynced) continue;
 
       syncingRef.current.add(run.run_timestamp);
-      sync.mutateAsync({ runTimestamp: run.run_timestamp, triggeredBy: profile?.id ?? null }).catch(
+      syncReport({ runTimestamp: run.run_timestamp, triggeredBy: profile?.id ?? null }).catch(
         (err) => {
           console.warn(`Auto-sync failed for run ${run.run_timestamp}`, err);
           syncingRef.current.delete(run.run_timestamp);
         },
       );
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runs, assessments, can]);
+  }, [runs, assessments, can, syncReport, profile?.id]);
 
   const columns: DataTableColumn<Row>[] = [
     {

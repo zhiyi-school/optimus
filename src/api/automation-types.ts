@@ -25,7 +25,6 @@ export interface StartRunRequest {
 export interface DemonstrationImage {
   path: string;
   caption?: string;
-  /** Both added by the backend on read; `exists` is false when the file is missing. */
   url?: string;
   exists?: boolean;
 }
@@ -59,9 +58,7 @@ export interface RiskDefinition {
   description: string;
   goal: string;
   is_blocking: boolean;
-  /** MITRE ATT&CK Mobile tactic, or null where the risk isn't mapped to one. */
   tactic: string | null;
-  /** False for risks that can only be tested by hand. */
   automation_available?: boolean;
   demonstration: DemonstrationBlock[];
   [key: string]: unknown;
@@ -81,7 +78,6 @@ export interface AppConfigEntry {
   [key: string]: unknown;
 }
 
-/** Body for POST /config/{platform}/apps. */
 export interface RegisterAppRequest {
   id?: string;
   name: string;
@@ -105,11 +101,9 @@ export interface ProvisioningStage {
   detail?: string | null;
 }
 
-/** GET /config/{platform}/apps/{app_id}/provisioning. */
 export interface AppProvisioning {
   app_id: string;
   platform: AutomationPlatform;
-  /** Resolved by the backend from the matched build; null until one is found. */
   bundle_id: string | null;
   status: "pending" | "ready" | "failed";
   stages: ProvisioningStage[];
@@ -131,6 +125,7 @@ export interface AutomationResultRow {
   test_name: string;
   category: string;
   status: string;
+  verdict: RiskVerdict;
   severity: string | null;
   summary: string;
   started_at: string;
