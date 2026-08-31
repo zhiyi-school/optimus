@@ -5,14 +5,14 @@ The schema itself lives in `supabase/migrations/` (`0001_schema.sql` /
 `0005_admin_policies.sql` / `0006_multi_role_admin.sql` /
 `0007_app_provisioning.sql` / `0008_assessment_messages.sql` /
 `0009_application_contact_emails.sql` / `0010_applications_delete.sql` /
-`0011_application_provisioning.sql`) —
+`0011_application_provisioning.sql` / `0012_dashboard_metrics_rpc.sql`) —
 this doc covers the *why* behind a few decisions that aren't obvious from
 reading the SQL alone.
 
 ## Row Level Security
 
 Frontend capability checks (`src/auth/permissions.ts`) are UX only. The
-policies in `0002_rls.sql` (as amended by `0005`/`0006`) are the actual
+policies in `0002_rls.sql` (as amended by later RLS migrations) are the actual
 authorization boundary.
 
 - **Role checks go through `SECURITY DEFINER` helper functions**
@@ -41,13 +41,25 @@ authorization boundary.
   `has_role('admin')`; changing *your own* `roles` is blocked outright,
   full stop, so a single admin session can grant roles to other accounts
   but can never escalate or quietly de-escalate itself. See
-  [SUPABASE_SETUP.md](./SUPABASE_SETUP.md#role-assignment) for how you
+  [SUPABASE_SETUP.md](./setup.md#role-assignment) for how you
   bootstrap the first admin (direct SQL — there's no other way in, by
   design).
 - **`is_active` is looser**: any `admin` can toggle it for *any* account,
   including their own — suspending/reinstating only gates access a role
   already implies, it can't grant a new privilege the way a `roles` change
   could, so the self-change restriction doesn't apply to it.
+- **Application deletes are explicit and privileged.** `0010` adds an
+  `applications_delete` policy for `security` or `admin` users only, used
+  for duplicate cleanup from the app-add flow. Cascading deletes are
+  expected from the existing foreign keys.
+- **Assessment messages follow the same access shape as ticket messages.**
+  `0008_assessment_messages.sql` adds `can_access_assessment()`, selects by
+  application visibility, and inserts only when the author is the caller
+  and has `developer` or `security`.
+- **Dashboard metrics are still RLS-scoped.** `dashboard_metrics()` in
+  `0012` is granted only to authenticated users and queries the base tables
+  without `SECURITY DEFINER`, so each count is limited by the caller's
+  existing RLS visibility.
 
 ## Admin page (Teams, Users, Applications, Roles)
 
@@ -91,7 +103,7 @@ policy must agree on these conventions:
 
 ## Idempotent sync
 
-See [AUTOMATION_API.md](./AUTOMATION_API.md#idempotent-sync) for how
+See [AUTOMATION_API.md](./automation-api.md#idempotent-sync) for how
 `src/data/sync.ts` uses `applications.external_id` and
 `findings.external_id` to keep re-syncing the same automation run
 duplicate-free.
@@ -111,20 +123,21 @@ with `status = 'queued'` (displayed as "Not Started") and `total_tests` set
 from the platform's risk catalogue. It also opens an `app_provisioning`
 ticket for Security to track downloading the app onto a device (and
 registering it under the test Apple ID, for iOS) — see
-[ROLES_AND_WORKFLOWS.md](./ROLES_AND_WORKFLOWS.md#app-provisioning-workflow).
+[ROLES_AND_WORKFLOWS.md](./roles-and-workflows.md#app-provisioning-workflow).
 
 Crucially, the app is **also registered with the automation backend** in the
 same operation, and the backend app id it returns is stored as
 `external_id` right away — see
-[AUTOMATION_API.md](./AUTOMATION_API.md#app-provisioning). That's what lets a
+[AUTOMATION_API.md](./automation-api.md#app-provisioning). That's what lets a
 later automation run for the same app merge into this row.
 
-Historically it did not: `external_id` was left null, `syncReport` matches
+Historically it did not: `external_id` was left null, the sync worker matches
 applications by `external_id`, and so the first real run created a *second*,
 permanently-duplicate `applications` row. Two safety nets remain for rows
 created before this changed, or created while the backend was unreachable:
-`findUnlinkedByNameAndPlatform` adopts an unlinked row on first sync
-(matching name + platform), and `addApp` refuses to create a second app with
+the worker's `find_unlinked_applications` adopts an unlinked row on first sync
+(matching name + platform, and refusing to guess when several match), and
+`addApp` refuses to create a second app with
 a name + platform that already exists. Genuinely duplicated rows from before
 those existed still need
 [`supabase/scripts/cleanup_duplicate_applications.sql`](../supabase/scripts/cleanup_duplicate_applications.sql).

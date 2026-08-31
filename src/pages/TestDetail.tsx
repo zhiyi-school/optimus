@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { EvidenceViewer, type EvidenceItem } from "@/components/evidence";
 import { AssessmentSidebar } from "@/components/assessment-sidebar";
 import { TestRunStages } from "@/components/assessment-progress";
+import { RunEventTimeline } from "@/components/run-events";
 import { CtaCard } from "@/components/cta-card";
 import { ConversationPanel } from "@/components/conversation-panel";
 import {
@@ -19,10 +20,21 @@ import {
   useProfiles,
   useRiskCatalogue,
   useSendAssessmentMessage,
+  useActiveRun,
+  useResyncRun,
+  useRunEvents,
+  useRunSyncStatus,
   useTestRunHistory,
 } from "@/hooks/queries";
+import { DashboardSyncNotice } from "@/components/dashboard-sync-notice";
 import { assessmentApi, defaultConfigPath } from "@/api/automation-services";
-import { syncService, mapVerdictToFindingStatus, type RunCancelToken } from "@/data/sync";
+import {
+  syncService,
+  mapVerdictToFindingStatus,
+  riskProgressInRun,
+  type RiskRunPhase,
+  type RunCancelToken,
+} from "@/data/sync";
 import { useAuth } from "@/auth/useAuth";
 import { riskIcon } from "@/lib/entity-icons";
 import { hasAutomation } from "@/lib/risk-automation";
@@ -38,6 +50,12 @@ Evidence:
 (Attach screenshots or screen recordings)`;
 
 export default function TestDetail() {
+  // Both routes share this element, so :testId changes without remounting.
+  const { testId } = useParams<{ testId: string }>();
+  return <TestPage key={testId} />;
+}
+
+function TestPage() {
   const { assessmentId, testId, runId } = useParams<{
     assessmentId: string;
     testId: string;
@@ -73,37 +91,77 @@ export default function TestDetail() {
     [history],
   );
 
-  const [running, setRunning] = useState(false);
+  const [watching, setWatching] = useState(false);
+  const [startedRunId, setStartedRunId] = useState<string | undefined>();
   const [progressOpen, setProgressOpen] = useState(true);
   const [runError, setRunError] = useState<string | null>(null);
+  const [stoppedWatchingRunId, setStoppedWatchingRunId] = useState<string | undefined>();
   const highlightedRef = useRef<HTMLLIElement>(null);
   const cancelRef = useRef<RunCancelToken>({ cancelled: false });
+
+  const { run: activeRun, platformRun } = useActiveRun({ platform, appExternalId, riskId: testId });
+  const adoptedRun = activeRun && activeRun.run_id !== stoppedWatchingRunId ? activeRun : undefined;
+  const activeRunId = startedRunId ?? adoptedRun?.run_id;
+  const { events: runEvents, streamState } = useRunEvents(activeRunId, !!activeRunId);
+
+  // Latched: the run outlives its /runs "running" entry, and its sync outlives the run.
+  const [watchedRunId, setWatchedRunId] = useState<string | undefined>();
+  useEffect(() => {
+    if (activeRunId) setWatchedRunId(activeRunId);
+  }, [activeRunId]);
+  const { data: sync } = useRunSyncStatus(watchedRunId);
+  const resync = useResyncRun(watchedRunId);
+
+  const progress = riskProgressInRun(runEvents, adoptedRun, appExternalId, testId);
+  // The device runs one risk at a time: being inside the run is not being executed by it.
+  const executing = watching || progress?.phase === "running";
+  const queued = progress?.phase === "queued";
+  // The device takes one run at a time, so any run at all blocks starting this test.
+  const deviceBusy = !executing && !queued && !!platformRun;
+  const busy = executing || queued || deviceBusy;
 
   useEffect(() => {
     if (runId) highlightedRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
   }, [runId, thread.length]);
 
+  // A run this tab only observed still has to refresh the page once this risk is done.
+  const observedPhaseRef = useRef<RiskRunPhase | undefined>();
+  useEffect(() => {
+    const previous = observedPhaseRef.current;
+    observedPhaseRef.current = progress?.phase;
+    if (previous !== "running" || progress?.phase === "running") return;
+    void refetch();
+    void queryClient.invalidateQueries({ queryKey: ["assessment", assessmentId] });
+    void queryClient.invalidateQueries({ queryKey: ["findings"] });
+  }, [progress?.phase, refetch, queryClient, assessmentId]);
+
   async function runTest() {
     if (!platform || !appExternalId || !testId) return;
-    setRunning(true);
+    setWatching(true);
+    setStartedRunId(undefined);
+    setStoppedWatchingRunId(undefined);
     setRunError(null);
     setProgressOpen(true);
     cancelRef.current = { cancelled: false };
     try {
-      const { run, synced, cancelled } = await syncService.runAndSync(
+      const { run, outcome } = await syncService.runAndWait(
         { platform, config_path: defaultConfigPath(platform), apps: appExternalId, risks: testId },
-        profile?.id ?? null,
-        undefined,
+        (started) => {
+          setStartedRunId(started.run_id);
+          return queryClient.invalidateQueries({ queryKey: ["automationRuns"] });
+        },
         cancelRef.current,
       );
 
-      if (cancelled) {
+      if (outcome === "failed") {
+        setRunError(run.error ?? `Run ended with status "${run.status}".`);
+      } else if (outcome === "cancelledWaiting") {
         setRunError(
-          "Stopped watching this run — it may still be going on the backend. Re-open this page later, or use Sync reports on the Assessments page, to pick up the result.",
+          "Stopped watching this run. It is still going on the automation host, which syncs the result on its own.",
         );
-      } else if (!synced) {
+      } else if (outcome === "timedOutWaiting") {
         setRunError(
-          run.error ?? `Run ended with status "${run.status}" and was not synced.`,
+          "Stopped waiting after the polling window. The run is still going on the automation host, which syncs the result on its own.",
         );
       }
 
@@ -115,12 +173,15 @@ export default function TestDetail() {
     } catch (err) {
       setRunError(errorMessage(err, "Unable to run this test."));
     } finally {
-      setRunning(false);
+      setWatching(false);
     }
   }
 
   function stopWaiting() {
     cancelRef.current.cancelled = true;
+    setStoppedWatchingRunId(activeRunId);
+    setStartedRunId(undefined);
+    setWatching(false);
   }
 
   if (!assessment || !risk) {
@@ -160,7 +221,7 @@ export default function TestDetail() {
         <div className={cn("grid grid-cols-1 items-stretch gap-4", can("run_test") && "sm:grid-cols-2")}>
           {can("run_test") &&
             (automated ? (
-              <Card className={cn("h-full p-4", !running && "border-primary/50 bg-primary/5")}>
+              <Card className={cn("h-full p-4", !busy && "border-primary/50 bg-primary/5")}>
                 <div className="flex items-start gap-3">
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
                     <Zap className="h-4.5 w-4.5" />
@@ -170,15 +231,27 @@ export default function TestDetail() {
                       {currentFinding ? "Run this test again" : "Run automated test"}
                     </p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      {currentFinding
-                        ? "Re-runs only this security test and updates its result."
-                        : "The environment is already set up — this starts running straight away."}
+                      {queued
+                        ? "This test is part of a run already under way — it starts as soon as the tests ahead of it finish."
+                        : deviceBusy
+                          ? "The test device is busy with a run in progress. It drives one test at a time, so this has to wait for that run to finish."
+                          : currentFinding
+                            ? "Re-runs only this security test and updates its result."
+                            : "The environment is already set up — this starts running straight away."}
                     </p>
                     <div className="mt-3 flex items-center gap-2">
-                      <Button size="sm" onClick={() => void runTest()} disabled={running}>
-                        {running ? "Running…" : currentFinding ? "Run Again" : "Run Automated Test"}
+                      <Button size="sm" onClick={() => void runTest()} disabled={busy}>
+                        {executing
+                          ? "Running…"
+                          : queued
+                            ? "Waiting its turn"
+                            : deviceBusy
+                              ? "Device busy"
+                              : currentFinding
+                                ? "Run Again"
+                                : "Run Automated Test"}
                       </Button>
-                      {running && (
+                      {executing && (
                         <Button size="sm" variant="ghost" onClick={stopWaiting}>
                           Stop waiting
                         </Button>
@@ -219,7 +292,7 @@ export default function TestDetail() {
         </div>
         {runError && <p className="-mt-2 text-xs text-danger">{runError}</p>}
 
-        {running && (
+        {(executing || queued) && (
           <Card className="border-primary/40">
             <CardContent className="py-4">
               <button
@@ -227,19 +300,48 @@ export default function TestDetail() {
                 onClick={() => setProgressOpen((o) => !o)}
                 className="flex w-full items-center justify-between gap-2"
               >
-                <span className="text-sm font-semibold text-foreground">Automated test is running</span>
+                <span className="text-sm font-semibold text-foreground">
+                  {executing ? "Automated test is running" : "Waiting for the test device"}
+                </span>
                 <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", progressOpen && "rotate-180")} />
               </button>
               {progressOpen && (
                 <div className="mt-3">
-                  <TestRunStages
-                    testingDescription={`Executing test cases to verify ${risk.name.toLowerCase()} protection…`}
-                  />
+                  {!watching && adoptedRun && (
+                    <p className="mb-3 text-xs text-muted-foreground">
+                      Part of a run started {formatDate(adoptedRun.started_at)}
+                      {progress && progress.total > 1
+                        ? ` covering ${progress.total} tests, ${progress.completed} done so far`
+                        : ""}
+                      . Tests run one at a time on the device, and the run continues whether or not
+                      this page is open.
+                    </p>
+                  )}
+                  {executing ? (
+                    <TestRunStages
+                      testingDescription={`Executing test cases to verify ${risk.name.toLowerCase()} protection…`}
+                    />
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      This test has not started yet — it begins once the tests ahead of it in this
+                      run have finished.
+                    </p>
+                  )}
+                  <div className="mt-4">
+                    <RunEventTimeline events={runEvents} streamState={streamState} />
+                  </div>
                 </div>
               )}
             </CardContent>
           </Card>
         )}
+
+        <DashboardSyncNotice
+          sync={sync}
+          onRetry={() => resync.mutate()}
+          retrying={resync.isPending}
+          retryError={resync.isError ? errorMessage(resync.error, "Could not start the sync.") : null}
+        />
 
         <Card>
           <CardContent className="py-5">

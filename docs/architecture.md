@@ -31,8 +31,52 @@ This dashboard is a client of two independent systems:
 └─────────────────┘  └────────────────────────┘
 ```
 
-Supabase and the automation API are independent systems. The dashboard is
-the only thing that talks to both — see `src/data/sync.ts`.
+Supabase and the automation API are independent systems, and the dashboard is
+the only thing in the browser that talks to both.
+
+## Ownership
+
+```text
+Backend automation   owns execution, raw reports, evidence, run status, SARIF
+Sync worker          translates completed reports into Supabase
+Supabase             owns users, roles, teams, applications, assessments,
+                     findings, finding history, tickets, retests, messages,
+                     activity
+Frontend             reads backend automation state and Supabase dashboard
+                     state; performs no authoritative synchronisation
+```
+
+**The dashboard is not the synchroniser.** Automation results reach Supabase
+through a worker process that runs on the automation host and holds the
+service-role key. The browser starts runs, watches progress, and reads what the
+worker has already published — it never writes a report feed to Supabase. This
+is a security boundary as much as an architectural one: the service-role key
+bypasses row-level security, so it must never be reachable from a browser.
+
+### Two statuses
+
+| | Automation status | Dashboard sync status |
+| --- | --- | --- |
+| Source | `GET /runs/{run_id}` | `GET /runs/{run_id}/sync-status` |
+| `completed` means | the device finished executing and the report is on disk | every Supabase write for that report succeeded |
+
+A run is routinely `completed` while its sync is still `queued`. The dashboard
+is eventually consistent by design and shows that state explicitly rather than
+hiding it — see [automation-api.md](./automation-api.md#dashboard-sync-status).
+
+### End-to-end topology
+
+```text
+Browser
+  ├── Frontend dashboard (static build)
+  ├── Supabase — browser-safe anon credentials, constrained by RLS
+  └── Backend automation API — VITE_API_BASE_URL
+          └── Mobile devices, Appium, reports on disk, and the sync worker
+                  └── Supabase — service-role credentials, worker-only
+```
+
+Both Supabase and the automation API must be reachable **from the browser**,
+not merely from whatever server hosts the static files.
 
 ## Technology Stack
 
@@ -72,10 +116,13 @@ activity_log — generic audit trail (entity_type, entity_id, action, metadata)
 | iOS/Android automated tests, test execution, job status, raw results, raw automation evidence | **Automation backend** (`mobile_playbook_automation`) |
 | Users, roles, teams, applications, assessment *metadata*, findings, finding history, tickets, messages, attachments, risk acceptance, retest workflow, activity history | **Supabase** |
 
-The dashboard never creates automated tests, assessments, or job runs by
-itself outside of calling the automation backend's own `/runs` endpoint —
-Supabase only mirrors the resulting metadata so it can be linked to
-findings and tickets (`src/data/sync.ts`).
+The dashboard never creates automated tests or job runs by itself outside of
+calling the automation backend's own `/runs` endpoint, and it never writes a
+report feed into Supabase. The sync worker on the automation host mirrors
+completed results so they can be linked to findings and tickets. What the
+browser does own is workflow state a person creates — an assessment placeholder,
+a ticket, a message, a risk acceptance — written directly to Supabase under
+row-level security.
 
 ## Project Structure
 
@@ -144,8 +191,8 @@ systems: an `applications` row plus a placeholder ("Not Started")
 `assessments` row and an `app_provisioning` ticket in Supabase, and an entry
 in the automation backend's `configs/<platform>.yaml` so runs can actually
 target it. See
-[AUTOMATION_API.md](./AUTOMATION_API.md#app-provisioning) for that exchange
-and [DATABASE.md](./DATABASE.md#manual-assessment-creation) for how it
+[AUTOMATION_API.md](./automation-api.md#app-provisioning) for that exchange
+and [DATABASE.md](./data-model.md#manual-assessment-creation) for how it
 interacts with automation sync.
 
 On submit it navigates to the new assessment's own page rather than back to
@@ -167,9 +214,9 @@ The two run-detail routes answer different questions. A backend run can
 cover many apps and risks at once (e.g. "run every configured iOS app"),
 so `/runs/:runTimestamp` is the *whole run's* view — status, progress, and
 one summary row per (app, risk) tested, sourced straight from the backend
-via `useRunResults` regardless of whether anything has synced into
-Supabase yet. `/assessments/:id/tests/:testId(/runs/:runId)` is scoped the
+via `useRunStatus`, `useRunEvents`, and `useRunResults` regardless of whether
+anything has synced into Supabase yet. `/assessments/:id/tests/:testId(/runs/:runId)` is scoped the
 other way — one specific test's conversation-style history across *every*
 run it's ever appeared in, which is why it fans out across
-`GET /reports` (see [AUTOMATION_API.md](./AUTOMATION_API.md)) instead of
+`GET /reports` (see [AUTOMATION_API.md](./automation-api.md)) instead of
 reading a single run.

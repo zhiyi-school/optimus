@@ -1,56 +1,65 @@
 # Mobile Application Security Assessment Dashboard
 
-A role-aware dashboard for triaging mobile application security findings
-and running the remediation → retest → risk-acceptance workflow between
-Developer Teams, the Security Team, and the CIO.
+A role-aware dashboard for triaging mobile application security findings and
+running the remediation → retest → risk-acceptance workflow between Developer
+Teams, the Security Team, and the CIO.
 
-This is a standalone frontend. It drives the existing automation backend
-([`mobile_playbook_automation`](../playbook/mobile_playbook_automation))
-for test execution, and uses [Supabase](https://supabase.com) for its own
-persistent data — users, roles, findings, tickets, and audit history. The
-two systems stay separate; this repo never modifies the automation
-backend.
+This is a standalone frontend. It drives the automation backend
+(`mobile_playbook_automation`) for test execution, and uses
+[Supabase](https://supabase.com) for its own persistent data — users, roles,
+findings, tickets, and audit history. The two systems stay separate; this repo
+never modifies the automation backend.
 
-## Quick Start
+**The dashboard is not the authoritative synchroniser.** Automation results
+reach Supabase through a worker that runs on the automation host. The browser
+starts runs, watches progress, and reads what the worker has already published;
+it never writes a report feed to Supabase itself. See
+[docs/automation-api.md](./docs/automation-api.md).
+
+## Quick start
 
 ```bash
-git clone <this-repository>
-cd mobile-security-dashboard
 cp .env.example .env   # fill in VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY
-
 npm install
 npm run dev
 ```
 
-You'll also need a Supabase project with the schema applied, and the
-automation backend running separately — see
-[docs/SUPABASE_SETUP.md](./docs/SUPABASE_SETUP.md) and
-[docs/AUTOMATION_API.md](./docs/AUTOMATION_API.md).
+You will also need a Supabase project with the migrations applied, and the
+automation backend running separately. Full walkthrough:
+[docs/setup.md](./docs/setup.md).
 
 ```bash
-npm run build      # production build
-npm run preview    # preview the production build
+npm run dev         # dev server on :5173
+npm run build       # typecheck (tsc -b) + production build
+npm run preview     # serve the production build locally
+npm test            # vitest
+npm run typecheck   # tsc -b
 npm run lint        # eslint
 ```
 
 ## Stack
 
-React, TypeScript, Vite, Tailwind CSS, TanStack Query, React Router,
-Supabase JS client. See [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) for
-the full breakdown.
+React, TypeScript, Vite, Tailwind CSS, TanStack Query, React Router, Supabase JS
+client. See [docs/architecture.md](./docs/architecture.md).
 
 ## Documentation
 
 | Doc | Covers |
 |---|---|
-| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | System architecture, tech stack, data ownership, project structure, routes |
-| [docs/SUPABASE_SETUP.md](./docs/SUPABASE_SETUP.md) | Creating and configuring a Supabase project, role assignment, local dev |
-| [docs/DATABASE.md](./docs/DATABASE.md) | RLS design rationale, storage path conventions |
-| [docs/ROLES_AND_WORKFLOWS.md](./docs/ROLES_AND_WORKFLOWS.md) | Role capabilities, authentication, ticket & risk-acceptance workflows |
-| [docs/AUTOMATION_API.md](./docs/AUTOMATION_API.md) | How the dashboard integrates with the automation backend, known gaps |
-| [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) | Environment variables, production build, Docker, troubleshooting |
-| [docs/CONFIGURATION.md](./docs/CONFIGURATION.md) | Ports, hosts, timeouts, polling intervals, and other non-env-var settings |
-| [docs/prompt.md](./docs/prompt.md) | Original project specification |
+| [docs/setup.md](./docs/setup.md) | Local setup, Supabase project, migrations, role assignment, connecting the backend |
+| [docs/architecture.md](./docs/architecture.md) | Architecture, data ownership, project structure, routes |
+| [docs/configuration.md](./docs/configuration.md) | Ports, timeouts, polling intervals, and other non-env-var settings |
+| [docs/automation-api.md](./docs/automation-api.md) | How the dashboard integrates with the automation backend |
+| [docs/data-model.md](./docs/data-model.md) | Tables, relationships, RLS design, storage conventions |
+| [docs/roles-and-workflows.md](./docs/roles-and-workflows.md) | Role capabilities, authentication, ticket and risk-acceptance workflows |
+| [docs/frontend-integration.md](./docs/frontend-integration.md) | Reusing this dashboard, and the backend compatibility contract |
+| [docs/testing.md](./docs/testing.md) | Test suite, typecheck, lint, build |
+| [docs/deployment.md](./docs/deployment.md) | Environment variables, production build, Docker, reverse proxy |
+
+Documentation examples use placeholder identifiers (`Example App`,
+`example-app`, `com.example.placeholder`, `<RUN_ID>`,
+`https://dashboard.example.com`). Real applications under test appear only in
+backend configuration and generated reports, neither of which lives here.
 
 ## License
 

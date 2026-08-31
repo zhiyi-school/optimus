@@ -32,6 +32,8 @@ export default function AssessmentDetail() {
   const navigate = useNavigate();
   const location = useLocation();
   const { profile, can } = useAuth();
+  const canRunTest = can("run_test");
+  const canCommentTicket = can("comment_ticket");
   const queryClient = useQueryClient();
   const { data: assessment, isLoading, isError, refetch } = useAssessment(assessmentId);
   const application = assessment?.application;
@@ -78,16 +80,17 @@ export default function AssessmentDetail() {
   // instance), so it does not count as ready for an unattended run even though
   // it doesn't block the overall status.
   const [autoStartError, setAutoStartError] = useState<string | null>(null);
-  const autoStartedRef = useRef(false);
+  const autoStartedAssessmentRef = useRef<string | null>(null);
   const verifiedReady =
     provisioning?.status === "ready" && !provisioning.stages.some((s) => s.state === "unknown");
   const runnableRiskIds = useMemo(() => automatedRiskIds(risks), [risks]);
   useEffect(() => {
-    if (!can("run_test") || autoStartedRef.current) return;
+    if (!canRunTest) return;
     if (!verifiedReady || !assessment || assessment.status !== "queued") return;
     if (!platform || !application?.external_id) return;
     if (runnableRiskIds.length === 0) return;
-    autoStartedRef.current = true;
+    if (autoStartedAssessmentRef.current === assessment.id) return;
+    autoStartedAssessmentRef.current = assessment.id;
     void syncService
       .runAllTests({
         assessmentId: assessment.id,
@@ -96,9 +99,18 @@ export default function AssessmentDetail() {
         riskIds: runnableRiskIds,
         triggeredBy: profile?.id ?? null,
       })
-      .then(() => queryClient.invalidateQueries({ queryKey: ["assessment", assessmentId] }))
+      .then((outcome) => {
+        if (outcome === "failed") {
+          setAutoStartError("The automated run failed. Results appear once the automation host records it.");
+        } else if (outcome === "cancelledWaiting" || outcome === "timedOutWaiting") {
+          setAutoStartError(
+            "Stopped waiting for this run. It is still going on the automation host, which syncs the results on its own.",
+          );
+        }
+        return queryClient.invalidateQueries({ queryKey: ["assessment", assessmentId] });
+      })
       .catch((err) => {
-        autoStartedRef.current = false;
+        autoStartedAssessmentRef.current = null;
         setAutoStartError(errorMessage(err, "Automated testing could not be started."));
       });
   }, [
@@ -107,7 +119,7 @@ export default function AssessmentDetail() {
     platform,
     application?.external_id,
     runnableRiskIds,
-    can,
+    canRunTest,
     profile?.id,
     queryClient,
     assessmentId,
@@ -213,7 +225,7 @@ export default function AssessmentDetail() {
           isLoading={messagesLoading}
           currentProfileId={profile?.id}
           profileMap={profileMap}
-          canComment={can("comment_ticket")}
+          canComment={canCommentTicket}
           onSend={(message) => sendMessage.mutateAsync(message)}
           sending={sendMessage.isPending}
           emptyStateDescription="Discuss this assessment with the rest of the team."

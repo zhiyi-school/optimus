@@ -4,11 +4,14 @@ import type {
   AppProvisioning,
   AutomationPlatform,
   AutomationResultRow,
+  DashboardSyncWorkerStatus,
   FeatureDefinition,
   RegisterAppRequest,
   RiskDefinition,
   RiskReportDetail,
   RunRecord,
+  RunSyncStatus,
+  SarifDocument,
   StartRunRequest,
 } from "@/api/automation-types";
 
@@ -121,7 +124,7 @@ export const assessmentApi = {
   },
 
   async getRun(runId: string): Promise<RunRecord> {
-    const { data } = await automationClient.get(`/runs/${runId}`);
+    const { data } = await automationClient.get(`/runs/${encodeURIComponent(runId)}`);
     return data;
   },
 
@@ -131,7 +134,7 @@ export const assessmentApi = {
   },
 
   async getRunSummary(runId: string): Promise<AutomationResultRow[]> {
-    const { data } = await automationClient.get(`/runs/${runId}/summary`);
+    const { data } = await automationClient.get(`/runs/${encodeURIComponent(runId)}/summary`);
     return data;
   },
 
@@ -182,7 +185,67 @@ export const assessmentApi = {
 
   eventsUrl(runId: string): string {
     const base = automationClient.defaults.baseURL ?? "";
-    return `${base}/runs/${runId}/events`;
+    return `${base}/runs/${encodeURIComponent(runId)}/events`;
+  },
+
+  reportSarifUrl(runTimestamp: string): string {
+    const base = automationClient.defaults.baseURL ?? "";
+    return `${base}/reports/${encodeURIComponent(runTimestamp)}/sarif`;
+  },
+
+  /** `null` when the run has no SARIF — an incomplete run, or a report predating the export. */
+  async getReportSarif(runTimestamp: string): Promise<SarifDocument | null> {
+    try {
+      const { data } = await automationClient.get(
+        `/reports/${encodeURIComponent(runTimestamp)}/sarif`,
+      );
+      return data;
+    } catch (err) {
+      if (isBackendUnavailable(err)) return null;
+      throw err;
+    }
+  },
+
+  /** Fetched as bytes so the browser never has to parse the document to hand it over. */
+  async downloadReportSarif(runTimestamp: string): Promise<Blob | null> {
+    try {
+      const { data } = await automationClient.get(
+        `/reports/${encodeURIComponent(runTimestamp)}/sarif`,
+        { responseType: "blob" },
+      );
+      return data;
+    } catch (err) {
+      if (isBackendUnavailable(err)) return null;
+      throw err;
+    }
+  },
+};
+
+export const syncApi = {
+  /** `null` when the backend keeps no record — a run predating sync status, or an older API. */
+  async getRunSyncStatus(runId: string): Promise<RunSyncStatus | null> {
+    try {
+      const { data } = await automationClient.get(`/runs/${encodeURIComponent(runId)}/sync-status`);
+      return data;
+    } catch (err) {
+      if (isBackendUnavailable(err)) return null;
+      throw err;
+    }
+  },
+
+  async getWorkerStatus(): Promise<DashboardSyncWorkerStatus | null> {
+    try {
+      const { data } = await automationClient.get("/sync/status");
+      return data;
+    } catch (err) {
+      if (isBackendUnavailable(err)) return null;
+      throw err;
+    }
+  },
+
+  async resyncRun(runId: string): Promise<RunSyncStatus> {
+    const { data } = await automationClient.post(`/runs/${encodeURIComponent(runId)}/sync`);
+    return data;
   },
 };
 

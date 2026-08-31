@@ -12,6 +12,91 @@ export interface RunRecord {
   error: string | null;
   started_at: string | null;
   completed_at: string | null;
+  /** CSV selection the run was started with; `null` means every app / every risk. */
+  apps: string | null;
+  risks: string | null;
+}
+
+/** SARIF 2.1.0 — an interoperability export, never the dashboard's input. */
+export interface SarifDocument {
+  version: string;
+  $schema: string;
+  runs: SarifRun[];
+}
+
+export interface SarifRun {
+  tool: { driver: { name: string; version: string; rules: SarifRule[] } };
+  automationDetails?: { id: string };
+  invocations?: { executionSuccessful: boolean }[];
+  results: SarifResult[];
+  properties?: Record<string, unknown>;
+}
+
+export interface SarifRule {
+  id: string;
+  name: string;
+  shortDescription?: { text: string };
+  fullDescription?: { text: string };
+  properties?: Record<string, unknown>;
+}
+
+export interface SarifResult {
+  ruleId: string;
+  ruleIndex?: number;
+  kind: "pass" | "fail" | "review" | "open" | "notApplicable" | "informational";
+  level: "none" | "note" | "warning" | "error";
+  message: { text: string };
+  partialFingerprints?: Record<string, string>;
+  properties?: Record<string, unknown>;
+}
+
+/** The dashboard sync workflow, which runs after — and separately from — the automation run. */
+export type DashboardSyncStatus = "queued" | "running" | "completed" | "failed" | "not_required";
+
+export interface RunSyncCounts {
+  applications: number;
+  assessments: number;
+  findings: number;
+  history: number;
+  activity: number;
+}
+
+export interface RunSyncStatus {
+  run_id: string;
+  run_timestamp: string;
+  status: DashboardSyncStatus;
+  attempt: number;
+  queued_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  last_updated_at: string | null;
+  error: string | null;
+  retryable: boolean;
+  counts: RunSyncCounts;
+}
+
+export interface DashboardSyncWorkerStatus {
+  enabled: boolean;
+  worker_state: "idle" | "running";
+  queue_depth: number;
+  last_success_at: string | null;
+  last_failure_at: string | null;
+  last_error: string | null;
+  recovery_sweep_enabled: boolean;
+}
+
+export interface RunProgressEvent {
+  type: string;
+  timestamp?: string;
+  app_id?: string;
+  risk_id?: string;
+  test_case_id?: string;
+  verdict?: RiskVerdict | string;
+  final_status?: string;
+  message?: string;
+  status?: RunStatus;
+  error?: string | null;
+  [key: string]: unknown;
 }
 
 export interface StartRunRequest {

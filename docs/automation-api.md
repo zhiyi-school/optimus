@@ -7,7 +7,12 @@ The dashboard talks to the automation backend's FastAPI endpoints
 run), `POST /runs` / `GET /runs/{id}` (start/poll a run), `GET /reports` /
 `GET /reports/{run_timestamp}/summary` (results), and
 `GET /reports/{run_timestamp}/files/{path}` / `GET /reports/{run_timestamp}/evidence-file`
-(evidence files).
+(evidence files). Per-app risk history comes from
+`GET /apps/{app_id}/risks/{risk_id}/history`.
+
+The backend is designed for localhost or a trusted lab network. If
+`VITE_API_BASE_URL` points anywhere else, that URL should be an
+authenticated VPN or reverse-proxy entrypoint, not the bare FastAPI server.
 
 ## Starting a run
 
@@ -109,10 +114,11 @@ back as its own field for the dashboard to store in
 
 The dashboard mirrors that verdict into `applications.provisioning_status`
 (`0011_application_provisioning.sql`) so other sessions see it without polling
-too. **The backend never writes to Supabase** — the dashboard polls and writes
-under the user's own session, so RLS stays the authorization boundary. A
-`null` provisioning_status means the backend isn't tracking this app, and the
-UI falls back to the `app_provisioning` ticket as its readiness signal.
+too. The unauthenticated automation API never writes to Supabase; durable
+report sync is handled by a separate worker process that holds the
+service-role key outside the browser and outside the API server. A `null`
+provisioning_status means the backend isn't tracking this app, and the UI
+falls back to the `app_provisioning` ticket as its readiness signal.
 
 Every one of these calls degrades rather than blocks: if the backend is
 unreachable or predates these endpoints (`404`/`501`/no response), the app is
@@ -123,12 +129,21 @@ validation detail) is surfaced to the user instead, since that's actionable —
 
 ## Idempotent sync
 
-`src/data/sync.ts` is the single place that writes automation results into
-Supabase. It uses stable external IDs (`applications.external_id` = the
-backend's `app_id`; `findings.external_id` = `"<app_id>::<test_id>"`) so
-re-syncing the same run never creates duplicate applications, assessments,
-or findings — it updates the existing rows and writes a `finding_history`
-entry only when the status actually changed.
+The automation host's `mobile_playbook/dashboard_sync.py` worker is the only
+writer of automation results into Supabase. Nothing in the browser writes them:
+the dashboard starts runs, watches progress, and reads what the worker has
+already published. This matters for more than tidiness — the worker holds the
+service-role key, and moving that anywhere a browser can reach would hand every
+visitor a key that bypasses row-level security.
+
+The worker uses stable external IDs (`applications.external_id` = the backend's
+`app_id`; `findings.external_id` = `"<app_id>::<test_id>"`) so re-syncing the
+same run never creates duplicate applications, assessments, or findings — it
+updates the existing rows and writes a `finding_history` entry only when the
+status actually changed. A processed ledger keyed by run timestamp and report
+digest skips work that already landed, and `finding_history`/`activity_log`
+rows carry a deterministic `sync_key` with a unique index behind it, so even a
+duplicate worker cannot double-write them.
 
 Assessments are keyed `"<run_timestamp>::<app_id>"`, but a dashboard-created
 one starts as `"manual::<uuid>"`. The first run to sync **adopts that
@@ -156,35 +171,128 @@ to `running`, which Postgres makes atomic — so several people with the page
 open cannot each start their own run. A failure to start releases the claim:
 back to `queued` when the backend was merely busy with another run for that
 platform (`409`, one run per platform at a time), so a later attempt retries,
-and `failed` otherwise. A run that outlives the poll window keeps `running`
-rather than being reset into a retry loop.
+and `failed` otherwise. Giving up on *watching* a run is not the same as the run
+failing: `cancelledWaiting` and `timedOutWaiting` mean only that this browser
+stopped following along, so neither writes a terminal status. The run keeps going
+on the automation host, and the dashboard sync worker records its result when it
+finishes. A real `POST /runs/{id}/cancel` endpoint is out of scope for this phase.
 
-Two different patterns trigger a sync, depending on the page:
+Nothing in the browser writes results. The dashboard sync worker on the
+automation host is the only writer, so a page that stops watching — or is closed
+altogether — costs nothing but the live progress view.
 
-- **Assessments page ("Run Automated Test")** is fire-and-forget: it calls
-  `POST /runs` directly and closes its dialog immediately — no
-  existing assessment is required, this is how the first assessment for an
-  app gets created at all. Progress is watched separately, by the
-  "Automation Runs" panel polling `GET /runs` every 5s
-  (`useAutomationRuns`). A `useEffect` in `src/pages/Assessments.tsx`
-  watches that same polled list and calls `syncService.syncReport()`
-  automatically the moment a run it hasn't synced yet turns `"completed"`
-  — a `syncingRef` set prevents re-triggering it on every poll and lets a
-  failed attempt retry on the next one, rather than giving up permanently.
-- **Test Workspace and "Run Retest" on a ticket** still use
-  `syncService.runAndSync()`, the blocking start → poll → sync sequence,
-  since those pages are already focused on watching one specific run to
-  completion (with a "Stop waiting" escape hatch if it takes too long —
-  see [CONFIGURATION.md](./CONFIGURATION.md)).
+### Picking a run back up
+
+Because the browser is only ever an observer, "is a run in progress?" cannot live
+in React state: unmounting a page would lose it, and a second person opening the
+same page would never see it at all. Instead `useActiveRun` polls `GET /runs`
+every 5s and `findActiveRun` (`src/data/sync/runs.ts`) picks out the record that
+is still `running` and whose `apps`/`risks` selection covers the app and risk the
+page is showing. A `null` selection covers everything, mirroring the backend's
+`--apps`/`--risks` defaults.
+
+Finding the run is only half of it. One physical device drives one test at a
+time, so a run started for four risks has one executing and three waiting — being
+*covered by* a run is not the same as *being run*. `riskProgressInRun` settles
+which of the three it is from the run's own event log: a `risk_completed` for
+this (app, risk) means `done`, a `risk_started` without one means `running`, and
+neither means `queued`. Reconnecting to the run's `EventSource` replays the whole
+`reports/{run_id}/events.jsonl` from the start, so a page that arrives mid-run
+classifies itself correctly rather than assuming it is next.
+
+`TestDetail` and the "Run Retest" dialog show live progress only for `running`,
+say plainly that the test is waiting its turn for `queued`, and stop showing
+either once this risk is `done` even though the run continues with other risks.
+Both merge that with a local `watching` flag covering the gap between clicking
+the button and the run appearing in the list. "Stop waiting" records the run id
+it dismissed so the poll does not immediately re-adopt it.
+
+Both routes for the test page share one `<TestDetail />` element, so switching
+between two tests changes `:testId` without unmounting anything. `TestDetail`
+therefore renders its body keyed by `testId`: without that key the previous
+test's "I started this" flag, run id and error survive into the next test, which
+then claims to be running when it is not. Starting a run also invalidates the
+shared `automationRuns` query so other pages see the busy device immediately
+rather than up to one poll interval later.
+
+`findPlatformRun` answers a different question: whether *any* run holds this
+platform's device. `POST /runs` rejects a second run for a busy platform with
+`409`, so the button is disabled with "Device busy" rather than letting the click
+fail. That covers a run for a different app entirely, and also the case where
+this risk has already finished but its run is still working through the rest.
 
 Only Security Team (`run_test` capability) can trigger any of these — RLS
 enforces this independently on the Supabase writes.
 
 Separately, `/runs/:runTimestamp` (`src/pages/RunDetail.tsx`) is a
 read-only view of one run's live status and full result summary — one row
-per (app, risk) tested, each with its real verdict — built straight from
+per (app, risk) tested, each with its real `verdict` — built straight from
 the backend (`useRunStatus` + `useRunResults`) rather than from whatever
-has synced into Supabase, so it works even before/without a sync.
+has synced into Supabase, so it works even before/without a sync. While a
+run is active, focused run views also open `GET /runs/{run_id}/events` with
+`EventSource` to render live progress events; regular `GET /runs/{run_id}`
+polling stays enabled as the fallback and remains the source of truth for
+completion.
+
+### Dashboard sync status
+
+A run finishing is not the same as the dashboard being current. The worker
+publishes results after the run ends, so there is a window — usually seconds —
+where `GET /runs/{run_id}` says `completed` while Supabase still holds the
+previous state. That window is what made results look "missing" right after a
+run, so it is now shown rather than hidden.
+
+`useRunSyncStatus(runId)` polls `GET /runs/{run_id}/sync-status` every 4s while
+the sync is `queued` or `running`, and stops on `completed`, `failed` or
+`not_required`. `syncPollInterval` in `src/lib/dashboard-sync.ts` is that rule as
+a plain function, so the start/stop behaviour is tested directly. A backend with
+no record for the run — an older API, or a report predating the feature —
+returns `null` through `syncApi.getRunSyncStatus` rather than an error, and the
+UI simply shows nothing.
+
+When the status reaches `completed`, the hook invalidates the Supabase-backed
+queries the worker rewrites: findings and their history, retests, assessments,
+tickets, activity and the dashboard metrics. That is the only refresh mechanism —
+the browser still never writes a report to Supabase, and nothing here reads the
+service-role key, which exists only in the worker's own process environment.
+
+`DashboardSyncNotice` renders the five states as "Dashboard sync queued", "…in
+progress", "Dashboard updated", "Dashboard sync failed" and "Dashboard sync not
+required". A failed sync says explicitly that the run itself is intact, because
+the run's own results and evidence keep rendering from the backend either way.
+A retry button appears only when the status is `failed` **and** `retryable` is
+true — an ambiguous-application failure needs a person to resolve it, so the
+backend marks it non-retryable and no button is offered. Retrying calls
+`POST /runs/{run_id}/sync`, which queues another worker pass without `--force`,
+so a report that already landed is skipped by the ledger instead of written
+twice.
+
+Giving up locally is still not a failure. `runAndWait`'s `cancelledWaiting` and
+`timedOutWaiting` outcomes report `dashboardSyncPending: false` and write no
+terminal state anywhere; the run and its sync both continue on the automation
+host, and reopening the page picks both back up.
+
+### SARIF download
+
+`RunDetail` offers a "Download SARIF" action for completed runs, so a run's
+results can be handed to any tool that speaks the SARIF 2.1.0 interchange
+format. `canExportSarif` in `src/lib/sarif.ts` gates it on the run's status:
+only a `completed` run has the manifest the backend requires, so the button is
+absent for a run that is still going or that failed, rather than offering a
+download that would 404.
+
+The click calls `assessmentApi.downloadReportSarif`, which requests
+`GET /reports/{run_timestamp}/sarif` with `responseType: "blob"`. Fetching bytes
+rather than JSON means the browser never parses SARIF — it only hands the file
+to the user. A run the backend has no export for comes back as `null` rather
+than throwing, and the button shows "No SARIF export is available for this run."
+`assessmentApi.reportSarifUrl(runTimestamp)` builds the same URL for anywhere a
+plain link is wanted.
+
+SARIF is an export only. Findings, tickets, history and activity continue to
+come from Supabase exactly as before, populated by the automation host's worker;
+nothing in the browser reads SARIF back into the dashboard, and this path
+touches no backend credential.
 
 ## Risk text comes from the playbook
 
@@ -246,8 +354,10 @@ from any other origin, set that variable on the backend — otherwise every
 request is blocked by the browser before it reaches the API, and the page
 looks empty rather than broken. The dashboard shows an explicit error banner
 when these calls fail (see `src/pages/Assessments.tsx`), but the fix is
-backend-side configuration.
+backend-side configuration. Use exact origins only; the backend rejects `*`
+at startup because its endpoints can write config, start tests, upload
+builds, and serve evidence.
 
 ## Known gaps / recommended backend additions
 
-1. **No authentication on the automation API.** Fine for local/trusted-network use, but anything beyond that needs a reverse proxy or backend change.
+1. **No built-in user authentication on the automation API.** Fine for localhost or trusted-network use, but anything beyond that needs an authenticated reverse proxy, VPN, or backend auth change.
