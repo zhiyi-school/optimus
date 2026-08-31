@@ -14,6 +14,7 @@ import {
 import { useFindings, useApplications, useTicketsByFindingIds } from "@/hooks/queries";
 import { formatShortDate } from "@/lib/utils";
 import type { Application, Finding, FindingStatus, TicketStatus } from "@/data/types";
+import { ApplicationIcon } from "@/components/application-icon";
 
 type Row = Finding & { application: Application | null };
 
@@ -63,7 +64,16 @@ export default function Findings() {
 
   const columns: DataTableColumn<Row>[] = [
     { key: "title", header: "Finding", render: (r) => <span className="font-medium text-foreground">{r.title}</span> },
-    { key: "application", header: "Application", render: (r) => r.application?.name ?? "—" },
+    {
+      key: "application",
+      header: "Application",
+      render: (r) => (
+        <div className="flex items-center gap-2.5">
+          <ApplicationIcon application={r.application} className="h-7 w-7" iconClassName="h-3.5 w-3.5" />
+          <span>{r.application?.name ?? "—"}</span>
+        </div>
+      ),
+    },
     { key: "version", header: "Version", render: (r) => r.application?.version ?? "—" },
     { key: "platform", header: "Platform", render: (r) => <PlatformBadge platform={r.platform} /> },
     { key: "severity", header: "Severity", render: (r) => <SeverityBadge severity={r.severity} /> },

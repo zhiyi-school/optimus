@@ -5,7 +5,9 @@ The schema itself lives in `supabase/migrations/` (`0001_schema.sql` /
 `0005_admin_policies.sql` / `0006_multi_role_admin.sql` /
 `0007_app_provisioning.sql` / `0008_assessment_messages.sql` /
 `0009_application_contact_emails.sql` / `0010_applications_delete.sql` /
-`0011_application_provisioning.sql` / `0012_dashboard_metrics_rpc.sql`) —
+`0011_application_provisioning.sql` / `0012_dashboard_metrics_rpc.sql` /
+`0013_sync_idempotency_keys.sql` / `0014_dashboard_metrics_grants.sql` /
+`0015_dashboard_metrics_revoke_anon.sql` / `0016_application_icon_refs.sql`) —
 this doc covers the *why* behind a few decisions that aren't obvious from
 reading the SQL alone.
 
@@ -100,6 +102,47 @@ policy must agree on these conventions:
   `evidence/ticket-<ticket_id>/<filename>` — `can_access_evidence_object`
   reads the `finding-`/`ticket-` prefix to decide which table to check
   against.
+
+## Application icons
+
+`0016_application_icon_refs.sql` adds three nullable columns to `applications`:
+
+| Column | Holds |
+| --- | --- |
+| `artifact_sha256` | SHA-256 of the build the icon came from |
+| `icon_ref` | logical reference of the form `icons/<ARTIFACT_ID>.png` |
+| `icon_extraction_status` | `available`, `unavailable` or `failed` |
+
+**No image data lives here.** The automation backend owns the IPA/APK and the
+extracted PNG; these columns are a pointer and a status, and the frontend turns
+them into a request to the backend
+([automation-api.md](./automation-api.md#application-icons)). A `bytea` or base64
+column was rejected deliberately: `applicationData.list()` selects `*` and runs
+on every assessments page load, so image bytes would ride along on the hot path,
+and the dashboard would then hold two copies of something the backend already
+stores content-addressed.
+
+`icon_ref` is a logical reference rather than a URL because the backend's origin
+is deployment-specific and already configured once as `VITE_API_BASE_URL`.
+Storing an absolute URL would pin every row to one host and break on a move.
+
+`artifact_sha256` is the checksum of the build a run actually executed against,
+recorded by the run itself, so an icon stays bound to the build that produced the
+assessment rather than to whatever was uploaded most recently.
+
+All three are nullable and default to null, which is the correct state for every
+row that existed before the migration — the frontend treats null as "no icon" and
+renders its placeholder. Check constraints reject anything that is not a hex
+digest, not the exact `icons/<64 hex>.png` shape, or not one of the three
+statuses, so a malformed reference cannot reach the frontend and be turned into a
+request. Access is unchanged: the `applications_select`/`applications_update`
+policies in `0002_rls.sql` are row-level, so the new columns inherit them without
+a policy change.
+
+The migration is **required** for icon-enabled synchronisation, not optional: the
+sync worker writes these fields on every application row, so without it a pass
+fails with `column ... does not exist`. A dashboard running against a backend
+that never writes icon references works fine with the columns present and null.
 
 ## Idempotent sync
 

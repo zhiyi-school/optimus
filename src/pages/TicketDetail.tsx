@@ -21,6 +21,7 @@ import {
 import { formatDate as fmt } from "@/lib/utils";
 import { ticketTypeConfig as typeConfig } from "@/lib/status";
 import type { TicketAttachment } from "@/data/types";
+import { ApplicationIcon } from "@/components/application-icon";
 
 export default function TicketDetail() {
   const { ticketId } = useParams<{ ticketId: string }>();
@@ -113,7 +114,12 @@ export default function TicketDetail() {
               {ticket.application && (
                 <div>
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Application</p>
-                  <p className="text-sm text-foreground">
+                  <p className="flex items-center gap-2 text-sm text-foreground">
+                    <ApplicationIcon
+                      application={ticket.application}
+                      className="h-6 w-6"
+                      iconClassName="h-3 w-3"
+                    />
                     {ticket.application.name} <PlatformBadge platform={ticket.application.platform} />
                   </p>
                 </div>

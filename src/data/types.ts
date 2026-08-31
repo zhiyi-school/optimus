@@ -63,6 +63,10 @@ export interface Application {
   developer_contact_email: string | null;
   provisioning_status: "pending" | "ready" | "failed" | null;
   provisioning_error: string | null;
+  artifact_sha256: string | null;
+  /** Logical reference into the automation backend's icon store, never a URL or image data. */
+  icon_ref: string | null;
+  icon_extraction_status: "available" | "unavailable" | "failed" | null;
   created_at: string;
   updated_at: string;
 }

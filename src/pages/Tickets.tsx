@@ -10,6 +10,7 @@ import { useTickets, useApplications, useProfiles } from "@/hooks/queries";
 import { ticketTypeConfig } from "@/lib/status";
 import { formatDate, cn } from "@/lib/utils";
 import type { Application, Finding, Ticket, TicketStatus, TicketType, UserRole } from "@/data/types";
+import { ApplicationIcon } from "@/components/application-icon";
 
 type Row = Ticket & { finding: Finding | null; application: Application | null };
 
@@ -98,7 +99,10 @@ export default function Tickets() {
       header: "Application",
       render: (r) => (
         <span className="inline-flex items-center gap-2">
-          {r.application?.name ?? "—"}
+          <span className="flex items-center gap-2.5">
+            <ApplicationIcon application={r.application} className="h-7 w-7" iconClassName="h-3.5 w-3.5" />
+            {r.application?.name ?? "—"}
+          </span>
           {r.application && <PlatformBadge platform={r.application.platform} />}
         </span>
       ),

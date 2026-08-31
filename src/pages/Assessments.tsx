@@ -21,7 +21,7 @@ import {
   useDeleteApplication,
 } from "@/hooks/queries";
 import { useAuth } from "@/auth/useAuth";
-import { appTypeIcon } from "@/lib/entity-icons";
+import { ApplicationIcon } from "@/components/application-icon";
 import { latestAssessmentPerApp } from "@/lib/assessments";
 import { errorMessage, formatDate } from "@/lib/utils";
 import type { Assessment, Application } from "@/data/types";
@@ -90,17 +90,12 @@ export default function Assessments() {
       {
         key: "application",
         header: "Application",
-        render: (r) => {
-          const Icon = appTypeIcon(r.application?.app_type);
-          return (
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-muted/40">
-                <Icon className="h-4 w-4 text-foreground" />
-              </div>
-              <span className="font-medium text-foreground">{r.application?.name ?? "—"}</span>
-            </div>
-          );
-        },
+        render: (r) => (
+          <div className="flex items-center gap-3">
+            <ApplicationIcon application={r.application} />
+            <span className="font-medium text-foreground">{r.application?.name ?? "—"}</span>
+          </div>
+        ),
       },
       { key: "version", header: "Version", render: (r) => r.application?.version ?? "—" },
       {

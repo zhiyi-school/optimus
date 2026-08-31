@@ -26,6 +26,7 @@ import {
 } from "@/hooks/queries";
 import { formatShortDate } from "@/lib/utils";
 import type { Application, Profile, Team, TeamType, UserRole } from "@/data/types";
+import { ApplicationIcon } from "@/components/application-icon";
 
 const roleLabels: Record<UserRole, string> = {
   developer: "Developer Team",
@@ -267,7 +268,16 @@ function ApplicationTable({ applications, teams }: { applications: Application[]
   const updateApp = useUpdateApplication();
 
   const columns: DataTableColumn<Application>[] = [
-    { key: "name", header: "Application", render: (a) => <span className="font-medium text-foreground">{a.name}</span> },
+    {
+      key: "name",
+      header: "Application",
+      render: (a) => (
+        <div className="flex items-center gap-2.5">
+          <ApplicationIcon application={a} className="h-7 w-7" iconClassName="h-3.5 w-3.5" />
+          <span className="font-medium text-foreground">{a.name}</span>
+        </div>
+      ),
+    },
     { key: "version", header: "Version", render: (a) => a.version ?? "—" },
     { key: "platform", header: "Platform", render: (a) => <PlatformBadge platform={a.platform} /> },
     {

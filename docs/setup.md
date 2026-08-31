@@ -55,6 +55,8 @@ A local Supabase (CLI) option is documented at the bottom for development.
    highest-numbered file present. `0013_sync_idempotency_keys.sql` adds the
    `sync_key` columns the dashboard sync worker writes; until it is applied
    the worker fails with `column ... does not exist`.
+   `0016_application_icon_refs.sql` is optional — without it every application
+   shows the placeholder icon and nothing else changes.
    (Or, with the Supabase CLI linked to your project: `supabase db push`.)
    Migrations are additive — if you already applied earlier ones, just run
    whichever ones are new.

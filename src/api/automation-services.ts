@@ -1,4 +1,4 @@
-import { automationClient } from "@/api/automation-client";
+import { automationAssetUrl, automationClient } from "@/api/automation-client";
 import type {
   AppConfigEntry,
   AppProvisioning,
@@ -114,6 +114,15 @@ export const provisioningApi = {
       if (isBackendUnavailable(err)) return null;
       throw err;
     }
+  },
+};
+
+export const iconApi = {
+  /** The backend endpoint for an app's icon, versioned by build so a new one is never cached over. */
+  url(platform: AutomationPlatform, appId: string, artifactSha256?: string): string {
+    const path = `/config/${encodeURIComponent(platform)}/apps/${encodeURIComponent(appId)}/icon`;
+    const url = automationAssetUrl(path);
+    return artifactSha256 ? `${url}?v=${encodeURIComponent(artifactSha256)}` : url;
   },
 };
 

@@ -98,6 +98,7 @@ merging into an existing project, these are the dependencies:
 | RLS | policies from `0002_rls.sql`, extended by `0005`, `0006`, `0010`, `0011` |
 | Idempotency | `sync_key` columns and their partial unique indexes (`0013_sync_idempotency_keys.sql`) — **the sync worker fails without these** |
 | Grants | `0014_dashboard_metrics_grants.sql`, then `0015_dashboard_metrics_revoke_anon.sql` |
+| Icon refs | `artifact_sha256`, `icon_ref`, `icon_extraction_status` on `applications` (`0016_application_icon_refs.sql`) — **required if the backend syncs icon references**, since the worker writes these fields on every application row |
 
 Migrations are additive and must be applied in numeric order. Table
 relationships and the RLS rationale: [data-model.md](./data-model.md).
@@ -124,6 +125,8 @@ The dashboard's expectations are encoded in `src/api/automation-types.ts` and
 | SARIF `result.kind` | `"pass"`, `"fail"`, `"review"`, `"open"`, `"notApplicable"`, `"informational"` |
 | provisioning `status` | `"pending"`, `"ready"`, `"failed"` |
 | provisioning stage `state` | `"pending"`, `"in_progress"`, `"done"`, `"failed"`, `"unknown"` |
+| `icon_extraction_status` | `"available"`, `"unavailable"`, `"failed"` |
+| `icon_ref` | exactly `icons/<64 lowercase hex>.png`, or `null` |
 | verdict | `"At Risk"`, `"Reduced Risk"`, `"Inconclusive"` |
 
 ### Identifier semantics
@@ -149,6 +152,7 @@ The dashboard's expectations are encoded in `src/api/automation-types.ts` and
 | `/config/{platform}/apps` | GET | — | array of `{id, name, bundle_id?, package_name?}` | 200 |
 | `/config/{platform}/apps` | POST | `{name, version?, bundle_id?, package_name?, artifact?, risks?}` | `{id}` | 201, 409 with `{detail:{app_id}}` on duplicate |
 | `/config/{platform}/apps/{app_id}/provisioning` | GET | — | `{app_id, platform, bundle_id, status, stages[], error}` | 200, 404 |
+| `/config/{platform}/apps/{app_id}/icon` | GET | — | `image/png`; `ETag`/`Cache-Control` optional | 200, 404 for unknown app **and** for no icon |
 | `/runs` | GET | — | array of run records | 200 |
 | `/runs` | POST | `{platform, config_path, apps?, risks?, out_dir?}` | `{run_id, platform, status}` | **202**, 409 busy, 422 unknown app/risk |
 | `/runs/{run_id}` | GET | — | full run record | 200, 404 |
@@ -307,6 +311,8 @@ or a trusted LAN needs an authenticating proxy or VPN in front of it. See
 | "Dashboard sync failed" | a Supabase write failed | read the message; retry if `retryable` |
 | Nothing ever syncs | the worker is not running, or `DASHBOARD_SYNC_AUTO_TRIGGER=false` | check `GET /sync/status` |
 | Report or evidence links 404 | the file is gone, or outside the backend's allowed roots | confirm the run directory still exists on the automation host |
+| Every application shows a placeholder icon | `0016` not applied, or no icon reference has been written yet | apply the migration, then run `python -m mobile_playbook.icon_backfill` on the automation host |
+| One application keeps its placeholder after a backfill | its build has no icon the backend can read | expected; the backfill records it as `unavailable`. iOS asset-catalog-only and Android adaptive-XML icons are known gaps |
 | A replacement API "works" but pages misbehave | shapes, status codes or `run_id` semantics differ | re-check the [contract](#required-backend-compatibility-contract) — names alone are not enough |
 
 ## Current limitations and follow-up work
@@ -322,3 +328,9 @@ or a trusted LAN needs an authenticating proxy or VPN in front of it. See
   rebuild, so one artifact cannot serve multiple environments.
 - **Single automation host** assumed; the dashboard has no concept of several
   backends or of routing a run to a particular one.
+- **Application icons are unauthenticated like the rest of the automation API.**
+  The icon endpoint sits behind the same trusted-local/trusted-LAN boundary as
+  every other backend route. If the API later gains authentication, the icon
+  endpoint must be placed inside the same authorization boundary as the
+  application and assessment data it depicts — an app's icon should not be
+  readable by a caller who cannot read the app.

@@ -127,6 +127,99 @@ validation detail) is surfaced to the user instead, since that's actionable —
 `isBackendUnavailable` / `describeAutomationError` in
 `src/api/automation-services.ts` draw that line.
 
+## Application icons
+
+The backend owns the IPA/APK and the icon extracted from it. Supabase holds only
+`applications.icon_ref` (`icons/<ARTIFACT_ID>.png`), `artifact_sha256` and
+`icon_extraction_status`; the dashboard never reads a build, parses an image, or
+stores image data.
+
+`src/lib/application-icon.ts` turns a row into a URL, and
+`src/components/application-icon.tsx` renders it:
+
+```ts
+applicationIconUrl(application)
+// -> "<VITE_API_BASE_URL>/config/<platform>/apps/<APP_ID>/icon"  when an icon exists
+// -> null                                                        otherwise
+```
+
+The URL is derived from `applications.platform` and `applications.external_id` —
+identifiers the dashboard already holds — so `icon_ref` never appears in it. It
+exists to answer "is there an icon?" without a request. `artifact_sha256` is
+appended as `?v=<checksum>`, which changes the URL whenever the underlying build
+changes, so a browser can never keep serving a previous build's icon from cache.
+The backend storage path and the `icons/<ARTIFACT_ID>.png` reference stay out of
+the DOM entirely. `applicationIconUrl`
+returns null, and no request is made at all, when the application has no
+`external_id`, has no `icon_ref`, or has an `icon_extraction_status` the backend
+already reported as `unavailable` or `failed`. Rows predating icon support have
+all three null and fall into the same path.
+
+`<ApplicationIcon application={...} />` is the only place icon behaviour lives.
+It renders the backend image when there is one and the existing
+`appTypeIcon` placeholder otherwise — for a missing reference, for a `404`, and
+for any image that fails to load, since it falls back on the `<img>` `onError`
+too. A backend that is down, an icon that was cleaned out of the store, and an
+app that never had one all look the same to the reader: the placeholder. It is used everywhere an application identity appears — the assessments list,
+the assessment sidebar, the findings and tickets tables, ticket detail, and the
+admin applications table — and any new surface should use it rather than
+reaching for `appTypeIcon` directly. A test enumerates those files and fails if
+one of them hand-rolls the placeholder instead.
+
+Nothing about an assessment depends on an icon. The icon request is a plain
+`<img>` outside React Query, so it cannot fail a query, block a render, or put a
+page into an error state.
+
+### Which build's icon you are looking at
+
+An icon is bound to the build a run actually executed against, not to whatever
+is on the automation host now. The run records that artifact's SHA-256 and the
+sync worker links the icon derived from that exact checksum, so uploading a new
+build does not retroactively change a finished assessment's icon. `artifact_sha256`
+on the row tells you which build you are seeing. If the recorded build's icon is
+missing from the store, the previous reference is left in place rather than
+replaced with a different build's.
+
+### Backfilling
+
+Applications created before icon support keep `icon_ref = null` until something
+fills it in. Two things do, both on the automation host:
+
+- **A dashboard sync pass**, which writes the reference alongside the rest of the
+  application row. Nothing extra to run.
+- **A one-time sweep**, for filling in a whole existing roster at once:
+
+  ```bash
+  python -m mobile_playbook.icon_backfill --dry-run
+  python -m mobile_playbook.icon_backfill
+  ```
+
+  It matches on backend id **and** platform first, then falls back to a single
+  unlinked row with the same name and platform. Several matches are reported as
+  ambiguous and skipped rather than guessed at.
+
+The dashboard has no icon-refresh action, by design: extraction reads
+backend-owned build files, so it stays an operator task on the host that owns
+them. The frontend only ever reads an icon. No scan of stored artifacts happens
+during ordinary dashboard loading, and every extraction result is cached by
+artifact checksum on the backend.
+
+### For a replacement backend
+
+A different backend can serve this contract by exposing one endpoint:
+
+```text
+GET /config/{platform}/apps/{app_id}/icon
+  200  image/png
+  404  unknown app, or no icon available
+```
+
+An `ETag` and `Cache-Control` are expected but optional. That is the whole
+contract — the dashboard never POSTs to it. If `icon_ref` is never written to
+Supabase the dashboard simply shows placeholders, and no other behaviour
+changes.
+
+
 ## Idempotent sync
 
 The automation host's `mobile_playbook/dashboard_sync.py` worker is the only

@@ -3,7 +3,8 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge, PlatformBadge } from "@/components/data-display";
-import { appTypeIcon, riskIcon } from "@/lib/entity-icons";
+import { riskIcon } from "@/lib/entity-icons";
+import { ApplicationIcon } from "@/components/application-icon";
 import { cn } from "@/lib/utils";
 import type { RiskDefinition } from "@/api/automation-types";
 import type { Application, Assessment, Finding } from "@/data/types";
@@ -25,7 +26,6 @@ export function AssessmentSidebar({
   activeTestId,
 }: AssessmentSidebarProps) {
   const navigate = useNavigate();
-  const AppIcon = appTypeIcon(application?.app_type);
   const pct =
     assessment.total_tests > 0
       ? Math.min(100, Math.round((assessment.completed_tests / assessment.total_tests) * 100))
@@ -43,9 +43,7 @@ export function AssessmentSidebar({
 
       <Card className="overflow-hidden">
         <div className="flex items-center gap-3 p-4 pb-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-muted/40">
-            <AppIcon className="h-5 w-5 text-foreground" />
-          </div>
+          <ApplicationIcon application={application} className="h-11 w-11" iconClassName="h-5 w-5" />
           <div className="min-w-0">
             <p className="truncate text-sm font-bold text-foreground">{application?.name ?? "—"}</p>
             <p className="text-xs text-muted-foreground">

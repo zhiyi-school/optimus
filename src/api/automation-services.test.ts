@@ -4,6 +4,7 @@ const get = vi.fn();
 const post = vi.fn();
 
 vi.mock("@/api/automation-client", () => ({
+  automationAssetUrl: (path: string) => `http://127.0.0.1:8080${path}`,
   automationClient: {
     get: (...args: unknown[]) => get(...args),
     post: (...args: unknown[]) => post(...args),
@@ -11,7 +12,7 @@ vi.mock("@/api/automation-client", () => ({
   },
 }));
 
-const { syncApi } = await import("./automation-services");
+const { iconApi, syncApi } = await import("./automation-services");
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -135,4 +136,25 @@ describe("SARIF export", () => {
 
     await expect(assessmentApi.downloadReportSarif("r1")).rejects.toThrow("boom");
   });
+});
+
+describe("iconApi", () => {
+  it("builds the icon URL from the platform and backend app id", () => {
+    expect(iconApi.url("ios", "example_app")).toBe(
+      "http://127.0.0.1:8080/config/ios/apps/example_app/icon",
+    );
+  });
+
+  it("escapes an app id rather than letting it shape the path", () => {
+    expect(iconApi.url("android", "../secrets")).toBe(
+      "http://127.0.0.1:8080/config/android/apps/..%2Fsecrets/icon",
+    );
+  });
+
+  it("appends the build checksum as a cache-busting version", () => {
+    expect(iconApi.url("ios", "example_app", "c".repeat(64))).toBe(
+      `http://127.0.0.1:8080/config/ios/apps/example_app/icon?v=${"c".repeat(64)}`,
+    );
+  });
+
 });
