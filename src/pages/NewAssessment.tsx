@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { Boxes, ChevronLeft, Plus, ShieldCheck, Terminal, Trash2, X } from "lucide-react";
@@ -72,7 +72,7 @@ export default function NewAssessment() {
     [stepOneRef, stepTwoRef, stepThreeRef],
   );
 
-  function goToStep(key: number) {
+  const goToStep = useCallback((key: number) => {
     if (key === 4) {
       setScreen("review");
       return;
@@ -83,7 +83,7 @@ export default function NewAssessment() {
       return;
     }
     sectionRefs[key as 1 | 2 | 3].current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
+  }, [screen, sectionRefs]);
 
   useEffect(() => {
     if (screen !== "form" || pendingScrollStep === null) return;
@@ -91,14 +91,15 @@ export default function NewAssessment() {
     setPendingScrollStep(null);
   }, [screen, pendingScrollStep, sectionRefs]);
 
-  function updateEmail(i: number, value: string) {
+  const updateEmail = useCallback((i: number, value: string) => {
     setEmails((prev) => prev.map((e, idx) => (idx === i ? value : e)));
-  }
-  function removeEmail(i: number) {
-    setEmails((prev) => prev.filter((_, idx) => idx !== i));
-  }
+  }, []);
 
-  async function confirm() {
+  const removeEmail = useCallback((i: number) => {
+    setEmails((prev) => prev.filter((_, idx) => idx !== i));
+  }, []);
+
+  const confirm = useCallback(async () => {
     if (!name.trim()) return;
     setSaving(true);
     setError(null);
@@ -127,7 +128,7 @@ export default function NewAssessment() {
     } finally {
       setSaving(false);
     }
-  }
+  }, [appType, emails, identifier, name, navigate, platform, queryClient, version]);
 
   const validEmails = emails.map((e) => e.trim()).filter(Boolean);
 
@@ -283,7 +284,7 @@ export default function NewAssessment() {
                             type="email"
                             value={email}
                             onChange={(e) => updateEmail(i, e.target.value)}
-                            placeholder="name@company.com"
+                            placeholder="name@example.com"
                             className="flex-1"
                           />
                           <button

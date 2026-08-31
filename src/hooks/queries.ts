@@ -1,7 +1,13 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { assessmentApi, configApi, provisioningApi, testApi } from "@/api/automation-services";
-import type { AutomationPlatform } from "@/api/automation-types";
+import { assessmentApi, configApi, provisioningApi, syncApi, testApi } from "@/api/automation-services";
+import type {
+  AutomationPlatform,
+  DashboardSyncStatus,
+  RunProgressEvent,
+} from "@/api/automation-types";
+import { findActiveRun, findPlatformRun, type ActiveRunFilter } from "@/data/sync";
+import { SYNC_STATUS_POLL_INTERVAL_MS, syncPollInterval } from "@/lib/dashboard-sync";
 import {
   activityData,
   applicationData,
@@ -18,7 +24,6 @@ import {
   ticketData,
   userData,
 } from "@/data/services";
-import { syncService } from "@/data/sync";
 import type {
   FindingStatus,
   RiskAcceptanceDecision,
@@ -96,6 +101,28 @@ export function useAutomationRuns() {
   });
 }
 
+const ACTIVE_RUN_POLL_INTERVAL_MS = 5000;
+
+/**
+ * Re-derives the in-flight run from the automation host so navigating away and
+ * back does not lose the progress a component was showing.
+ */
+export function useActiveRun(filter: ActiveRunFilter) {
+  const enabled = !!filter.platform && !!filter.appExternalId;
+  const { data } = useQuery({
+    queryKey: ["automationRuns"],
+    queryFn: assessmentApi.listRuns,
+    enabled,
+    refetchInterval: ACTIVE_RUN_POLL_INTERVAL_MS,
+    retry: false,
+  });
+  return {
+    run: findActiveRun(data, filter),
+    /** Any run holding the platform's device — it blocks starting another one. */
+    platformRun: findPlatformRun(data, filter.platform),
+  };
+}
+
 export function useAutomationReports() {
   return useQuery({
     queryKey: ["automationReports"],
@@ -114,6 +141,140 @@ export function useRunStatus(runId: string | undefined, opts: { poll?: boolean }
       return status === "running" ? 2000 : false;
     },
   });
+}
+
+/** Supabase-backed views the worker rewrites when it publishes a run. */
+const DASHBOARD_QUERY_KEYS = [
+  "findings",
+  "finding",
+  "findingHistory",
+  "findingRetests",
+  "assessment",
+  "assessments",
+  "tickets",
+  "ticket",
+  "ticketsWithRelations",
+  "ticketRetests",
+  "activity",
+  "dashboardMetrics",
+];
+
+export function useRunSyncStatus(runId: string | undefined) {
+  const queryClient = useQueryClient();
+  const query = useQuery({
+    queryKey: ["runSyncStatus", runId],
+    queryFn: () => syncApi.getRunSyncStatus(runId as string),
+    enabled: !!runId,
+    refetchInterval: (q) => syncPollInterval(q.state.data?.status),
+    retry: false,
+  });
+
+  const status = query.data?.status;
+  const seenRef = useRef<DashboardSyncStatus | undefined>();
+  useEffect(() => {
+    const previous = seenRef.current;
+    seenRef.current = status;
+    if (status !== "completed" || previous === undefined || previous === "completed") return;
+    for (const key of DASHBOARD_QUERY_KEYS) {
+      void queryClient.invalidateQueries({ queryKey: [key] });
+    }
+  }, [status, queryClient]);
+
+  return query;
+}
+
+export function useResyncRun(runId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => syncApi.resyncRun(runId as string),
+    onSuccess: (data) => {
+      queryClient.setQueryData(["runSyncStatus", runId], data);
+    },
+  });
+}
+
+export function useDashboardSyncWorker(opts: { poll?: boolean } = {}) {
+  return useQuery({
+    queryKey: ["dashboardSyncWorker"],
+    queryFn: syncApi.getWorkerStatus,
+    refetchInterval: opts.poll ? SYNC_STATUS_POLL_INTERVAL_MS : false,
+    retry: false,
+  });
+}
+
+export type RunEventStreamState = "idle" | "connecting" | "open" | "unavailable" | "closed";
+
+function runEventKey(event: RunProgressEvent) {
+  return [
+    event.timestamp ?? "",
+    event.type,
+    event.app_id ?? "",
+    event.risk_id ?? "",
+    event.test_case_id ?? "",
+    event.status ?? "",
+    event.error ?? "",
+  ].join("|");
+}
+
+export function useRunEvents(runId: string | undefined, enabled: boolean) {
+  const queryClient = useQueryClient();
+  const seenRef = useRef<Set<string>>(new Set());
+  const [events, setEvents] = useState<RunProgressEvent[]>([]);
+  const [streamState, setStreamState] = useState<RunEventStreamState>("idle");
+
+  useEffect(() => {
+    seenRef.current = new Set();
+    setEvents([]);
+
+    if (!runId || !enabled) {
+      setStreamState("idle");
+      return undefined;
+    }
+
+    if (typeof EventSource === "undefined") {
+      setStreamState("unavailable");
+      return undefined;
+    }
+
+    const source = new EventSource(assessmentApi.eventsUrl(runId));
+    let closedByClient = false;
+    setStreamState("connecting");
+
+    source.onopen = () => setStreamState("open");
+    source.onmessage = (message) => {
+      try {
+        const event = JSON.parse(message.data) as RunProgressEvent;
+        const key = runEventKey(event);
+        if (!seenRef.current.has(key)) {
+          seenRef.current.add(key);
+          setEvents((current) => [...current, event]);
+        }
+        if (event.type === "done") {
+          void queryClient.invalidateQueries({ queryKey: ["runStatus", runId] });
+          void queryClient.invalidateQueries({ queryKey: ["automationRuns"] });
+          closedByClient = true;
+          source.close();
+          setStreamState("closed");
+        }
+      } catch {
+        setStreamState("unavailable");
+        source.close();
+      }
+    };
+    source.onerror = () => {
+      if (!closedByClient) {
+        setStreamState("unavailable");
+        source.close();
+      }
+    };
+
+    return () => {
+      closedByClient = true;
+      source.close();
+    };
+  }, [enabled, queryClient, runId]);
+
+  return { events, streamState };
 }
 
 export function useReportSummary(runTimestamp: string | undefined) {
@@ -455,25 +616,6 @@ export function useReviewRiskAcceptance() {
   });
 }
 
-export function useSyncReport() {
-  const invalidate = useInvalidate();
-  return useMutation({
-    mutationFn: ({
-      runTimestamp,
-      triggeredBy,
-    }: {
-      runTimestamp: string;
-      triggeredBy: string | null;
-    }) => syncService.syncReport(runTimestamp, triggeredBy),
-    onSuccess: () =>
-      invalidate([
-        ["assessments"],
-        ["applications"],
-        ["findings"],
-        ["dashboardMetrics"],
-      ]),
-  });
-}
 
 export function useCreateTeam() {
   const invalidate = useInvalidate();

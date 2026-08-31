@@ -2,21 +2,34 @@ import { useParams } from "react-router-dom";
 import { PageHeader, LoadingState, ErrorState, EmptyState } from "@/components/common";
 import { Card, CardContent } from "@/components/ui/card";
 import { PlatformBadge, StatusBadge, TestRunStatusBadge } from "@/components/data-display";
-import { useRunStatus, useRunResults } from "@/hooks/queries";
+import { RunEventTimeline } from "@/components/run-events";
+import { DashboardSyncNotice } from "@/components/dashboard-sync-notice";
+import { DownloadSarifButton } from "@/components/download-sarif-button";
+import { canExportSarif } from "@/lib/sarif";
+import {
+  useRunEvents,
+  useRunStatus,
+  useRunResults,
+  useRunSyncStatus,
+  useResyncRun,
+} from "@/hooks/queries";
 import { mapVerdictToFindingStatus } from "@/data/sync";
-import { formatDate, formatDuration } from "@/lib/utils";
+import { errorMessage, formatDate, formatDuration } from "@/lib/utils";
 
 export default function RunDetail() {
-  const { runTimestamp } = useParams<{ runTimestamp: string }>();
-  const { data: run, isLoading, isError, refetch } = useRunStatus(runTimestamp, { poll: true });
+  const { runTimestamp: runId } = useParams<{ runTimestamp: string }>();
+  const { data: run, isLoading, isError, refetch } = useRunStatus(runId, { poll: true });
+  const { data: sync } = useRunSyncStatus(run?.run_id ?? runId);
+  const resync = useResyncRun(run?.run_id ?? runId);
 
   const inProgress = run?.status === "running";
+  const { events, streamState } = useRunEvents(run?.run_id ?? runId, !!inProgress);
   const {
     data: results,
     isLoading: resultsLoading,
     isError: resultsError,
     refetch: refetchResults,
-  } = useRunResults(runTimestamp, !inProgress);
+  } = useRunResults(run?.run_timestamp ?? runId, !inProgress);
 
   if (isLoading) return <LoadingState label="Loading run…" />;
   if (isError || !run) return <ErrorState message="Unable to load this run." onRetry={() => refetch()} />;
@@ -30,6 +43,7 @@ export default function RunDetail() {
           <div className="flex items-center gap-2">
             <PlatformBadge platform={run.platform} />
             <TestRunStatusBadge status={run.status} />
+            <DownloadSarifButton runTimestamp={run.run_timestamp ?? runId} available={canExportSarif(run)} />
           </div>
         }
       />
@@ -52,11 +66,22 @@ export default function RunDetail() {
         </div>
       )}
 
+      <DashboardSyncNotice
+        className="mb-6"
+        sync={sync}
+        onRetry={() => resync.mutate()}
+        retrying={resync.isPending}
+        retryError={resync.isError ? errorMessage(resync.error, "Could not start the sync.") : null}
+      />
+
       {inProgress && (
-        <EmptyState
-          title="Run in progress…"
-          description="This page updates automatically. Results will appear here once the run completes."
-        />
+        <div className="space-y-4">
+          <RunEventTimeline events={events} streamState={streamState} />
+          <EmptyState
+            title="Run in progress…"
+            description="This page streams live events when available and keeps polling as a fallback. Results will appear here once the run completes."
+          />
+        </div>
       )}
 
       {!inProgress && (

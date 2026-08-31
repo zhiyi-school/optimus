@@ -1,7 +1,7 @@
 # Configuration
 
 Environment variables (`VITE_API_BASE_URL`, `VITE_SUPABASE_URL`, etc.) are
-covered in [DEPLOYMENT.md](./DEPLOYMENT.md#environment-variables). This
+covered in [DEPLOYMENT.md](./deployment.md#environment-variables). This
 doc covers everything else that's configurable but isn't an env var —
 ports, hosts, timeouts, and other constants that live directly in source.
 
@@ -72,9 +72,9 @@ This only bounds a single HTTP request (e.g. fetching a report or the risk
 catalogue) — it has nothing to do with how long an automated test itself
 is allowed to run (see below).
 
-## Run polling (start → poll → sync)
+## Run polling (start → watch)
 
-`src/data/sync.ts`'s `runAndSync` — the shared logic behind every "Run
+`src/data/sync/runs.ts`'s `runAndWait` — the shared logic behind every "Run
 Automated Test" / "Run Retest" action — polls the backend for run status
 rather than waiting on a single long request:
 
@@ -86,13 +86,15 @@ const RUN_POLL_MAX_ATTEMPTS = 120;   // give up after 120 polls (~6 minutes)
 If a real automated test run can legitimately take longer than 6 minutes,
 raise `RUN_POLL_MAX_ATTEMPTS` (or lower `RUN_POLL_INTERVAL_MS` for more
 responsive UI updates at the cost of more requests). Hitting the limit
-doesn't cancel the backend run — it just means the dashboard stops waiting
-and reports it as not-yet-synced; re-syncing later from the Assessments
-page will still pick up the result once it exists.
+doesn't cancel the backend run and doesn't mark anything failed — it only means
+this browser stopped following along. The run finishes on the automation host
+and the dashboard sync worker records its result. Reopening the page picks the
+run back up: `useActiveRun` finds it again in `GET /runs` by the app and risk it
+covers. There is no `POST /runs/{id}/cancel` endpoint in this phase.
 
 Every "Running…" button also has a **Stop waiting** action next to it
-(`RunCancelToken` in `src/data/sync.ts`) — it stops the dashboard's polling
-loop early without pretending to cancel anything on the backend (there's
+(`RunCancelToken` in `src/data/sync/mapping.ts`) — it stops the dashboard's
+polling loop early without pretending to cancel anything on the backend (there's
 no cancel-a-run endpoint), so it's purely a way to get the UI back under
 your control before the 6-minute backstop. This matters because the
 backend has no automatic failure detection for a hung test setup (e.g. an
@@ -105,10 +107,15 @@ If runs on a platform seem permanently stuck, restarting the automation
 backend is the actual fix — the dashboard has no way to unstick a
 backend-side lock.
 
-## Live-ish polling elsewhere
+## Live progress elsewhere
 
-- **Automation Runs panel** (Assessments page): refetches every 5 seconds
-  while the page is open (`useAutomationRuns`, `src/hooks/queries.ts`).
+- **In-flight run discovery**: `useActiveRun` (`src/hooks/queries.ts`) polls
+  `GET /runs` every 5 seconds so a page that was closed mid-run can pick the run
+  back up. It does not synchronise anything — the automation host's worker is
+  the only writer of dashboard rows.
+- **Focused run views**: use `GET /runs/{run_id}/events` via `EventSource`
+  for live progress while the page is open, and keep their normal `GET /runs`
+  polling active as the fallback if the stream is unavailable or drops.
 - **Ticket messages**: not polled — pushed instantly via a Supabase
   Realtime subscription (`messageData.subscribeToTicket`,
   `src/data/services.ts`).

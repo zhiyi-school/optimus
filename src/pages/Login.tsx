@@ -161,7 +161,7 @@ export default function Login() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   autoComplete="email"
-                  placeholder="name@company.com"
+                  placeholder="name@example.com"
                   className="h-11 pl-9"
                 />
               </div>

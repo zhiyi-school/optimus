@@ -36,8 +36,8 @@ never authorization.
 Supabase Auth (email/password) plus a `profiles` table for
 application-specific data (`display_name`, `roles`, `team_id`,
 `is_active`). `profiles.id` is the Supabase Auth user id. See
-[SUPABASE_SETUP.md](./SUPABASE_SETUP.md#role-assignment) for how initial
-roles are assigned, and the [Admin page](./DATABASE.md#admin-page-teams-users-applications)
+[SUPABASE_SETUP.md](./setup.md#role-assignment) for how initial
+roles are assigned, and the [Admin page](./data-model.md#admin-page-teams-users-applications)
 for how roles get managed day-to-day.
 
 ## Ticket Workflow

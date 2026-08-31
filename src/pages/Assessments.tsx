@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Plus, RefreshCw, Trash2 } from "lucide-react";
 import { PageHeader, FilterBar, LoadingState, ErrorState, EmptyState } from "@/components/common";
@@ -18,9 +18,7 @@ import {
   useAssessments,
   useApplications,
   useAutomationReports,
-  useAutomationRuns,
   useDeleteApplication,
-  useSyncReport,
 } from "@/hooks/queries";
 import { useAuth } from "@/auth/useAuth";
 import { appTypeIcon } from "@/lib/entity-icons";
@@ -33,7 +31,7 @@ type Row = Assessment & { application: Application | null };
 export default function Assessments() {
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
-  const { profile, can } = useAuth();
+  const { can } = useAuth();
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
   const [appToDelete, setAppToDelete] = useState<Application | null>(null);
 
@@ -44,24 +42,20 @@ export default function Assessments() {
     isError: reportsError,
     error: reportsErrorDetail,
   } = useAutomationReports();
-  const { data: runs } = useAutomationRuns();
-  const sync = useSyncReport();
-  const syncReport = sync.mutateAsync;
   const deleteApp = useDeleteApplication();
-  const syncingRef = useRef<Set<string>>(new Set());
-  const [syncError, setSyncError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const canRunTest = can("run_test");
 
   const platformFilter = params.get("platform") ?? "";
   const statusFilter = params.get("status") ?? "";
   const appFilter = params.get("application") ?? "";
 
-  function setParam(key: string, value: string) {
+  const setParam = useCallback((key: string, value: string) => {
     const next = new URLSearchParams(params);
     if (value) next.set(key, value);
     else next.delete(key);
     setParams(next, { replace: true });
-  }
+  }, [params, setParams]);
 
   const rows = useMemo(() => {
     let list = latestAssessmentPerApp(assessments);
@@ -71,7 +65,7 @@ export default function Assessments() {
     return list;
   }, [assessments, platformFilter, statusFilter, appFilter]);
 
-  const unsyncedReports = useMemo(
+  const awaitingSync = useMemo(
     () =>
       (reports ?? []).filter(
         (runTimestamp) =>
@@ -80,19 +74,7 @@ export default function Assessments() {
     [reports, assessments],
   );
 
-  async function syncAll() {
-    setSyncError(null);
-    try {
-      for (const runTimestamp of unsyncedReports) {
-        await sync.mutateAsync({ runTimestamp, triggeredBy: profile?.id ?? null });
-      }
-      refetch();
-    } catch (err) {
-      setSyncError(errorMessage(err, "Unable to sync one or more reports."));
-    }
-  }
-
-  async function confirmDelete() {
+  const confirmDelete = useCallback(async () => {
     if (!appToDelete) return;
     setDeleteError(null);
     try {
@@ -101,89 +83,72 @@ export default function Assessments() {
     } catch (err) {
       setDeleteError(errorMessage(err, "Unable to delete this app."));
     }
-  }
+  }, [appToDelete, deleteApp]);
 
-  useEffect(() => {
-    if (!can("run_test")) return;
-    for (const run of runs ?? []) {
-      if (run.status !== "completed") continue;
-      if (syncingRef.current.has(run.run_timestamp)) continue;
-      const alreadySynced = (assessments ?? []).some((a) =>
-        a.external_id.startsWith(`${run.run_timestamp}::`),
-      );
-      if (alreadySynced) continue;
-
-      syncingRef.current.add(run.run_timestamp);
-      syncReport({ runTimestamp: run.run_timestamp, triggeredBy: profile?.id ?? null }).catch(
-        (err) => {
-          console.warn(`Auto-sync failed for run ${run.run_timestamp}`, err);
-          syncingRef.current.delete(run.run_timestamp);
-        },
-      );
-    }
-  }, [runs, assessments, can, syncReport, profile?.id]);
-
-  const columns: DataTableColumn<Row>[] = [
-    {
-      key: "application",
-      header: "Application",
-      render: (r) => {
-        const Icon = appTypeIcon(r.application?.app_type);
-        return (
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-muted/40">
-              <Icon className="h-4 w-4 text-foreground" />
+  const columns: DataTableColumn<Row>[] = useMemo(
+    () => [
+      {
+        key: "application",
+        header: "Application",
+        render: (r) => {
+          const Icon = appTypeIcon(r.application?.app_type);
+          return (
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-muted/40">
+                <Icon className="h-4 w-4 text-foreground" />
+              </div>
+              <span className="font-medium text-foreground">{r.application?.name ?? "—"}</span>
             </div>
-            <span className="font-medium text-foreground">{r.application?.name ?? "—"}</span>
-          </div>
-        );
+          );
+        },
       },
-    },
-    { key: "version", header: "Version", render: (r) => r.application?.version ?? "—" },
-    {
-      key: "progress",
-      header: "Progress",
-      render: (r) => (
-        <div>
-          <p className="mb-1 text-xs font-medium text-foreground">
-            {r.completed_tests} of {r.total_tests}
-          </p>
-          <div className="h-1.5 w-24 overflow-hidden rounded-full bg-muted">
-            <div
-              className="h-full rounded-full bg-primary transition-all"
-              style={{
-                width: `${r.total_tests > 0 ? Math.min(100, Math.round((r.completed_tests / r.total_tests) * 100)) : 0}%`,
-              }}
-            />
+      { key: "version", header: "Version", render: (r) => r.application?.version ?? "—" },
+      {
+        key: "progress",
+        header: "Progress",
+        render: (r) => (
+          <div>
+            <p className="mb-1 text-xs font-medium text-foreground">
+              {r.completed_tests} of {r.total_tests}
+            </p>
+            <div className="h-1.5 w-24 overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-primary transition-all"
+                style={{
+                  width: `${r.total_tests > 0 ? Math.min(100, Math.round((r.completed_tests / r.total_tests) * 100)) : 0}%`,
+                }}
+              />
+            </div>
           </div>
-        </div>
-      ),
-    },
-    { key: "status", header: "Status", render: (r) => <AssessmentStatusBadge status={r.status} /> },
-    { key: "created", header: "Created At", render: (r) => formatDate(r.created_at) },
-    ...(can("run_test")
-      ? [
-          {
-            key: "actions",
-            header: "",
-            render: (r: Row) =>
-              r.application && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setAppToDelete(r.application);
-                  }}
-                  className="text-muted-foreground hover:text-danger"
-                  title={`Delete ${r.application.name}`}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              ),
-          },
-        ]
-      : []),
-  ];
+        ),
+      },
+      { key: "status", header: "Status", render: (r) => <AssessmentStatusBadge status={r.status} /> },
+      { key: "created", header: "Created At", render: (r) => formatDate(r.created_at) },
+      ...(canRunTest
+        ? [
+            {
+              key: "actions",
+              header: "",
+              render: (r: Row) =>
+                r.application && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setAppToDelete(r.application);
+                    }}
+                    className="text-muted-foreground hover:text-danger"
+                    title={`Delete ${r.application.name}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                ),
+            },
+          ]
+        : []),
+    ],
+    [canRunTest],
+  );
 
   return (
     <div>
@@ -191,7 +156,7 @@ export default function Assessments() {
         title="Assessments"
         description="Select an application assessment to continue."
         actions={
-          can("run_test") && (
+          canRunTest && (
             <>
               <Link to="/assessments/new">
                 <Button size="sm" variant="outline" className="border-primary text-primary hover:bg-primary/5">
@@ -199,12 +164,10 @@ export default function Assessments() {
                   New Assessment
                 </Button>
               </Link>
-              {unsyncedReports.length > 0 && (
-                <Button size="sm" variant="outline" onClick={() => void syncAll()} disabled={sync.isPending}>
-                  <RefreshCw className="h-3.5 w-3.5" />
-                  Sync {unsyncedReports.length} report{unsyncedReports.length > 1 ? "s" : ""}
-                </Button>
-              )}
+              <Button size="sm" variant="outline" onClick={() => void refetch()}>
+                <RefreshCw className="h-3.5 w-3.5" />
+                Refresh
+              </Button>
             </>
           )
         }
@@ -218,8 +181,11 @@ export default function Assessments() {
         />
       )}
 
-      {syncError && (
-        <ErrorState message={`Sync failed: ${syncError}`} onRetry={() => void syncAll()} />
+      {awaitingSync.length > 0 && (
+        <p className="text-xs text-muted">
+          {awaitingSync.length} completed run{awaitingSync.length > 1 ? "s have" : " has"} not appeared here
+          yet. The automation host syncs them on its own schedule; this page does not write them.
+        </p>
       )}
 
       <FilterBar>
@@ -251,7 +217,7 @@ export default function Assessments() {
         <EmptyState
           title="No assessments are currently available."
           description={
-            can("run_test")
+            canRunTest
               ? "Add an app, or sync existing automation reports, to populate this page."
               : "The Security Team has not run any assessments yet."
           }
@@ -271,7 +237,7 @@ export default function Assessments() {
               <div>
                 <p className="mb-3 text-sm text-foreground">
                   {r.status === "running"
-                    ? "Tests are running. You can safely leave this page and we'll notify you when it's complete."
+                    ? "Tests are running on the backend. Check Automation Runs for live status, then sync reports once the run completes."
                     : ready
                       ? "Setup is complete. Security tests can be run against this app."
                       : "This assessment is still being set up — the app has to be prepared for testing before any security test can run against it."}

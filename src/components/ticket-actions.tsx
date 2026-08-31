@@ -1,7 +1,6 @@
 import { useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "@/auth/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
 import {
@@ -18,10 +17,13 @@ import {
   useCreateRiskAcceptanceTicket,
   useRequestRetest,
   useReviewRiskAcceptance,
+  useActiveRun,
+  useRunEvents,
   useSubmitFix,
   useUpdateTicketStatus,
 } from "@/hooks/queries";
-import { syncService, type RunCancelToken } from "@/data/sync";
+import { RunEventTimeline } from "@/components/run-events";
+import { syncService, riskProgressInRun, type RunCancelToken } from "@/data/sync";
 import { retestData } from "@/data/services";
 import { defaultConfigPath } from "@/api/automation-services";
 import { errorMessage } from "@/lib/utils";
@@ -304,47 +306,72 @@ function RunRetestButton({
   application: Application | null | undefined;
   retestId: string;
 }) {
-  const { profile } = useAuth();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [running, setRunning] = useState(false);
+  const [watching, setWatching] = useState(false);
+  const [startedRunId, setStartedRunId] = useState<string | undefined>();
   const [runError, setRunError] = useState<string | null>(null);
+  const [stoppedWatchingRunId, setStoppedWatchingRunId] = useState<string | undefined>();
   const updateStatus = useUpdateTicketStatus(ticket.id);
   const cancelRef = useRef<RunCancelToken>({ cancelled: false });
 
+  const appExternalId = application?.external_id ?? undefined;
+  const { run: activeRun, platformRun } = useActiveRun({
+    platform: finding.platform,
+    appExternalId,
+    riskId: finding.test_id ?? undefined,
+  });
+  const adoptedRun = activeRun && activeRun.run_id !== stoppedWatchingRunId ? activeRun : undefined;
+  const activeRunId = startedRunId ?? adoptedRun?.run_id;
+  const { events: runEvents, streamState } = useRunEvents(activeRunId, !!activeRunId);
+
+  const progress = riskProgressInRun(runEvents, adoptedRun, appExternalId, finding.test_id ?? undefined);
+  const executing = watching || progress?.phase === "running";
+  const queued = progress?.phase === "queued";
+  // The device takes one run at a time, so any run at all blocks starting this retest.
+  const deviceBusy = !executing && !queued && !!platformRun;
+  const busy = executing || queued || deviceBusy;
+
   async function run() {
     if (!application?.external_id || !finding.test_id) return;
-    setRunning(true);
+    setWatching(true);
+    setStartedRunId(undefined);
+    setStoppedWatchingRunId(undefined);
     setRunError(null);
     cancelRef.current = { cancelled: false };
     let errored = false;
     try {
       await updateStatus.mutateAsync("retest_in_progress");
 
-      const { run: runRecord, synced, cancelled } = await syncService.runAndSync(
+      const { run: runRecord, outcome } = await syncService.runAndWait(
         {
           platform: finding.platform,
           config_path: defaultConfigPath(finding.platform),
           apps: application.external_id,
           risks: finding.test_id,
         },
-        profile?.id ?? null,
-        (started) => retestData.markRunning(retestId, started.run_id),
+        (started) => {
+          setStartedRunId(started.run_id);
+          return Promise.all([
+            retestData.markRunning(retestId, started.run_id),
+            queryClient.invalidateQueries({ queryKey: ["automationRuns"] }),
+          ]);
+        },
         cancelRef.current,
       );
 
-      if (cancelled) {
+      // The automation host writes the terminal retest state when it syncs the run.
+      if (outcome === "failed") {
         setRunError(
-          "Stopped watching this retest — it may still be going on the backend. It'll stay marked as running on this ticket until it's synced later.",
+          runRecord.error ?? "The run failed. This ticket updates once the automation host records it.",
         );
         errored = true;
-      } else if (synced) {
-        await retestData.complete(retestId, "Retest completed — see finding for updated status.", "completed");
-        await updateStatus.mutateAsync("under_review");
-      } else {
-        const message = runRecord.error ?? `Run ended with status "${runRecord.status}".`;
-        await retestData.complete(retestId, message, "failed");
-        setRunError(message);
+      } else if (outcome !== "completed") {
+        setRunError(
+          outcome === "cancelledWaiting"
+            ? "Stopped watching this retest. It is still running on the automation host, which will complete it and move this ticket."
+            : "Stopped waiting after the polling window. The run is still going on the automation host, which will complete it and move this ticket.",
+        );
         errored = true;
       }
 
@@ -357,13 +384,16 @@ function RunRetestButton({
       setRunError(errorMessage(err, "Unable to run retest."));
       errored = true;
     } finally {
-      setRunning(false);
+      setWatching(false);
       if (!errored) setOpen(false);
     }
   }
 
   function stopWaiting() {
     cancelRef.current.cancelled = true;
+    setStoppedWatchingRunId(activeRunId);
+    setStartedRunId(undefined);
+    setWatching(false);
   }
 
   return (
@@ -380,8 +410,27 @@ function RunRetestButton({
           </DialogDescription>
         </DialogHeader>
         {runError && <p className="text-xs text-danger">{runError}</p>}
+        {queued && (
+          <p className="text-xs text-muted-foreground">
+            This test is already part of a run under way and has not started yet — the device runs
+            one test at a time.
+          </p>
+        )}
+        {deviceBusy && (
+          <p className="text-xs text-muted-foreground">
+            The test device is busy with a run in progress. It drives one test at a time, so this
+            retest has to wait for that run to finish.
+          </p>
+        )}
+        {(executing || queued) && (
+          <RunEventTimeline
+            events={runEvents}
+            streamState={streamState}
+            emptyLabel="Waiting for retest events…"
+          />
+        )}
         <DialogFooter>
-          {running && (
+          {executing && (
             <Button type="button" variant="outline" onClick={stopWaiting}>
               Stop waiting
             </Button>
@@ -389,8 +438,14 @@ function RunRetestButton({
           <Button type="button" variant="outline" onClick={() => setOpen(false)}>
             Cancel
           </Button>
-          <Button disabled={running} onClick={() => void run()}>
-            {running ? "Running…" : "Start retest"}
+          <Button disabled={busy} onClick={() => void run()}>
+            {executing
+              ? "Running…"
+              : queued
+                ? "Waiting its turn"
+                : deviceBusy
+                  ? "Device busy"
+                  : "Start retest"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -452,6 +507,7 @@ export function TicketActions({
         application &&
         pendingRetestId && (
           <RunRetestButton
+            key={pendingRetestId}
             ticket={ticket}
             finding={finding}
             application={application}
