@@ -404,6 +404,55 @@ catalogue is the playbook's wording.
 `tactic` (MITRE ATT&CK Mobile, e.g. `"Discovery"`, or `null` when the risk
 isn't mapped) replaced the old `mitre_attack_mobile_technique_id` field.
 
+## Developer remediation controls
+
+The risk text above describes the problem and how security demonstrates it. The
+control endpoints describe what a developer changes to fix it, read by the
+backend from an external playbook directory it never writes to.
+
+```text
+GET /platforms/{platform}/risks                                          controls[] summaries
+GET /platforms/{platform}/risks/{risk_id}/controls                       full control list
+GET /platforms/{platform}/controls/{control_id}                          one control's steps
+GET /platforms/{platform}/controls/{control_id}/assets/{asset_path}      one screenshot
+GET /platforms/{platform}/controls/{control_id}/source                   archive metadata
+GET /platforms/{platform}/controls/{control_id}/source/download          the archive
+GET /platforms/{platform}/playbook/status                                diagnostics
+```
+
+`src/api/playbook-services.ts` is the only place these are called from; the
+response shapes are in `src/api/playbook-types.ts`.
+
+**The dashboard never parses playbook Markdown.** A control's steps arrive as
+typed blocks — `paragraph`, `caption`, `heading`, `code`, `list`, `table`,
+`image` — and `src/lib/playbook.ts` filters them against an allowlist before
+`src/components/playbook-content.tsx` renders them. Any block kind the backend
+grows later is dropped rather than passed through, nothing is ever injected as
+raw HTML, and `renderInline()` only produces links for `http`/`https` URLs, so a
+`javascript:` or `data:` target in the playbook cannot become an anchor.
+
+**No filesystem path from the playbook reaches this code.** Image blocks carry a
+backend-relative `url`, which `automationAssetUrl()` resolves against
+`VITE_API_BASE_URL`. The playbook's location on the automation host is the
+backend's business and is configured there
+(`IOS_PLAYBOOK_DIR` / `ANDROID_PLAYBOOK_DIR`).
+
+### Degrading when the playbook is unavailable
+
+A misconfigured or missing playbook directory must not break the dashboard:
+
+| Situation | What the dashboard does |
+|---|---|
+| Directory unreadable | `GET /platforms/{platform}/risks` still returns risks with `controls_available: false`; the Resolve pages show an error on the controls card only |
+| Control endpoint returns `503` | The control page shows an error with a retry, not an empty step list |
+| A screenshot is missing (`exists: false`) | An inline "screenshot unavailable" placeholder in the step, with the caption if there is one |
+| A control has no archive | The implementation-example card is not rendered |
+| Archive downloads disabled | The filename is shown with a note that downloads are off on that host |
+| Backend predates these endpoints (`404`/`405`) | `getStatus`/`getControlSource` resolve to `null` and their cards disappear |
+
+An empty control list is never shown as though the risk simply has no
+remediation guidance.
+
 ## Manual testing steps
 
 `/assessments/:assessmentId/tests/:testId/manual`

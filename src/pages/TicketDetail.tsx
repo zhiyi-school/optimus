@@ -5,19 +5,25 @@ import { PageHeader, LoadingState, ErrorState } from "@/components/common";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatusBadge, TicketBadge, PlatformBadge } from "@/components/data-display";
 import { Timeline } from "@/components/timeline";
-import { TicketActions } from "@/components/ticket-actions";
+import { TicketActions, WithdrawalNotice } from "@/components/ticket-actions";
 import { ConversationPanel } from "@/components/conversation-panel";
+import { ControlChecklist } from "@/components/control-checklist";
+import { ProgressBar } from "@/components/resolve-display";
 import {
   useActivity,
   useProfiles,
   useRiskAcceptance,
+  useRiskControls,
   useSendMessage,
   useTicket,
   useTicketAttachments,
+  useTicketControlSteps,
+  useTicketControls,
   useTicketMessages,
   useTicketRetests,
   useUploadAttachment,
 } from "@/hooks/queries";
+import { controlProgress, liveControls } from "@/lib/resolve";
 import { formatDate as fmt } from "@/lib/utils";
 import { ticketTypeConfig as typeConfig } from "@/lib/status";
 import type { TicketAttachment } from "@/data/types";
@@ -35,6 +41,12 @@ export default function TicketDetail() {
     ticket?.type === "risk_acceptance" ? ticketId : undefined,
   );
   const { data: retests } = useTicketRetests(ticketId);
+  const { data: controls } = useTicketControls(ticketId);
+  const { data: controlSteps } = useTicketControlSteps(ticketId);
+  const { data: controlDefinitions } = useRiskControls(
+    ticket?.finding?.platform,
+    ticket?.finding?.test_id,
+  );
 
   const sendMessage = useSendMessage(ticketId ?? "");
   const uploadAttachment = useUploadAttachment(ticketId ?? "");
@@ -58,6 +70,8 @@ export default function TicketDetail() {
   if (isError || !ticket) return <ErrorState message="Unable to load this ticket." onRetry={() => refetch()} />;
 
   const pendingRetest = (retests ?? []).find((r) => r.status === "queued" || r.status === "running");
+  const controlBase = can("view_resolve") ? `/resolve/tickets/${ticket.id}` : `/tickets/${ticket.id}`;
+  const live = liveControls(controlDefinitions, controls ?? [], controlSteps ?? []);
 
   return (
     <div>
@@ -87,6 +101,26 @@ export default function TicketDetail() {
             attachmentsByMessage={attachmentsByMessage}
             onUploadAttachment={(file) => uploadAttachment.mutateAsync(file)}
           />
+
+          {ticket.type === "remediation" && live.length > 0 && (
+            <Card>
+              <CardContent className="py-4">
+                <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+                  <h2 className="text-sm font-semibold text-foreground">Developer remediation</h2>
+                  <div className="min-w-[12rem] flex-1">
+                    <ProgressBar
+                      label="Control steps completed"
+                      progress={controlProgress(live)}
+                    />
+                  </div>
+                </div>
+                <ControlChecklist
+                  controls={live}
+                  linkTo={(controlId) => `${controlBase}/controls/${controlId}`}
+                />
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardContent className="py-4">
@@ -134,6 +168,12 @@ export default function TicketDetail() {
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Updated</p>
                 <p className="text-sm text-foreground">{fmt(ticket.updated_at)}</p>
               </div>
+              <WithdrawalNotice
+                ticket={ticket}
+                actorName={
+                  ticket.withdrawn_by ? profileMap.get(ticket.withdrawn_by)?.display_name : null
+                }
+              />
             </CardContent>
           </Card>
 

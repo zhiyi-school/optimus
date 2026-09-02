@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { assessmentApi, configApi, provisioningApi, syncApi, testApi } from "@/api/automation-services";
 import type {
   AutomationPlatform,
@@ -8,12 +8,14 @@ import type {
 } from "@/api/automation-types";
 import { findActiveRun, findPlatformRun, type ActiveRunFilter } from "@/data/sync";
 import { SYNC_STATUS_POLL_INTERVAL_MS, syncPollInterval } from "@/lib/dashboard-sync";
+import { playbookApi } from "@/api/playbook-services";
 import {
   activityData,
   applicationData,
   assessmentData,
   assessmentMessageData,
   attachmentData,
+  controlProgressData,
   evidenceData,
   findingData,
   messageData,
@@ -25,12 +27,15 @@ import {
   userData,
 } from "@/data/services";
 import type {
+  ControlProgressStatus,
   FindingStatus,
   RiskAcceptanceDecision,
+  TicketControl,
+  TicketControlStep,
   TicketStatus,
   UserRole,
 } from "@/data/types";
-import type { FindingFilters, TicketFilters } from "@/data/services";
+import type { ControlReconciliation, FindingFilters, TicketFilters } from "@/data/services";
 
 export function useProfiles() {
   return useQuery({ queryKey: ["profiles"], queryFn: userData.listProfiles });
@@ -361,6 +366,47 @@ export function useFindingEvidenceItems(findingId: string | undefined) {
   });
 }
 
+export function useTicketEvidenceItems(ticketId: string | undefined) {
+  return useQuery({
+    queryKey: ["ticketEvidenceItems", ticketId],
+    queryFn: async () => {
+      const rows = await evidenceData.listForTicket(ticketId as string);
+      return Promise.all(
+        rows.map(async (row) => {
+          let url: string | undefined;
+          if (row.storage_path) {
+            const { data } = await evidenceData.getSignedUrl(row.storage_path);
+            url = data?.signedUrl;
+          } else if (row.external_url) {
+            url = row.external_url;
+          }
+          return {
+            id: row.id,
+            name: row.name,
+            kind: row.type,
+            url,
+            textContent: row.text_content,
+            source: row.source,
+          };
+        }),
+      );
+    },
+    enabled: !!ticketId,
+  });
+}
+
+export function useUploadTicketEvidence(ticketId: string | undefined) {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (file: File) => evidenceData.uploadFile(null, ticketId as string, file),
+    onSuccess: () =>
+      invalidate([
+        ["ticketEvidenceItems", ticketId],
+        ["activity", "ticket", ticketId],
+      ]),
+  });
+}
+
 export function useFindingRetests(findingId: string | undefined) {
   return useQuery({
     queryKey: ["findingRetests", findingId],
@@ -510,6 +556,48 @@ export function useCreateRemediationTicket() {
   });
 }
 
+const TICKET_LIFECYCLE_KEYS = (ticketId: string, findingId: string | null | undefined) => [
+  ["ticket", ticketId],
+  ["ticketsWithRelations"],
+  ["tickets"],
+  ["activity", "ticket", ticketId],
+  ["dashboardMetrics"],
+  ...(findingId ? [["finding", findingId], ["activity", "finding", findingId]] : []),
+];
+
+export function useStartRemediation() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: async (input: {
+      ticket: Parameters<typeof ticketData.createRemediationTicket>[0];
+      plan: ControlReconciliation[];
+    }) => {
+      const ticket = await ticketData.createRemediationTicket(input.ticket);
+      if (input.plan.length > 0) {
+        await controlProgressData.reconcile(ticket.id, input.plan);
+      }
+      return ticket;
+    },
+    onSuccess: (ticket) => invalidate(TICKET_LIFECYCLE_KEYS(ticket.id, ticket.finding_id)),
+  });
+}
+
+export function useWithdrawTicket(ticketId: string, findingId: string | null | undefined) {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (reason: string) => ticketData.withdraw(ticketId, reason),
+    onSuccess: () => invalidate(TICKET_LIFECYCLE_KEYS(ticketId, findingId)),
+  });
+}
+
+export function useResumeTicket(ticketId: string, findingId: string | null | undefined) {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: () => ticketData.resume(ticketId),
+    onSuccess: () => invalidate(TICKET_LIFECYCLE_KEYS(ticketId, findingId)),
+  });
+}
+
 export function useCreateRiskAcceptanceTicket() {
   const invalidate = useInvalidate();
   return useMutation({
@@ -550,6 +638,9 @@ export function useSubmitFix(ticketId: string) {
         ["ticket", ticketId],
         ["ticketsWithRelations"],
         ["ticketMessages", ticketId],
+        ["tickets"],
+        ["activity", "ticket", ticketId],
+        ["dashboardMetrics"],
       ]),
   });
 }
@@ -559,7 +650,13 @@ export function useUpdateTicketStatus(ticketId: string) {
   return useMutation({
     mutationFn: (status: TicketStatus) => ticketData.updateStatus(ticketId, status),
     onSuccess: () =>
-      invalidate([["ticket", ticketId], ["ticketsWithRelations"], ["dashboardMetrics"]]),
+      invalidate([
+        ["ticket", ticketId],
+        ["ticketsWithRelations"],
+        ["tickets"],
+        ["activity", "ticket", ticketId],
+        ["dashboardMetrics"],
+      ]),
   });
 }
 
@@ -571,7 +668,9 @@ export function useRequestRetest(ticketId: string, findingId: string) {
       invalidate([
         ["ticket", ticketId],
         ["ticketsWithRelations"],
+        ["tickets"],
         ["findingRetests", findingId],
+        ["activity", "ticket", ticketId],
         ["dashboardMetrics"],
       ]),
   });
@@ -616,6 +715,207 @@ export function useReviewRiskAcceptance() {
   });
 }
 
+
+export function useRiskControls(
+  platform: AutomationPlatform | undefined,
+  riskId: string | null | undefined,
+) {
+  return useQuery({
+    queryKey: ["riskControls", platform, riskId],
+    queryFn: () => playbookApi.listRiskControls(platform as AutomationPlatform, riskId as string),
+    enabled: !!platform && !!riskId,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+export function useControlDetail(
+  platform: AutomationPlatform | undefined,
+  controlId: string | undefined,
+) {
+  return useQuery({
+    queryKey: ["control", platform, controlId],
+    queryFn: () => playbookApi.getControl(platform as AutomationPlatform, controlId as string),
+    enabled: !!platform && !!controlId,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+export function useControlSource(
+  platform: AutomationPlatform | undefined,
+  controlId: string | undefined,
+) {
+  return useQuery({
+    queryKey: ["controlSource", platform, controlId],
+    queryFn: () => playbookApi.getControlSource(platform as AutomationPlatform, controlId as string),
+    enabled: !!platform && !!controlId,
+    retry: false,
+  });
+}
+
+export function useTicketControls(ticketId: string | undefined) {
+  return useQuery({
+    queryKey: ["ticketControls", ticketId],
+    queryFn: () => controlProgressData.listForTicket(ticketId as string),
+    enabled: !!ticketId,
+  });
+}
+
+export function useTicketControlSteps(ticketId: string | undefined) {
+  return useQuery({
+    queryKey: ["ticketControlSteps", ticketId],
+    queryFn: () => controlProgressData.listStepsForTicket(ticketId as string),
+    enabled: !!ticketId,
+  });
+}
+
+export function useControlProgressForTickets(ticketIds: string[]) {
+  const key = [...ticketIds].sort();
+  const controls = useQuery({
+    queryKey: ["ticketControlsBulk", key],
+    queryFn: () => controlProgressData.listForTicketIds(key),
+    enabled: key.length > 0,
+  });
+
+  const controlRowIds = (controls.data ?? []).map((control) => control.id).sort();
+  const steps = useQuery({
+    queryKey: ["ticketControlStepsBulk", controlRowIds],
+    queryFn: () => controlProgressData.listStepsForControlIds(controlRowIds),
+    enabled: controlRowIds.length > 0,
+  });
+
+  return {
+    controls: controls.data ?? EMPTY_CONTROLS,
+    steps: steps.data ?? EMPTY_STEPS,
+    isLoading: controls.isLoading || steps.isLoading,
+    isError: controls.isError || steps.isError,
+  };
+}
+
+const EMPTY_CONTROLS: TicketControl[] = [];
+const EMPTY_STEPS: TicketControlStep[] = [];
+
+const CONTROL_PROGRESS_KEYS = (ticketId: string) => [
+  ["ticketControls", ticketId],
+  ["ticketControlSteps", ticketId],
+  ["ticketControlsBulk"],
+  ["activity", "ticket", ticketId],
+];
+
+export function useReconcileTicketControls(ticketId: string | undefined) {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (plan: ControlReconciliation[]) =>
+      controlProgressData.reconcile(ticketId as string, plan),
+    onSuccess: () => invalidate(CONTROL_PROGRESS_KEYS(ticketId as string)),
+  });
+}
+
+const PLAYBOOK_POLL_INTERVAL_MS = 45_000;
+
+/** The revision seen on arrival is kept in session memory only, never written to the database. */
+export function usePlaybookRevisionWatch(
+  platform: AutomationPlatform | undefined,
+  enabled: boolean,
+) {
+  const queryClient = useQueryClient();
+  const initial = useRef<string | null>(null);
+  const [acknowledged, setAcknowledged] = useState<string | null>(null);
+
+  const status = useQuery({
+    queryKey: ["playbookStatus", platform],
+    queryFn: () => playbookApi.getStatus(platform as AutomationPlatform),
+    enabled: !!platform && enabled,
+    retry: false,
+    refetchInterval: enabled ? PLAYBOOK_POLL_INTERVAL_MS : false,
+    refetchOnWindowFocus: enabled,
+  });
+
+  const revision = status.data?.revision ?? null;
+
+  useEffect(() => {
+    if (!revision) return;
+    if (initial.current === null) {
+      initial.current = revision;
+      return;
+    }
+    if (initial.current === revision) return;
+    void queryClient.invalidateQueries({ queryKey: ["riskControls"] });
+    void queryClient.invalidateQueries({ queryKey: ["control"] });
+    void queryClient.invalidateQueries({ queryKey: ["controlSource"] });
+  }, [revision, queryClient]);
+
+  const changed = revision !== null && initial.current !== null && initial.current !== revision;
+
+  return {
+    revision,
+    updated: changed && acknowledged !== revision,
+    dismiss: () => setAcknowledged(revision),
+  };
+}
+
+/** `undefined` while unknown, so an unreachable backend degrades to counting every stored row. */
+export function useLiveControlKeys(risks: { platform: AutomationPlatform; riskId: string }[]) {
+  const unique = [...new Map(risks.map((r) => [`${r.platform}/${r.riskId}`, r])).values()].sort(
+    (a, b) => `${a.platform}/${a.riskId}`.localeCompare(`${b.platform}/${b.riskId}`),
+  );
+
+  const results = useQueries({
+    queries: unique.map((risk) => ({
+      queryKey: ["riskControls", risk.platform, risk.riskId],
+      queryFn: () => playbookApi.listRiskControls(risk.platform, risk.riskId),
+      staleTime: 5 * 60_000,
+      retry: false,
+    })),
+  });
+
+  return useMemo(() => {
+    if (results.length === 0 || results.some((result) => !result.isSuccess)) return undefined;
+    const controlIds = new Set<string>();
+    const stepKeys = new Set<string>();
+    for (const result of results) {
+      for (const control of result.data ?? []) {
+        controlIds.add(control.control_id);
+        for (const step of control.steps) stepKeys.add(step.step_key);
+      }
+    }
+    return { controlIds, stepKeys };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [results.map((r) => `${r.status}:${r.dataUpdatedAt}`).join("|")]);
+}
+
+export function useSetControlStepStatus(ticketId: string | undefined) {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (input: { stepId: string; status: ControlProgressStatus; note?: string }) =>
+      controlProgressData.setStepStatus(
+        ticketId as string,
+        input.stepId,
+        input.status,
+        input.note,
+      ),
+    onSuccess: () => invalidate(CONTROL_PROGRESS_KEYS(ticketId as string)),
+  });
+}
+
+export function useSetControlStatus(ticketId: string | undefined) {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (input: {
+      controlRowId: string;
+      status: ControlProgressStatus;
+      note?: string;
+    }) =>
+      controlProgressData.setControlStatus(
+        ticketId as string,
+        input.controlRowId,
+        input.status,
+        input.note,
+      ),
+    onSuccess: () => invalidate(CONTROL_PROGRESS_KEYS(ticketId as string)),
+  });
+}
 
 export function useCreateTeam() {
   const invalidate = useInvalidate();

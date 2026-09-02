@@ -22,6 +22,7 @@ const presetsByRole: Record<UserRole, { label: string; status?: TicketStatus; ty
     { label: "Risk Acceptance", type: "risk_acceptance" },
     { label: "Retest Requested", status: "retest_requested" },
     { label: "Awaiting Security", status: "under_review" },
+    { label: "Withdrawn", status: "withdrawn", type: "remediation" },
     { label: "Closed", status: "closed" },
   ],
   security: [
@@ -30,6 +31,7 @@ const presetsByRole: Record<UserRole, { label: string; status?: TicketStatus; ty
     { label: "Risk Acceptance Requests", status: "under_review", type: "risk_acceptance" },
     { label: "Retest Requests", status: "retest_requested" },
     { label: "Awaiting Review", status: "under_review" },
+    { label: "Withdrawn", status: "withdrawn", type: "remediation" },
     { label: "App Provisioning", status: "open", type: "app_provisioning" },
   ],
   cio: [

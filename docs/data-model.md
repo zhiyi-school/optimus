@@ -7,7 +7,9 @@ The schema itself lives in `supabase/migrations/` (`0001_schema.sql` /
 `0009_application_contact_emails.sql` / `0010_applications_delete.sql` /
 `0011_application_provisioning.sql` / `0012_dashboard_metrics_rpc.sql` /
 `0013_sync_idempotency_keys.sql` / `0014_dashboard_metrics_grants.sql` /
-`0015_dashboard_metrics_revoke_anon.sql` / `0016_application_icon_refs.sql`) —
+`0015_dashboard_metrics_revoke_anon.sql` / `0016_application_icon_refs.sql` /
+`0017_ticket_controls.sql` / `0018_ticket_withdrawal.sql` /
+`0019_live_playbook_progress.sql`) —
 this doc covers the *why* behind a few decisions that aren't obvious from
 reading the SQL alone.
 
@@ -27,13 +29,22 @@ authorization boundary.
   `0006_multi_role_admin.sql` — a user can hold more than one role, so
   every policy checks *membership* in the caller's roles, not equality
   against one value.
-- **Ticket status-transition legitimacy is enforced in the application
-  layer**, not as a SQL state machine. A developer only ever moving a
-  ticket to `fix_submitted`/`retest_requested`, never straight to
-  `accepted`/`closed`, is encoded in `src/data/services.ts` and
-  `src/components/ticket-actions.tsx`. RLS enforces *who* can write to
-  *which rows* (role + team scoping) — it does not re-implement the
-  workflow.
+- **Ticket status transitions are constrained in the database, not just in
+  the UI.** RLS by itself only decides *who* may write to *which rows*, and
+  `tickets_update` deliberately lets a developer write to a ticket their team
+  owns — which meant the generic status mutation could set `closed` and skip
+  the reassessment workflow entirely. `enforce_ticket_update_permissions`
+  (`0017_ticket_controls.sql`) closes that: a caller holding neither
+  `security` nor `admin` may only move a ticket to `open`, `in_progress`,
+  `fix_submitted` or `retest_requested`, cannot touch `closed_at`, and cannot
+  change `type`, `finding_id`, `application_id`, `created_by` or either
+  assignment column. It is a guardrail on the security-owned transitions, not
+  a full state machine — which step is *sensible* next is still the
+  application's business (`src/lib/resolve.ts`, `src/components/ticket-actions.tsx`).
+  Like `prevent_role_escalation`, it only applies when
+  `auth.role() = 'authenticated'`, so the automation sync worker — which holds
+  the service-role key and moves a ticket to `under_review` when a retest lands
+  — is unaffected.
 - **`id` can never change, for anyone, through the app.** The
   `prevent_role_escalation` trigger on `profiles` raises an exception
   unconditionally whenever `auth.role() = 'authenticated'` — i.e. via the
@@ -62,6 +73,83 @@ authorization boundary.
   `0012` is granted only to authenticated users and queries the base tables
   without `SECURITY DEFINER`, so each count is limited by the caller's
   existing RLS visibility.
+
+## Developer remediation progress
+
+`ticket_controls` and `ticket_control_steps` record how far a developer has got
+through a finding's remediation. They hold **workflow state only**.
+
+- **No playbook content is stored, and no snapshot of it.** The control's title,
+  summary, ordering, step text, code blocks, screenshots and archives all live in
+  the automation backend's external playbook directory and are fetched per
+  request. A row is `(ticket_id, control_id)` or `(ticket_control_id, step_key)`
+  plus a status, a timestamp, who did it and an optional note. `0019` dropped the
+  columns `0017` had copied in — `playbook_revision`, `title`, `step_count`,
+  `position`, `step_title` and `step_index` — because a ticket that carried them
+  went on following the version of the playbook it was opened against.
+- **A ticket always renders the current playbook.** The dashboard pairs the
+  backend's live controls and steps with these rows by id. Whatever the playbook
+  says today is what the developer sees today.
+- **`step_key` is the playbook's stable step id.** A playbook author declares it
+  above the step; a document that declares none falls back to an id derived from
+  the instruction's own text. Either way it survives rewording (declared) or
+  reordering (both), which is what lets progress stay attached to the right
+  instruction. See
+  [the backend's playbook guide](../../playbook/mobile_playbook_automation/docs/developer-playbook.md).
+- **Reconciliation only adds.** Opening a ticket inserts a row for any control or
+  step the playbook lists that the ticket does not yet have. Nothing is updated
+  and nothing is deleted, so a step removed from the playbook keeps its history —
+  it simply stops being rendered and stops counting toward completion.
+  `unique (ticket_id, control_id)` and `unique (ticket_control_id, step_key)` back
+  an `upsert … ignoreDuplicates`, so reconciling repeatedly creates each row at
+  most once.
+- **Only active, required controls are reconciled.** A `deprioritized` or
+  `deprecated` control is never counted as required developer work.
+- **Progress cannot be deleted.** Both tables have `select`, `insert` and
+  `update` policies and no `delete` policy, and RLS denies whatever a policy does
+  not allow. Rows go only when their ticket does, by cascade.
+- **Access follows the ticket.** `can_access_ticket_control()` resolves a step
+  to its ticket, which resolves to an application, which is team-scoped — so
+  team scoping on applications carries through to control progress with no
+  separate rule to keep in sync.
+- **`completed_by` must be the caller.** Every write policy carries
+  `completed_by is null or completed_by = auth.uid()`, so the audit trail cannot
+  name someone else.
+
+`supabase/tests/0017_ticket_controls_rls.sql` exercises all of this against a
+live database. It builds its own fixtures, impersonates each role, and ends in
+`rollback`, so it is safe to run against a real project from the SQL Editor.
+
+## Developer withdrawal
+
+A developer who decides not to continue needs a way out that is not `closed`.
+`closed` means security verified the remediation and finalised the ticket, so
+`0018_ticket_withdrawal.sql` adds a separate terminal state, `withdrawn`, plus
+`withdrawn_at`, `withdrawn_by` and `withdrawal_reason` on `tickets`.
+
+- **Withdrawing is not resolving.** It never sets `closed_at` and never touches
+  the finding. The finding stays `at_risk` and keeps appearing as work that
+  needs doing; the Resolve dashboard counts a withdrawn ticket as withdrawn and
+  as nothing else — not active, not awaiting security, not resolved.
+- **Withdrawal stops before security starts.** `withdrawn` is reachable only
+  from `open`, `in_progress`, `fix_submitted` or `rejected`. Once the developer
+  has asked for a reassessment the request is in security's queue, so cancelling
+  it is security's call, and the trigger refuses a developer withdrawal from
+  `retest_requested` onwards.
+- **A withdrawal must be complete and honest.** The trigger requires a non-empty
+  `withdrawal_reason`, requires `withdrawn_at`, and requires `withdrawn_by` to be
+  the caller — a developer cannot record someone else as the one who stopped.
+- **Withdrawal details are written once.** After the withdrawing update they
+  cannot be edited, so the record of why work stopped survives a later resume.
+- **Resuming is the only way back, and only to `in_progress`.** A withdrawn
+  ticket keeps its conversation, evidence, control progress, activity, creator,
+  application and finding; resuming changes the status and nothing else.
+- **Security keeps closure over everything.** Security can still read, work on
+  and close a withdrawn ticket, and a developer can never reopen a ticket
+  security has closed or accepted.
+
+`supabase/tests/0018_ticket_withdrawal_rls.sql` exercises all of this the same
+way `0017`'s does: own fixtures, one role at a time, ending in `rollback`.
 
 ## Admin page (Teams, Users, Applications, Roles)
 

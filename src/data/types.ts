@@ -23,11 +23,14 @@ export type TicketStatus =
   | "under_review"
   | "accepted"
   | "rejected"
+  | "withdrawn"
   | "closed";
 
 export type RiskAcceptanceDecision = "pending" | "accepted" | "rejected";
 
 export type RetestStatus = "queued" | "running" | "completed" | "failed";
+
+export type ControlProgressStatus = "not_started" | "in_progress" | "completed" | "needs_changes";
 
 export interface Profile {
   id: string;
@@ -124,6 +127,9 @@ export interface Ticket {
   created_at: string;
   updated_at: string;
   closed_at: string | null;
+  withdrawn_at: string | null;
+  withdrawn_by: string | null;
+  withdrawal_reason: string | null;
 }
 
 export interface AssessmentMessage {
@@ -197,6 +203,31 @@ export interface RiskAcceptance {
   review_comment: string | null;
   created_at: string;
   reviewed_at: string | null;
+}
+
+export interface TicketControl {
+  id: string;
+  ticket_id: string;
+  control_id: string;
+  status: ControlProgressStatus;
+  required: boolean;
+  completed_at: string | null;
+  completed_by: string | null;
+  developer_note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TicketControlStep {
+  id: string;
+  ticket_control_id: string;
+  step_key: string;
+  status: ControlProgressStatus;
+  completed_at: string | null;
+  completed_by: string | null;
+  developer_note: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface ActivityLogEntry {

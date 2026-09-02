@@ -57,6 +57,10 @@ A local Supabase (CLI) option is documented at the bottom for development.
    the worker fails with `column ... does not exist`.
    `0016_application_icon_refs.sql` is optional — without it every application
    shows the placeholder icon and nothing else changes.
+   `0017_ticket_controls.sql` and `0018_ticket_withdrawal.sql` add the developer
+   remediation workflow: control progress, the ticket-status guardrail, and the
+   `withdrawn` state. Without `0018`, withdrawing a remediation fails with
+   `violates check constraint "tickets_status_check"`.
    (Or, with the Supabase CLI linked to your project: `supabase db push`.)
    Migrations are additive — if you already applied earlier ones, just run
    whichever ones are new.
@@ -124,6 +128,37 @@ suspend or reinstate *any* account, including their own — that only
 removes or restores access already implied by the account's existing
 roles, never grants a new one, so the self-change restriction doesn't
 apply to it.
+
+### Setting up a developer account
+
+The developer workspace at `/resolve` needs three things, and all of them are
+the existing account model — there is no separate developer login:
+
+```text
+Authenticated user  +  developer role  +  a team_id that matches
+                                          applications.developer_team_id
+```
+
+1. The user signs up normally. `handle_new_user` gives them
+   `roles = ['developer']` already.
+2. An `admin` opens **Admin → Users**, confirms the role, and assigns the user
+   to a developer team.
+3. An `admin` opens **Admin → Applications** and sets that team as the
+   application's owner.
+
+A worked example, with placeholders:
+
+```text
+User:    developer@example.test
+Role:    developer
+Team:    Example Developer Team
+team_id: example-team-id
+```
+
+Stop at step 1 and the user lands on `/resolve` and is told their account is
+not assigned to a team yet. **They do not see every application** — RLS matches
+`developer_team_id` against a null `team_id` and returns nothing, so the empty
+result is enforced by the database, not just by the page.
 
 ### Optional: local Supabase (CLI)
 

@@ -28,7 +28,9 @@ export function Layout() {
 
   const navItems = [
     { to: "/assessments", label: "Assess", show: can("view_assessments") },
-    { to: "/tickets", label: "Resolve", show: can("view_tickets") },
+    { to: "/findings", label: "Findings", show: can("view_findings") },
+    { to: "/resolve", label: "Resolve", show: can("view_resolve") },
+    { to: "/tickets", label: "Tickets", show: can("view_tickets") },
     { to: "/learn", label: "Learn", show: true },
     { to: "/admin", label: "Admin", show: can("access_admin") },
   ].filter((item) => item.show);
@@ -46,7 +48,10 @@ export function Layout() {
             </span>
           </Link>
 
-          <nav className="flex h-full flex-1 items-center gap-1">
+          <nav
+            aria-label="Main"
+            className="flex h-full min-w-0 flex-1 items-center gap-1 overflow-x-auto"
+          >
             {navItems.map((item) => (
               <NavLink
                 key={item.to}
@@ -54,7 +59,7 @@ export function Layout() {
                 end={item.to === "/"}
                 className={({ isActive }) =>
                   cn(
-                    "flex h-8 items-center rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+                    "flex h-8 shrink-0 items-center rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
                     isActive && "bg-primary/10 text-primary hover:bg-primary/10 hover:text-primary",
                   )
                 }

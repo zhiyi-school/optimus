@@ -8,6 +8,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { useAuth } from "@/auth/useAuth";
+import { defaultRouteFor } from "@/auth/permissions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -43,7 +44,7 @@ const TRUST_BADGES = [
 ];
 
 export default function Login() {
-  const { session, signIn, signUp } = useAuth();
+  const { session, profile, loading: authLoading, signIn, signUp } = useAuth();
   const [mode, setMode] = useState<Mode>("signin");
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
@@ -52,7 +53,7 @@ export default function Login() {
   const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  if (session) return <Navigate to="/" replace />;
+  if (session && !authLoading) return <Navigate to={defaultRouteFor(profile)} replace />;
 
   function switchMode(next: Mode) {
     setMode(next);

@@ -1,6 +1,7 @@
 import { useRef, useState, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/auth/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
 import {
@@ -13,20 +14,33 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
-  useCreateRemediationTicket,
   useCreateRiskAcceptanceTicket,
+  useFindingTickets,
   useRequestRetest,
+  useResumeTicket,
   useReviewRiskAcceptance,
+  useRiskControls,
   useActiveRun,
   useRunEvents,
+  useSendMessage,
+  useStartRemediation,
   useSubmitFix,
   useUpdateTicketStatus,
+  useWithdrawTicket,
 } from "@/hooks/queries";
 import { RunEventTimeline } from "@/components/run-events";
 import { syncService, riskProgressInRun, type RunCancelToken } from "@/data/sync";
 import { retestData } from "@/data/services";
 import { defaultConfigPath } from "@/api/automation-services";
-import { errorMessage } from "@/lib/utils";
+import {
+  activeRemediationTicket,
+  canResumeTicket,
+  canSubmitFix,
+  canWithdrawTicket,
+  reconciliationPlan,
+  resumableRemediationTicket,
+} from "@/lib/resolve";
+import { errorMessage, formatDate } from "@/lib/utils";
 import type { Finding, Ticket, Application } from "@/data/types";
 import type { Capability } from "@/auth/permissions";
 
@@ -42,31 +56,75 @@ export function WorkOnRiskButton({
   const [plannedFix, setPlannedFix] = useState("");
   const [targetVersion, setTargetVersion] = useState("");
   const navigate = useNavigate();
-  const create = useCreateRemediationTicket();
+  const { can } = useAuth();
+  const start = useStartRemediation();
+  const { data: tickets } = useFindingTickets(finding.id);
+  const definitions = useRiskControls(finding.platform, finding.test_id);
+
+  const active = activeRemediationTicket(finding.id, tickets);
+  const withdrawn = resumableRemediationTicket(finding.id, tickets);
+  const resume = useResumeTicket(withdrawn?.id ?? "", finding.id);
+  const ticketPath = (id: string) =>
+    can("view_resolve") ? `/resolve/tickets/${id}` : `/tickets/${id}`;
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    const ticket = await create.mutateAsync({
-      finding_id: finding.id,
-      application_id: finding.application_id,
-      title: `Remediate: ${finding.title}`,
-      description: [notes, plannedFix && `Planned fix: ${plannedFix}`]
-        .filter(Boolean)
-        .join("\n\n"),
-      target_version: targetVersion || undefined,
+    const ticket = await start.mutateAsync({
+      ticket: {
+        finding_id: finding.id,
+        application_id: finding.application_id,
+        title: `Remediate: ${finding.title}`,
+        description: [notes, plannedFix && `Planned fix: ${plannedFix}`]
+          .filter(Boolean)
+          .join("\n\n"),
+        target_version: targetVersion || undefined,
+      },
+      plan: reconciliationPlan(definitions.data ?? []),
     });
     setOpen(false);
-    navigate(`/tickets/${ticket.id}`);
+    navigate(ticketPath(ticket.id));
+  }
+
+  if (active) {
+    return (
+      <Link
+        to={ticketPath(active.id)}
+        className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+      >
+        Continue remediation
+      </Link>
+    );
+  }
+
+  if (withdrawn) {
+    return (
+      <div>
+        <Button
+          disabled={resume.isPending}
+          onClick={async () => {
+            await resume.mutateAsync();
+            navigate(ticketPath(withdrawn.id));
+          }}
+        >
+          {resume.isPending ? "Resuming…" : "Resume remediation"}
+        </Button>
+        {resume.isError && (
+          <p className="mt-1 text-xs text-danger">
+            {errorMessage(resume.error, "Could not resume this remediation.")}
+          </p>
+        )}
+      </div>
+    );
   }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button>Work on this Risk</Button>
+        <Button>Start remediation</Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Create remediation ticket</DialogTitle>
+          <DialogTitle>Start remediation</DialogTitle>
           <DialogDescription>
             {finding.title} — {application?.name}
           </DialogDescription>
@@ -99,12 +157,17 @@ export function WorkOnRiskButton({
             </label>
             <Input value={targetVersion} onChange={(e) => setTargetVersion(e.target.value)} />
           </div>
+          {start.isError && (
+            <p className="text-xs text-danger">
+              {errorMessage(start.error, "Could not start this remediation.")}
+            </p>
+          )}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={create.isPending}>
-              {create.isPending ? "Creating…" : "Create ticket"}
+            <Button type="submit" disabled={start.isPending}>
+              {start.isPending ? "Starting…" : "Start remediation"}
             </Button>
           </DialogFooter>
         </form>
@@ -186,6 +249,173 @@ export function AcceptRiskButton({ finding }: { finding: Finding }) {
             </Button>
             <Button type="submit" disabled={create.isPending}>
               {create.isPending ? "Submitting…" : "Submit request"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function WithdrawRemediationDialog({
+  ticket,
+  size = "sm",
+}: {
+  ticket: Ticket;
+  size?: "sm" | "default";
+}) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const withdraw = useWithdrawTicket(ticket.id, ticket.finding_id);
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    await withdraw.mutateAsync(reason);
+    setOpen(false);
+    setReason("");
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size={size} variant="outline">
+          Withdraw remediation
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Stop working on this remediation?</DialogTitle>
+          <DialogDescription>
+            This will withdraw the remediation request. The finding will remain unresolved and
+            security will not treat it as verified. Your conversation, evidence and control
+            progress are kept.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={onSubmit} className="space-y-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">Reason *</label>
+            <Textarea
+              rows={3}
+              required
+              placeholder="Why are you stopping work on this remediation?"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+            />
+          </div>
+          {withdraw.isError && (
+            <p className="text-xs text-danger">
+              {errorMessage(withdraw.error, "Could not withdraw this remediation.")}
+            </p>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={withdraw.isPending || !reason.trim()}>
+              {withdraw.isPending ? "Withdrawing…" : "Withdraw remediation"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function ResumeRemediationButton({
+  ticket,
+  size = "sm",
+}: {
+  ticket: Ticket;
+  size?: "sm" | "default";
+}) {
+  const resume = useResumeTicket(ticket.id, ticket.finding_id);
+  return (
+    <div>
+      <Button size={size} disabled={resume.isPending} onClick={() => void resume.mutateAsync()}>
+        {resume.isPending ? "Resuming…" : "Resume remediation"}
+      </Button>
+      {resume.isError && (
+        <p className="mt-1 text-xs text-danger">
+          {errorMessage(resume.error, "Could not resume this remediation.")}
+        </p>
+      )}
+    </div>
+  );
+}
+
+export function WithdrawalNotice({
+  ticket,
+  actorName,
+}: {
+  ticket: Ticket;
+  actorName?: string | null;
+}) {
+  if (ticket.status !== "withdrawn") return null;
+  return (
+    <div className="rounded-md border border-border bg-muted/40 p-3">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        Withdrawn by developer
+      </p>
+      <p className="mt-1 text-sm text-foreground">
+        {ticket.withdrawal_reason || "No reason was recorded."}
+      </p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        {actorName ?? "A developer"}
+        {ticket.withdrawn_at ? ` · ${formatDate(ticket.withdrawn_at)}` : ""}
+      </p>
+      <p className="mt-2 text-xs text-muted-foreground">
+        The finding stays unresolved. Security has not verified anything here.
+      </p>
+    </div>
+  );
+}
+
+function RequestChangesDialog({ ticketId }: { ticketId: string }) {
+  const [open, setOpen] = useState(false);
+  const [comment, setComment] = useState("");
+  const updateStatus = useUpdateTicketStatus(ticketId);
+  const sendMessage = useSendMessage(ticketId);
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    await sendMessage.mutateAsync(comment);
+    await updateStatus.mutateAsync("rejected");
+    setOpen(false);
+    setComment("");
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="outline">
+          Request Changes
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Request changes from the developer</DialogTitle>
+          <DialogDescription>
+            This sends the ticket back for more work. It does not change the finding&apos;s
+            technical status.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={onSubmit} className="space-y-3">
+          <Textarea
+            rows={3}
+            required
+            placeholder="What still needs to change?"
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+          />
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={updateStatus.isPending || sendMessage.isPending || !comment.trim()}
+            >
+              Request changes
             </Button>
           </DialogFooter>
         </form>
@@ -479,8 +709,16 @@ export function TicketActions({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {isDeveloperFlow && can("submit_fix") && ticket.status !== "closed" && (
+      {isDeveloperFlow && can("submit_fix") && canSubmitFix(ticket) && (
         <SubmitFixDialog ticketId={ticket.id} />
+      )}
+
+      {can("withdraw_ticket") && canWithdrawTicket(ticket) && (
+        <WithdrawRemediationDialog ticket={ticket} />
+      )}
+
+      {can("withdraw_ticket") && canResumeTicket(ticket) && (
+        <ResumeRemediationButton ticket={ticket} />
       )}
 
       {canRequestRetest && (
@@ -499,6 +737,12 @@ export function TicketActions({
         can("review_risk_acceptance") &&
         riskAcceptanceId && (
           <ReviewRiskAcceptanceDialog ticketId={ticket.id} riskAcceptanceId={riskAcceptanceId} />
+        )}
+
+      {isDeveloperFlow &&
+        can("request_changes") &&
+        ["fix_submitted", "retest_requested", "under_review"].includes(ticket.status) && (
+          <RequestChangesDialog ticketId={ticket.id} />
         )}
 
       {ticket.status === "retest_requested" &&

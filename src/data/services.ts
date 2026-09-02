@@ -5,5 +5,6 @@ export * from "./services/applications";
 export * from "./services/assessments";
 export * from "./services/findings";
 export * from "./services/tickets";
+export * from "./services/controls";
 export * from "./services/evidence";
 export * from "./services/metrics";

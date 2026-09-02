@@ -40,6 +40,11 @@ layer rather than rendered components.
 | Run event stream labels | `src/lib/run-stream.test.ts` |
 | Metrics RPC fallback | `src/data/services/metrics.test.ts` |
 | Test page keying (state must not leak between tests) | `src/pages/TestDetail.test.tsx` |
+| Capability model, `/resolve` access states, post-login routing | `src/auth/permissions.test.ts` |
+| Remediation progress formulas, control seeding, workflow gates | `src/lib/resolve.test.ts` |
+| The whole developer lifecycle, sign-in to closure | `src/lib/resolve-workflow.test.ts` |
+| Playbook block allowlist and inline-link safety | `src/lib/playbook.test.tsx` |
+| Playbook API client — escaping, error degradation | `src/api/playbook-services.test.ts` |
 
 ## Conventions
 
@@ -61,20 +66,99 @@ network. Match the real error shape — the client's interceptor always attaches
 `vi.runAllTimersAsync()`; a poll-cap test that waits in real time takes minutes
 and will be deleted by whoever hits it next.
 
+## Database tests
+
+Two SQL files in `supabase/tests/` check the rules the developer workflow
+depends on at the table level, where they are actually enforced:
+
+| File | What it proves |
+|---|---|
+| `0017_ticket_controls_rls.sql` | team scoping on control progress, a developer with no team seeing nothing, and every security-owned action refused for a developer |
+| `0018_ticket_withdrawal_rls.sql` | a withdrawal must carry a reason and name its author, is refused once security verification has started, never sets `closed_at`, leaves the finding unresolved, cannot be edited afterwards, resumes only as `in_progress`, and never lets a developer reopen or close what security finalised |
+
+Neither is part of `npm test` — they need a database. Paste one into the
+Supabase SQL Editor and run it. Each creates its own placeholder fixtures,
+impersonates each role by setting `request.jwt.claims`, asserts, and ends with
+`rollback`, so it leaves nothing behind and is safe against a live project. A
+failed assertion raises; a clean run prints `0017 RLS checks passed` or
+`0018 withdrawal checks passed`.
+
+**Write these assertions so they can only pass for the right reason.** An
+assertion that a developer cannot withdraw a risk-acceptance ticket proves
+nothing if that ticket is also in a state no ticket can be withdrawn from — the
+eligibility rule refuses it and the type rule is never reached. The way to find
+that out is to break one rule in the trigger at a time and confirm a *named*
+assertion fails; three of these assertions were passing for the wrong reason
+until that was done.
+
+## The end-to-end test is a logic test
+
+`src/lib/resolve-workflow.test.ts` walks a finding through the entire developer
+lifecycle — sign-in routing, control initialisation, step completion, submit
+fix, request reassessment, security verification, closure — asserting the gates
+and the labels at each stage, and that the developer never holds the capability
+for a security-owned step.
+
+A second walkthrough covers the preview route into a tracked remediation, and a
+third covers withdrawal and resume: that the finding stays unresolved, that
+`closed_at` is untouched, that control progress and the withdrawal record
+survive, and that closure stays with security.
+
+They drive the pure functions rather than a browser, so they prove the workflow
+*rules*, not the wiring. A broken button or a mis-wired query would still pass
+them. The component tests below cover part of that gap; a real browser-driving
+test would cover the rest.
+
+## Component tests
+
+There is no Testing Library. Components that need a DOM mount through
+`react-dom/client` directly, in a file that opts into jsdom per-file:
+
+```tsx
+// @vitest-environment jsdom
+import { act } from "react";
+import { createRoot } from "react-dom/client";
+```
+
+`(globalThis as ...).IS_REACT_ACT_ENVIRONMENT = true` at module scope, a fresh
+container and root per test, `act(() => root.unmount())` in `afterEach`. Wrap
+anything containing a `Link` in `<MemoryRouter>`. Assertions go through
+`container.querySelector` and `container.textContent`.
+
+`control-navigation.test.tsx`, `control-content.test.tsx` and `Layout.test.tsx`
+cover what the pure-function tests cannot reach: that a click anywhere on a
+control card actually navigates — title, summary, badge, progress bar, card
+padding and the "View steps" label all reach the same route — that the route
+matches the viewer's access, that no interactive element is nested inside
+another, that a preview renders every step and its screenshots while offering
+nothing that could record progress, that a checkbox in work mode fires the
+mutation with the right arguments, and that each navbar item appears only for
+the capability that owns it.
+
+Navigation is asserted by dispatching a real bubbling click and reading the
+router's location back from a probe component, not by comparing `href`
+attributes — an `href` proves a link exists, not that clicking the summary
+text reaches it.
+
 ## What is not covered
 
-There is **no component rendering test infrastructure** — no jsdom, no
-Testing Library. Component behaviour is verified by typechecking, linting, the
-build, and by extracting logic into testable functions.
+**The live-update poll is not exercised end to end.** `usePlaybookRevisionWatch`
+polls, compares and invalidates, but no test drives a real revision change
+through a mounted page — the reconciliation and rendering rules underneath it are
+covered by `resolve-workflow.test.ts` and the component tests instead.
 
-The consequence is real: two UI state bugs in this codebase (state leaking
-between test pages, and a queued risk reported as running) were invisible to
-the existing suite and were caught only by using the app. `TestDetail.test.tsx`
-guards the first of those without a DOM by calling the component function and
-inspecting the returned element's `key`.
+**Pages are not mounted.** The tested units are components and pure functions;
+no test renders `Resolve`, `ResolveTicket`, `FindingDetail`, `ControlDetail` or
+`ControlPreview` with a real query client, so a mis-wired hook, a wrong
+`enabled` condition or a broken loading branch would still pass. That
+`ControlPreview` records no progress is guarded instead by a check that the page
+imports no progress mutation — cheap, and it fails the moment one is added. The consequence is real: two UI state
+bugs in this codebase (state leaking between test pages, and a queued risk
+reported as running) were invisible to the suite and were caught only by using
+the app.
 
-Adding jsdom and `@testing-library/react` would close this gap for roughly one
-devDependency. That is a deliberate open decision, not an oversight.
+**Nothing drives a browser.** Navigation between routes, authentication and the
+Supabase round trip are all stubbed or bypassed.
 
 ## Backend tests
 

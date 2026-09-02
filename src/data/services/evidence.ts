@@ -13,6 +13,16 @@ export const evidenceData = {
     return data;
   },
 
+  async listForTicket(ticketId: string): Promise<Evidence[]> {
+    const { data, error } = await supabase
+      .from("evidence")
+      .select("*")
+      .eq("ticket_id", ticketId)
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return data;
+  },
+
   async uploadFile(findingId: string | null, ticketId: string | null, file: File) {
     const userId = await requireUserId();
     const prefix = findingId ? `finding-${findingId}` : `ticket-${ticketId}`;

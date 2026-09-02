@@ -1,3 +1,5 @@
+import type { ControlSummary } from "@/api/playbook-types";
+
 export type AutomationPlatform = "ios" | "android";
 
 export type RunStatus = "running" | "completed" | "failed";
@@ -146,6 +148,9 @@ export interface RiskDefinition {
   tactic: string | null;
   automation_available?: boolean;
   demonstration: DemonstrationBlock[];
+  controls?: ControlSummary[];
+  controls_available?: boolean;
+  controls_error?: string | null;
   [key: string]: unknown;
 }
 

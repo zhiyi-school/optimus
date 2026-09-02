@@ -67,6 +67,7 @@ export const ticketStatusConfig: Record<
   under_review: { label: "Under Review", tone: "warning" },
   accepted: { label: "Accepted", tone: "success" },
   rejected: { label: "Rejected", tone: "danger" },
+  withdrawn: { label: "Withdrawn", tone: "neutral" },
   closed: { label: "Closed", tone: "neutral" },
 };
 

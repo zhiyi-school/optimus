@@ -179,12 +179,41 @@ supabase/migrations/
 /assessments/:assessmentId/tests/:testId/runs/:runId     One run's detail, scoped to a single test
 /runs/:runTimestamp                                      One backend run's progress + full result summary
 /findings                                                Findings
-/findings/:findingId                                     Finding detail
+/findings/:findingId                                     Finding detail + the risk's developer controls
+/findings/:findingId/controls/:controlId                 One control, read-only, before any ticket exists
 /tickets                                                 Tickets
 /tickets/:ticketId                                       Ticket detail
+/tickets/:ticketId/controls/:controlId                   One control, from a ticket, for anyone who may view it
+/resolve                                                 Developer workspace: applications in the team's scope
+/resolve/applications/:applicationId                     One application's remediation progress
+/resolve/findings/:findingId/controls/:controlId         One control, read-only, before any ticket exists
+/resolve/tickets/:ticketId                               One finding's remediation workspace
+/resolve/tickets/:ticketId/controls/:controlId           One control's ordered steps, writable
 /settings                                                Profile + automation defaults
 /admin                                                   Teams, users, roles, applications (admin role only)
 ```
+
+The `/resolve` tree is the developer surface and every route in it is wrapped
+in `ResolveGuard`, which resolves `resolveAccess(profile)` to one of
+`loading`, `unauthorized`, `inactive`, `no_team` or `ready`. `no_team` is a
+setup state, never a grant: an unassigned developer sees an explanation rather
+than a fallback list of every application. RLS refuses the same thing
+independently, so the guard is UX, not authorization.
+
+`/tickets/:ticketId` and `/resolve/tickets/:ticketId` show the same ticket from
+two sides. The Tickets route is the shared, security-oriented view of every
+ticket type; the Resolve route is a developer's remediation workspace for one
+finding, leading with the required controls and the actions the developer owns.
+Both read the same rows.
+
+The three control routes render one component pair — `ControlDetail` for a
+ticket, `ControlPreview` for a finding — over a shared `control-content`
+module, so a control's Markdown blocks, screenshots, references and archive are
+rendered in exactly one place. What differs between them is the capability
+gate: `/findings/...` is guarded by `view_findings`, `/tickets/...` by
+`view_tickets`, `/resolve/...` by `ResolveGuard`, and whether steps can be
+ticked is decided separately by `update_control_progress`. A preview reads no
+progress rows and creates none.
 
 `/assessments/new` (Security Team only) registers the app with **both**
 systems: an `applications` row plus a placeholder ("Not Started")

@@ -90,7 +90,7 @@ merging into an existing project, these are the dependencies:
 
 | Kind | Objects |
 | --- | --- |
-| Tables | `profiles`, `teams`, `applications`, `assessments`, `assessment_messages`, `findings`, `finding_history`, `evidence`, `tickets`, `ticket_messages`, `ticket_attachments`, `retest_runs`, `risk_acceptance`, `activity_log` |
+| Tables | `profiles`, `teams`, `applications`, `assessments`, `assessment_messages`, `findings`, `finding_history`, `evidence`, `tickets`, `ticket_messages`, `ticket_attachments`, `retest_runs`, `risk_acceptance`, `activity_log`, `ticket_controls`, `ticket_control_steps` |
 | Team scoping | a `team_id` column on `profiles`, `developer_team_id` on `applications`, `assigned_team_id` on `tickets` — there is no join table |
 | Contacts | columns on `applications` (`owner_email`, `developer_contact_*`, `contact_emails[]`), added by `0004` and `0009` — not a separate table |
 | RPC | `dashboard_metrics()` — the overview page's fast path; the UI falls back to per-table queries and logs a console warning naming `0012_dashboard_metrics_rpc.sql` if it is absent |
@@ -232,6 +232,7 @@ backend does not support the feature" and degrades instead of erroring.
 | **Optional: SARIF export** | `/reports/{run_timestamp}/sarif` | the download button is hidden |
 | **Optional: worker operations** | `/sync/status` | worker health is unavailable |
 | **Optional: retry** | `POST /runs/{run_id}/sync` | the retry button never appears |
+| **Optional: developer remediation controls** | `/platforms/{platform}/risks/{risk_id}/controls`, `/platforms/{platform}/controls/{control_id}`, `.../assets/{asset_path}`, `.../source`, `/platforms/{platform}/playbook/status` | the Resolve workspace still lists applications, findings and tickets, but every control card reports that remediation instructions are unavailable |
 
 ## How the client is structured
 
@@ -315,6 +316,38 @@ or a trusted LAN needs an authenticating proxy or VPN in front of it. See
 | One application keeps its placeholder after a backfill | its build has no icon the backend can read | expected; the backfill records it as `unavailable`. iOS asset-catalog-only and Android adaptive-XML icons are known gaps |
 | A replacement API "works" but pages misbehave | shapes, status codes or `run_id` semantics differ | re-check the [contract](#required-backend-compatibility-contract) — names alone are not enough |
 
+## Supplying your own remediation playbook
+
+The control text the Resolve workspace renders is not in this repository and
+not in Supabase. It comes from a directory on the automation host, pointed at by
+`IOS_PLAYBOOK_DIR` / `ANDROID_PLAYBOOK_DIR` there. To reuse this dashboard with
+your own remediation guidance you provide that directory; nothing changes here.
+
+What the dashboard requires of whatever serves those endpoints:
+
+- **Structured JSON, not Markdown.** Steps arrive as typed blocks and the
+  dashboard renders only `paragraph`, `caption`, `heading`, `code`, `list`,
+  `table` and `image`, dropping anything else. It will not parse Markdown and
+  will not render raw HTML.
+- **`control_id` and `step_key` are stable identifiers.** They are what
+  `ticket_controls` and `ticket_control_steps` store. A backend that renumbers
+  steps on every edit orphans recorded progress.
+- **`playbook_revision` changes when the control's content changes.** The
+  dashboard compares the stored revision against the live one to warn that
+  guidance moved on.
+- **`status` is one of `active`, `deprecated`, `deprioritized`, and `required`
+  is a boolean.** Only an active, required control is initialised onto a ticket
+  and counted toward progress.
+- **Image blocks carry a backend-relative `url` and an `exists` flag**, not a
+  filesystem path. `exists: false` renders a placeholder instead of a broken
+  image.
+- **An unreadable playbook is reported, not hidden.** `GET /platforms/{platform}/risks`
+  must keep working with `controls_available: false` and a reason in
+  `controls_error`, rather than returning an empty `controls` array as though
+  the risk genuinely has no remediation guidance.
+
+The full document format is in the backend's `docs/developer-playbook.md`.
+
 ## Current limitations and follow-up work
 
 - **No versioned contract.** The compatibility table above is prose. There is
@@ -328,6 +361,22 @@ or a trusted LAN needs an authenticating proxy or VPN in front of it. See
   rebuild, so one artifact cannot serve multiple environments.
 - **Single automation host** assumed; the dashboard has no concept of several
   backends or of routing a run to a particular one.
+- **Implemented-control archives are unauthenticated at the backend.** The
+  dashboard links to them, but the automation API protects them only by network
+  posture and an all-or-nothing `PLAYBOOK_SOURCE_DOWNLOAD_ENABLED` switch. A
+  deployment that needs per-application control over who downloads a reference
+  implementation has to add it at a proxy.
+- **No page is mounted in a test.** Individual components and the workflow rules
+  are covered, but nothing renders a page with a real query client, so a
+  mis-wired hook or a broken loading branch would not be caught — see
+  [testing.md](./testing.md#what-is-not-covered).
+- **One active remediation ticket per finding is a UI rule, not a constraint.**
+  The finding page offers "Continue remediation" instead of creating a second
+  ticket, but the database does not refuse a duplicate. A deployment that has
+  confirmed it has no existing duplicates can enforce it with a partial unique
+  index on `tickets (finding_id) where type = 'remediation' and status not in
+  ('closed', 'accepted', 'withdrawn')`; that is not in a migration because it
+  would fail on any project that already has duplicates.
 - **Application icons are unauthenticated like the rest of the automation API.**
   The icon endpoint sits behind the same trusted-local/trusted-LAN boundary as
   every other backend route. If the API later gains authentication, the icon

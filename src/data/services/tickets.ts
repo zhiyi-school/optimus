@@ -245,6 +245,9 @@ export const ticketData = {
   },
 
   async updateStatus(ticketId: string, status: TicketStatus): Promise<Ticket> {
+    if (status === "withdrawn") {
+      throw new Error("Use ticketData.withdraw() so the reason and actor are recorded.");
+    }
     const closed_at = status === "closed" ? new Date().toISOString() : null;
     const { data, error } = await supabase
       .from("tickets")
@@ -286,6 +289,48 @@ export const ticketData = {
       entity_type: "ticket",
       entity_id: ticketId,
       action: "fix_submitted",
+    });
+    return data;
+  },
+
+  async withdraw(ticketId: string, reason: string): Promise<Ticket> {
+    const trimmed = reason.trim();
+    if (!trimmed) throw new Error("Withdrawing a remediation needs a reason.");
+    const userId = await requireUserId();
+    const { data, error } = await supabase
+      .from("tickets")
+      .update({
+        status: "withdrawn",
+        withdrawn_at: new Date().toISOString(),
+        withdrawn_by: userId,
+        withdrawal_reason: trimmed,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", ticketId)
+      .select()
+      .single();
+    if (error) throw error;
+    await activityData.log({
+      entity_type: "ticket",
+      entity_id: ticketId,
+      action: "remediation_withdrawn",
+      metadata: { reason: trimmed },
+    });
+    return data;
+  },
+
+  async resume(ticketId: string): Promise<Ticket> {
+    const { data, error } = await supabase
+      .from("tickets")
+      .update({ status: "in_progress", updated_at: new Date().toISOString() })
+      .eq("id", ticketId)
+      .select()
+      .single();
+    if (error) throw error;
+    await activityData.log({
+      entity_type: "ticket",
+      entity_id: ticketId,
+      action: "remediation_resumed",
     });
     return data;
   },

@@ -17,9 +17,11 @@ import {
   useFindingTickets,
   useActivity,
   useRiskCatalogue,
+  useRiskControls,
   useTestRunHistory,
   useUpdateFindingStatus,
 } from "@/hooks/queries";
+import { ControlDefinitionList } from "@/components/control-definition-list";
 import { formatDate } from "@/lib/utils";
 import type { FindingStatus } from "@/data/types";
 
@@ -34,6 +36,7 @@ export default function FindingDetail() {
   const { data: tickets } = useFindingTickets(findingId);
   const { data: activity } = useActivity("finding", findingId);
   const { data: risks } = useRiskCatalogue(finding?.platform);
+  const controls = useRiskControls(finding?.platform, finding?.test_id);
   const { data: runHistory } = useTestRunHistory(
     application?.external_id ?? undefined,
     finding?.test_id ?? undefined,
@@ -54,14 +57,7 @@ export default function FindingDetail() {
       <PageHeader
         title={finding.title}
         description={`${application?.name ?? "Unknown application"} · Finding ${finding.id.slice(0, 8)}`}
-        actions={
-          showDeveloperActions ? (
-            <>
-              <WorkOnRiskButton finding={finding} application={application} />
-              <AcceptRiskButton finding={finding} />
-            </>
-          ) : undefined
-        }
+        actions={showDeveloperActions ? <AcceptRiskButton finding={finding} /> : undefined}
       />
 
       <Card className="mb-6">
@@ -99,6 +95,36 @@ export default function FindingDetail() {
             <RiskGoal risk={riskDefinition} />
           ) : (
             <p className="text-sm text-muted-foreground">No remediation guidance available for this test.</p>
+          )}
+        </Section>
+
+        <Section title="Developer remediation controls">
+          <p className="mb-3 text-xs text-muted-foreground">
+            Each control is a way to address this risk, with the steps a developer follows to
+            implement it. These are not the steps security uses to demonstrate the risk. Reading
+            them records nothing.
+          </p>
+          {!finding.test_id ? (
+            <p className="text-sm text-muted-foreground">
+              This finding is not linked to a playbook risk, so it has no developer controls.
+            </p>
+          ) : controls.isLoading ? (
+            <LoadingState label="Loading remediation controls…" />
+          ) : controls.isError ? (
+            <ErrorState
+              message="The automation backend could not provide the remediation controls for this risk."
+              onRetry={() => controls.refetch()}
+            />
+          ) : (
+            <ControlDefinitionList
+              controls={controls.data}
+              linkTo={(controlId) => `/findings/${finding.id}/controls/${controlId}`}
+            />
+          )}
+          {showDeveloperActions && (
+            <div className="mt-4 border-t border-border pt-4">
+              <WorkOnRiskButton finding={finding} application={application} />
+            </div>
           )}
         </Section>
 
