@@ -1,25 +1,29 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ListChecks, ShieldCheck, Zap } from "lucide-react";
+import { ChevronDown, ListChecks, Zap } from "lucide-react";
 import { LoadingState, ErrorState } from "@/components/common";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { StatusBadge, PlatformBadge } from "@/components/data-display";
+import { StatusBadge, PlatformBadge, SeverityBadge } from "@/components/data-display";
 import { Badge } from "@/components/ui/badge";
-import { EvidenceViewer, type EvidenceItem } from "@/components/evidence";
 import { AssessmentSidebar } from "@/components/assessment-sidebar";
 import { TestRunStages } from "@/components/assessment-progress";
 import { RunEventTimeline } from "@/components/run-events";
 import { CtaCard } from "@/components/cta-card";
-import { ConversationPanel } from "@/components/conversation-panel";
+import { RiskConversationPanel } from "@/components/conversation-panel";
+import { RiskConversationActions } from "@/components/ticket-actions";
 import {
   useAssessment,
-  useAssessmentMessages,
+  useFindingRetests,
+  useFindingTickets,
   useFindings,
   useProfiles,
   useRiskCatalogue,
-  useSendAssessmentMessage,
+  useRiskConversation,
+  useRiskConversationAttachments,
+  useRiskConversationEntries,
+  useSendRiskMessage,
   useActiveRun,
   useResyncRun,
   useRunEvents,
@@ -30,7 +34,6 @@ import { DashboardSyncNotice } from "@/components/dashboard-sync-notice";
 import { assessmentApi, defaultConfigPath } from "@/api/automation-services";
 import {
   syncService,
-  mapVerdictToFindingStatus,
   riskProgressInRun,
   type RiskRunPhase,
   type RunCancelToken,
@@ -38,16 +41,10 @@ import {
 import { useAuth } from "@/auth/useAuth";
 import { riskIcon } from "@/lib/entity-icons";
 import { hasAutomation } from "@/lib/risk-automation";
-import { cn, errorMessage, formatDate, formatDuration } from "@/lib/utils";
+import { conversationTimeline } from "@/lib/conversation-timeline";
+import { activeRemediationTicket, resumableRemediationTicket } from "@/lib/resolve";
+import { cn, errorMessage, formatDate } from "@/lib/utils";
 import type { Application, Finding } from "@/data/types";
-
-const MANUAL_REPORT_TEMPLATE = `Status: [At Risk / Reduced Risk / Inconclusive]
-
-Notes:
-(Add your observations here…)
-
-Evidence:
-(Attach screenshots or screen recordings)`;
 
 export default function TestDetail() {
   // Both routes share this element, so :testId changes without remounting.
@@ -64,7 +61,8 @@ function TestPage() {
   const queryClient = useQueryClient();
   const { profile, can } = useAuth();
 
-  const { data: assessment } = useAssessment(assessmentId);
+  const assessmentQuery = useAssessment(assessmentId);
+  const assessment = assessmentQuery.data;
   const platform = assessment?.application?.platform;
   const { data: risks } = useRiskCatalogue(platform);
   const risk = useMemo(() => risks?.find((r) => r.risk_id === testId), [risks, testId]);
@@ -81,22 +79,41 @@ function TestPage() {
 
   const { data: profiles } = useProfiles();
   const profileMap = useMemo(() => new Map((profiles ?? []).map((p) => [p.id, p])), [profiles]);
-  const { data: messages, isLoading: messagesLoading } = useAssessmentMessages(assessmentId);
-  const sendMessage = useSendAssessmentMessage(assessmentId ?? "");
+
+  const canComment = can("comment_risk_conversation");
+  const conversation = useRiskConversation(
+    assessment?.application_id,
+    testId,
+    currentFinding?.id,
+    { create: canComment, originAssessmentId: assessmentId },
+  );
+  const entries = useRiskConversationEntries(conversation.data?.id);
+  const attachments = useRiskConversationAttachments(
+    useMemo(() => (entries.data ?? []).map((entry) => entry.id), [entries.data]),
+  );
+  const attachmentsByEntry = useMemo(() => {
+    const map = new Map<string, typeof attachments>();
+    for (const attachment of attachments) {
+      map.set(attachment.entry_id, [...(map.get(attachment.entry_id) ?? []), attachment]);
+    }
+    return map;
+  }, [attachments]);
+  const sendMessage = useSendRiskMessage(conversation.data?.id);
+  const { data: findingTickets } = useFindingTickets(currentFinding?.id);
+  const { data: retests } = useFindingRetests(currentFinding?.id);
+  const remediationTicket =
+    activeRemediationTicket(currentFinding?.id ?? "", findingTickets) ??
+    resumableRemediationTicket(currentFinding?.id ?? "", findingTickets);
 
   const appExternalId = assessment?.application?.external_id ?? undefined;
   const { data: history, isLoading, isError, refetch } = useTestRunHistory(appExternalId, testId);
-  const thread = useMemo(
-    () => [...(history ?? [])].sort((a, b) => a.started_at.localeCompare(b.started_at)),
-    [history],
-  );
+  const timeline = useMemo(() => conversationTimeline(entries.data, history), [entries.data, history]);
 
   const [watching, setWatching] = useState(false);
   const [startedRunId, setStartedRunId] = useState<string | undefined>();
   const [progressOpen, setProgressOpen] = useState(true);
   const [runError, setRunError] = useState<string | null>(null);
   const [stoppedWatchingRunId, setStoppedWatchingRunId] = useState<string | undefined>();
-  const highlightedRef = useRef<HTMLLIElement>(null);
   const cancelRef = useRef<RunCancelToken>({ cancelled: false });
 
   const { run: activeRun, platformRun } = useActiveRun({ platform, appExternalId, riskId: testId });
@@ -119,10 +136,6 @@ function TestPage() {
   // The device takes one run at a time, so any run at all blocks starting this test.
   const deviceBusy = !executing && !queued && !!platformRun;
   const busy = executing || queued || deviceBusy;
-
-  useEffect(() => {
-    if (runId) highlightedRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
-  }, [runId, thread.length]);
 
   // A run this tab only observed still has to refresh the page once this risk is done.
   const observedPhaseRef = useRef<RiskRunPhase | undefined>();
@@ -184,6 +197,11 @@ function TestPage() {
     setWatching(false);
   }
 
+  // RLS hides an assessment outside the viewer's application scope, so an empty
+  // result here is a permission answer rather than a slow load.
+  if (assessmentQuery.isSuccess && !assessment) {
+    return <ErrorState message="You do not have access to this assessment." />;
+  }
   if (!assessment || !risk) {
     return <LoadingState label="Loading test…" />;
   }
@@ -212,8 +230,33 @@ function TestPage() {
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-lg font-bold text-foreground">{risk.name}</h1>
               {currentFinding && <StatusBadge status={currentFinding.status} />}
+              {currentFinding && <SeverityBadge severity={currentFinding.severity} />}
             </div>
             <p className="mt-0.5 text-sm text-muted-foreground">{risk.description}</p>
+            {(currentFinding || remediationTicket) && (
+              <p className="mt-1 flex flex-wrap items-center gap-3 text-xs">
+                {currentFinding && (
+                  <Link
+                    to={`/findings/${currentFinding.id}`}
+                    className="font-medium text-primary hover:underline"
+                  >
+                    View the finding
+                  </Link>
+                )}
+                {remediationTicket && (
+                  <Link
+                    to={
+                      can("view_resolve")
+                        ? `/resolve/tickets/${remediationTicket.id}`
+                        : `/tickets/${remediationTicket.id}`
+                    }
+                    className="font-medium text-primary hover:underline"
+                  >
+                    View the remediation ticket
+                  </Link>
+                )}
+              </p>
+            )}
           </div>
           {platform && <PlatformBadge platform={platform} />}
         </div>
@@ -343,93 +386,48 @@ function TestPage() {
           retryError={resync.isError ? errorMessage(resync.error, "Could not start the sync.") : null}
         />
 
-        <Card>
-          <CardContent className="py-5">
-            <h2 className="mb-3 text-sm font-semibold text-foreground">Automated Test History</h2>
-
-            {isLoading && <LoadingState label="Loading run history…" />}
-            {isError && <ErrorState message="Unable to load run history." onRetry={() => refetch()} />}
-
-            {!isLoading && !isError && thread.length === 0 && (
-              <div className="flex flex-col items-center justify-center gap-3 py-14 text-center">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-                  <ShieldCheck className="h-5 w-5 text-muted-foreground" />
-                </div>
-                <p className="text-sm font-medium text-foreground">
-                  {automated ? "No automated runs yet." : "This test is manual only."}
-                </p>
-                <p className="max-w-sm text-xs text-muted-foreground">
-                  {!automated
-                    ? "There is no automation for this security test, so no runs will appear here."
-                    : can("run_test")
-                      ? "Run an automated test to start building a history for this check."
-                      : "No automated runs have been recorded for this test yet."}
-                </p>
-              </div>
-            )}
-
-            {!isLoading && thread.length > 0 && (
-              <ol className="space-y-4">
-                {thread.map((run) => (
-                  <li
-                    key={run.run_timestamp}
-                    ref={run.run_timestamp === runId ? highlightedRef : undefined}
-                    className={cn(
-                      "flex gap-3 rounded-lg p-2 transition-colors",
-                      run.run_timestamp === runId && "ring-2 ring-primary/40",
-                    )}
-                  >
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                      <ShieldCheck className="h-4 w-4 text-primary" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="mb-1 flex flex-wrap items-baseline gap-2">
-                        <span className="text-sm font-semibold text-foreground">Automated Test</span>
-                        <span className="text-xs text-muted-foreground">{formatDate(run.started_at)}</span>
-                      </div>
-                      <div className="rounded-lg border border-border bg-muted/40 p-3">
-                        <div className="mb-2 flex flex-wrap items-center gap-2">
-                          <StatusBadge status={mapVerdictToFindingStatus(run.verdict)} />
-                          <span className="text-xs text-muted-foreground">
-                            {run.status} · {formatDuration(run.duration_seconds)}
-                          </span>
-                        </div>
-                        <p className="text-sm text-foreground">{run.summary}</p>
-                        {run.evidence.length > 0 && (
-                          <div className="mt-3">
-                            <EvidenceViewer
-                              items={run.evidence.map(
-                                (e, i): EvidenceItem => ({
-                                  id: `${run.run_timestamp}-${i}`,
-                                  name: e.label,
-                                  kind: e.kind,
-                                  url: assessmentApi.evidenceFileUrl(run.run_timestamp, e.path),
-                                  source: "Automation backend",
-                                }),
-                              )}
-                            />
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </CardContent>
-        </Card>
-
-        <ConversationPanel
-          messages={messages}
-          isLoading={messagesLoading}
-          currentProfileId={profile?.id}
-          profileMap={profileMap}
-          canComment={can("comment_ticket")}
-          onSend={(message) => sendMessage.mutateAsync(message)}
-          sending={sendMessage.isPending}
-          emptyStateDescription="Start the conversation to begin your manual test."
-          draftTemplate={MANUAL_REPORT_TEMPLATE}
-        />
+        {can("view_risk_conversation") && (
+          <RiskConversationPanel
+            items={timeline}
+            isLoading={conversation.isLoading || entries.isLoading || isLoading}
+            isError={conversation.isError || entries.isError}
+            onRetry={() => {
+              void conversation.refetch();
+              void entries.refetch();
+            }}
+            historyError={isError}
+            onRetryHistory={() => void refetch()}
+            attachmentsByEntry={attachmentsByEntry}
+            evidenceUrl={assessmentApi.evidenceFileUrl}
+            highlightRunTimestamp={runId}
+            currentProfileId={profile?.id}
+            profileMap={profileMap}
+            canComment={canComment && !!conversation.data}
+            composerNote={
+              canComment
+                ? "This conversation could not be opened, so there is nothing to post to yet. Retry above."
+                : undefined
+            }
+            onSend={(input) => sendMessage.mutateAsync(input)}
+            sending={sendMessage.isPending}
+            sendError={sendMessage.error}
+            emptyStateDescription={
+              automated
+                ? "Every automated run of this risk appears here, alongside the discussion, classification decisions and reassessments."
+                : "This risk has no automation. Discuss it with the other team, record a classification decision, or ask for a reassessment."
+            }
+            actions={
+              <RiskConversationActions
+                conversation={conversation.data}
+                finding={currentFinding}
+                application={assessment.application}
+                ticket={remediationTicket}
+                retests={retests}
+                can={can}
+              />
+            }
+          />
+        )}
       </div>
     </div>
   );

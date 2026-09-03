@@ -16,10 +16,11 @@ the real authorization boundary** (`supabase/migrations/0002_rls.sql`,
 | view_dashboard | ✅ | ✅ | ✅ | ✅ |
 | view_findings / view_tickets | ✅ | ✅ | ✅ | |
 | view_assessments | | ✅ | ✅ | |
+| view_risk_conversation | ✅ | ✅ | ✅ | |
 | view_resolve | ✅ | | | |
 | create_ticket / submit_fix / request_retest | ✅ | | | |
 | update_control_progress / withdraw_ticket | ✅ | | | |
-| comment_ticket | ✅ | ✅ | | |
+| comment_risk_conversation | ✅ | ✅ | | |
 | run_test / update_finding / close_ticket / review_risk_acceptance / request_changes | | ✅ | | |
 | view_executive_metrics | | | ✅ | |
 | access_admin | | | | ✅ |
@@ -27,7 +28,7 @@ the real authorization boundary** (`supabase/migrations/0002_rls.sql`,
 `admin` is deliberately separate from `security` — holding `security` does
 **not** grant access to the Admin page (`/admin`); a user needs `admin`
 specifically (in addition to, or instead of, any other role they hold). A
-few UI spots (which dashboard to show, ticket message bubble color) need
+few UI spots (which dashboard to show, conversation bubble colour) need
 to pick one representative role when a user has several — see
 `primaryRole()` in `src/auth/permissions.ts` for the precedence order
 (`security` > `cio` > `developer` > `admin`); this only affects display,
@@ -179,6 +180,84 @@ going through the dashboard or the Resolve tree. Every control card — in the
 preview list and on a ticket — is a single link covering the whole card, so a
 click anywhere on it opens the control.
 
+## The risk conversation
+
+Every application feature-risk has exactly one conversation, and it is the only
+conversation dialogue in the dashboard. It lives with the risk it is about:
+
+```text
+one application
+  -> one feature-risk
+       -> one shared conversation
+            messages, classification changes, remediation activity,
+            reassessment requests and results, automated test history
+```
+
+An application is assessed many times, and all of it lands in the one thread:
+opening the same risk from a later assessment continues the conversation rather
+than starting another. It is where security and developers discuss that risk,
+where security changes its classification, where a developer asks for a
+reassessment, and where the reassessment's progress and outcome are recorded.
+
+One chronological feed carries three things together — ordinary messages,
+structured workflow events, and the automated runs the automation backend has
+recorded for that risk — so a result, the decision it led to and the discussion
+around it sit side by side. Each of the three is visually distinct, and an event
+is never rendered as raw data. The automated runs are combined into the feed at
+render time and are not copied into the conversation: the automation host stays
+their only source. A run still going is shown separately, as live progress
+rather than history, and a link to a specific run still highlights and scrolls
+to it in the feed.
+
+Everything else links to the conversation rather than repeating it. Finding
+Detail, Ticket Detail and the Resolve ticket page each carry a link straight
+into it; none of them has a composer of its own. A ticket records the
+conversation *and* the assessment it was opened against, and keeps both for
+good, so a later run that moves the finding's own assessment reference on cannot
+send the ticket somewhere else.
+
+| Who | May |
+|---|---|
+| Security | read, post, change the classification, run a test or retest |
+| Developer | read and post on their own team's applications, request a reassessment when their remediation ticket is eligible |
+| CIO | read |
+
+A developer reaches the risk page for an application their team owns without
+holding `view_assessments`: the route admits `view_risk_conversation` as well,
+and RLS still decides what is visible, so an assessment outside their scope
+comes back empty and the page says so. Reading a conversation grants nothing
+else - a developer never gets test execution or classification.
+
+Requesting a reassessment is still gated on the remediation workflow, and not
+only in the UI: `enforce_retest_request_permissions` requires a non-security
+caller to name a remediation ticket with a fix submitted, or one security sent
+back, and refuses a ticket raised against a different risk. A developer with no
+eligible ticket can still post a message and ask a question.
+
+When an action cannot be used it stays visible and says why, rather than
+disappearing: a developer with no remediation ticket is told to start one, one
+who has not submitted a fix is told to do that first, and one whose
+reassessment is already queued is told security has it. Security sees the same
+treatment on the classification control when no result has been published for
+the risk yet. Only one reassessment can be in flight per risk, and that is
+enforced by the database, not just by hiding the button.
+
+### Classification versus severity
+
+The **classification** is the finding's status - At Risk, Reduced Risk or
+Inconclusive - and it is changed in the risk conversation, by security, with a
+required reason. One database function, `classify_risk()`, writes
+`findings.status`, appends to `finding_history` and posts a
+`classification_changed` event into the conversation in a single statement, so
+the finding cannot change without the record of who changed it and why. Finding
+Detail shows that history but no longer offers the control.
+
+**Severity** - Critical, High, Medium, Low, Info - is test-result data and is
+separate. Nothing in this workflow changes it.
+
+A manual classification is not final: the automation backend stays the
+authority, and a later real result supersedes it.
+
 ## Ticket Workflow
 
 ```text
@@ -189,19 +268,26 @@ Developer opens an At Risk / Inconclusive finding
      (never edits the finding directly)
    → the ticket's required controls are initialised from the playbook
    → Developer works through each control's steps, marking them complete
-   → Developer discusses, attaches evidence, submits fix info
-   → Developer clicks "Request Reassessment" → ticket → retest_requested
-   → Security Team clicks "Run Retest" → automation API runs the test
+   → Developer attaches evidence and submits fix info
+   → in the risk conversation, Developer clicks "Request reassessment"
+     → ticket → retest_requested
+   → in the same conversation, Security Team clicks "Run Retest"
+     → automation API runs the test
      → result synced back → finding status updated → ticket → under_review
+     → the conversation records the outcome
    → Security Team closes the ticket
 ```
+
+Discussion, classification and reassessment all live in the risk conversation
+on the assessment's risk page, never on the ticket — see
+[the risk conversation](#the-risk-conversation).
 
 Completing every control step **does not** resolve the finding. It only makes
 the control ready to submit; the finding's status changes on a real
 reassessment result or an explicit Security Team override.
 
 Security can send work back at any point with **Request Changes**, which moves
-the ticket to `rejected` and posts the reason into the conversation. The
+the ticket to `rejected` and posts the reason into the risk conversation. The
 developer sees that as "Changes requested" and can submit again.
 
 A finding has at most one remediation ticket in flight. When one is already
@@ -227,9 +313,9 @@ offered only while the developer still owns the next step — `open`,
 requested the work is in security's queue, so withdrawal is refused and the
 decision is security's.
 
-Nothing is lost: the conversation, evidence, control progress and activity
-survive, and resuming puts the ticket back to `in_progress` with all of it
-intact and the withdrawal still on the record.
+Nothing is lost: the risk conversation, evidence, control progress and
+activity survive, and resuming puts the ticket back to `in_progress` with all
+of it intact and the withdrawal still on the record.
 
 ### Developer-facing status labels
 
@@ -253,14 +339,15 @@ The Resolve workspace renames every ticket status for a developer audience:
 | Action | Developer | Security |
 |---|---|---|
 | Create a remediation ticket | ✅ | ✅ |
-| Comment, upload evidence | ✅ | ✅ |
+| Read and post in a risk conversation | ✅ | ✅ |
+| Upload evidence | ✅ | ✅ |
 | Update control-step progress | ✅ | |
 | Submit a fix | ✅ | |
 | Request a reassessment | ✅ | |
 | Withdraw or resume a remediation | ✅ | |
 | Run a reassessment or retest | | ✅ |
 | Request changes | | ✅ |
-| Change a finding's status | | ✅ |
+| Change a risk's classification | | ✅ |
 | Close a ticket | | ✅ |
 | Approve risk acceptance | | ✅ |
 
@@ -320,6 +407,45 @@ Team reviews and accepts/rejects the *business* record
 separate field that only changes via an actual retest result or an
 explicit Security Team override. A finding can legitimately still read
 **At Risk** while an accepted-risk record exists — both stay visible.
+
+## Assessment execution
+
+Creating an assessment queues a durable request; a backend worker runs it. The
+assessment page shows and steers that, but never drives it — closing the tab
+changes nothing.
+
+```text
+Security Team adds an app
+   → an assessment is created, and a run request queued with it
+   → the worker checks whether the app can actually run now
+     → it can          → the run starts, the assessment goes to running
+     → it cannot yet   → the assessment goes to waiting, with a reason,
+                         and the worker tries again on its own
+     → it never will   → the assessment fails, and says what to change
+   → the sync worker imports the report → completed
+```
+
+Configuration being finished is not the same as being able to run: the device
+may be unplugged. Those are reported separately, so an assessment whose setup is
+complete but whose device is missing shows **Waiting for a compatible test
+device** rather than a completed setup or a raw error.
+
+A queued, waiting or failed assessment stays open and readable from the
+assessments list — the row navigates, and the chevron beside it expands setup
+progress without taking navigation away. Where an assessment is stuck for a
+reason someone can clear, the page offers **Retry now**; where it is stuck for a
+reason nobody can, it says so and links to the configuration instead. Retrying
+reuses the same assessment and the same request, so clicking twice, refreshing,
+or having two tabs open cannot start two runs.
+
+| State | What it means |
+|---|---|
+| Queued for automated testing | waiting for a worker to pick it up |
+| Preparing the test environment | a worker has it and is checking readiness |
+| Waiting for … | blocked on something temporary; retries itself |
+| Automated tests are running | on the device now |
+| Test execution could not start | blocked on something that needs a change |
+| Completed | the report has been imported |
 
 ## App Provisioning Workflow
 

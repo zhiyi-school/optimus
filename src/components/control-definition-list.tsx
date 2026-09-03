@@ -3,7 +3,7 @@ import { ArrowRight, BookOpen } from "lucide-react";
 import { EmptyState } from "@/components/common";
 import { Card, CardContent } from "@/components/ui/card";
 import { ToneBadge } from "@/components/resolve-display";
-import { isRequiredControl, playbookControlStatusLabels } from "@/lib/resolve";
+import { isRemediationControl, playbookControlStatusLabels } from "@/lib/resolve";
 import type { ControlDetail } from "@/api/playbook-types";
 
 export function ControlDefinitionList({
@@ -21,7 +21,7 @@ export function ControlDefinitionList({
     <ul className="space-y-2">
       {controls.map((control) => {
         const status = playbookControlStatusLabels[control.status];
-        const required = isRequiredControl(control);
+        const selectable = isRemediationControl(control);
         return (
           <li key={control.control_id}>
             <Link
@@ -41,8 +41,8 @@ export function ControlDefinitionList({
                         <span className="flex shrink-0 items-center gap-1.5">
                           <ToneBadge tone={status.tone} label={status.label} />
                           <ToneBadge
-                            tone={required ? "warning" : "neutral"}
-                            label={required ? "Required" : "Optional"}
+                            tone={selectable ? "info" : "neutral"}
+                            label={selectable ? "Approach" : "Not offered"}
                           />
                         </span>
                       </div>
@@ -60,9 +60,9 @@ export function ControlDefinitionList({
                           <ArrowRight className="h-3 w-3" />
                         </span>
                       </div>
-                      {!required && (
+                      {!selectable && (
                         <p className="mt-2 text-xs text-muted-foreground">
-                          Not counted as required remediation work.
+                          Not offered as a remediation approach.
                         </p>
                       )}
                     </div>

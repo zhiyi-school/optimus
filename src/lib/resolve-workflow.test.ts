@@ -18,7 +18,10 @@ import {
   resumableRemediationTicket,
   controlProgress,
   liveControls,
-  reconciliationPlan,
+  effectiveSelectedControlId,
+  selectableControls,
+  selectedControl,
+  selectedControlReconciliationPlan,
   developerTicketLabel,
   summarizeApplication,
 } from "./resolve";
@@ -90,7 +93,6 @@ const deprioritized: ControlDetail = {
   ...controlDefinition,
   control_id: "example-feature-01-risk-01-control-02",
   status: "deprioritized",
-  required: false,
 };
 
 function world() {
@@ -123,9 +125,12 @@ function world() {
     withdrawn_at: null,
     withdrawn_by: null,
     withdrawal_reason: null,
+    selected_control_id: "example-feature-01-risk-01-control-01",
     assigned_user_id: null,
     assigned_team_id: TEAM,
     target_version: null,
+    risk_conversation_id: "conversation-1",
+    origin_assessment_id: "assessment-1",
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
     closed_at: null,
@@ -141,7 +146,10 @@ function world() {
     steps,
     /** Mirrors controlProgressData.reconcile: add what is missing, remove nothing. */
     reconcile(definitions: ControlDetail[]) {
-      for (const plan of reconciliationPlan(definitions)) {
+      const chosen = selectableControls(definitions).find(
+        (candidate) => candidate.control_id === ticket.selected_control_id,
+      );
+      for (const plan of selectedControlReconciliationPlan(chosen)) {
         let row = controls.find((existing) => existing.control_id === plan.control_id);
         if (!row) {
           row = {
@@ -149,7 +157,6 @@ function world() {
             ticket_id: ticket.id,
             control_id: plan.control_id,
             status: "not_started",
-            required: plan.required,
             completed_at: null,
             completed_by: null,
             developer_note: null,
@@ -158,11 +165,12 @@ function world() {
           };
           controls.push(row);
         }
+        const created = row;
         for (const stepKey of plan.step_keys) {
-          if (steps.some((s) => s.ticket_control_id === row!.id && s.step_key === stepKey)) continue;
+          if (steps.some((s) => s.ticket_control_id === created.id && s.step_key === stepKey)) continue;
           steps.push({
-            id: `${row.id}-${stepKey}`,
-            ticket_control_id: row.id,
+            id: `${created.id}-${stepKey}`,
+            ticket_control_id: created.id,
             step_key: stepKey,
             status: "not_started",
             completed_at: null,
@@ -181,8 +189,14 @@ function world() {
     move(status: TicketStatus) {
       ticket.status = status;
     },
+    /** Only the selected approach is current work; the page renders nothing else. */
     live(definitions: ControlDetail[] = [controlDefinition, deprioritized]) {
-      return liveControls(definitions, controls, steps);
+      const candidates = selectableControls(definitions);
+      const chosen = selectedControl(
+        candidates,
+        effectiveSelectedControlId(ticket.selected_control_id, candidates),
+      );
+      return chosen ? liveControls([chosen], controls, steps) : [];
     },
   };
 }
@@ -292,7 +306,7 @@ describe("developer remediation, end to end", () => {
     expect(resolveAccess(both)).toBe("ready");
     expect(roleCan(both.roles, "update_control_progress")).toBe(true);
     expect(roleCan(both.roles, "close_ticket")).toBe(true);
-    expect(defaultRouteFor(both)).toBe("/");
+    expect(defaultRouteFor(both)).toBe("/resolve");
   });
 });
 
@@ -309,7 +323,7 @@ describe("developer remediation from a control preview, end to end", () => {
 
     let summary = summarizeApplication(APP, [state.finding], tickets, state.controls, state.steps);
     expect(summary.status).toBe("action_required");
-    expect(summary.requiredControls).toBe(0);
+    expect(summary.controls.total).toBe(0);
 
     expect(previewable).toHaveLength(2);
     expect(state.controls).toHaveLength(0);
@@ -384,7 +398,7 @@ describe("developer withdrawal, end to end", () => {
 
     let summary = summarizeApplication(APP, [state.finding], tickets, state.controls, state.steps);
     expect(summary.withdrawnTickets).toBe(1);
-    expect(summary.requiredControls).toBe(0);
+    expect(summary.controls.total).toBe(0);
     expect(summary.awaitingReassessment).toBe(0);
     expect(summary.resolvedFindings).toBe(0);
     expect(summary.status).toBe("action_required");
@@ -404,7 +418,7 @@ describe("developer withdrawal, end to end", () => {
 
     summary = summarizeApplication(APP, [state.finding], tickets, state.controls, state.steps);
     expect(summary.withdrawnTickets).toBe(0);
-    expect(summary.requiredControls).toBe(1);
+    expect(summary.controls.total).toBe(2);
     expect(summary.status).toBe("in_progress");
 
     expect(canSubmitFix(state.ticket)).toBe(true);
@@ -517,7 +531,7 @@ describe("a playbook that changes while a ticket is open", () => {
     expect(live[0].steps[1].row?.status).toBe("completed");
   });
 
-  it("shows an added control as outstanding work on the open ticket", () => {
+  it("treats a newly added control as an alternative, not as extra work", () => {
     const state = started();
     const added: ControlDetail = {
       ...controlDefinition,
@@ -527,9 +541,28 @@ describe("a playbook that changes while a ticket is open", () => {
 
     state.reconcile([controlDefinition, added]);
     const live = state.live([controlDefinition, added]);
-    expect(live).toHaveLength(2);
-    expect(live[1].status).toBe("not_started");
-    expect(controlProgress(live)).toMatchObject({ completed: 1, total: 4 });
+
+    expect(live).toHaveLength(1);
+    expect(live[0].definition.control_id).toBe(controlDefinition.control_id);
+    expect(controlProgress(live)).toMatchObject({ completed: 1, total: 2 });
+    expect(state.controls.map((row) => row.control_id)).toEqual([controlDefinition.control_id]);
+  });
+
+  it("shows a step added to the selected approach as outstanding work", () => {
+    const state = started();
+    const grown: ControlDetail = {
+      ...controlDefinition,
+      steps: [
+        ...controlDefinition.steps,
+        { ...controlDefinition.steps[0], step_key: "example-added-step", content_hash: "sha256:three" },
+      ],
+    };
+
+    state.reconcile([grown]);
+    const live = state.live([grown]);
+
+    expect(controlProgress(live)).toMatchObject({ completed: 1, total: 3 });
+    expect(live[0].status).toBe("in_progress");
   });
 
   it("reconciling twice never duplicates a control or step row", () => {

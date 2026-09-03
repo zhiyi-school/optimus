@@ -17,7 +17,6 @@ import {
 } from "@/components/ui/dialog";
 import { ApplicationIcon } from "@/components/application-icon";
 import { PlatformBadge, SeverityBadge, StatusBadge } from "@/components/data-display";
-import { ConversationPanel } from "@/components/conversation-panel";
 import { ControlChecklist } from "@/components/control-checklist";
 import {
   ResumeRemediationButton,
@@ -26,45 +25,55 @@ import {
 } from "@/components/ticket-actions";
 import { EvidenceViewer } from "@/components/evidence";
 import { Timeline } from "@/components/timeline";
-import { PlaybookUpdatedNotice, ProgressBar, ToneBadge } from "@/components/resolve-display";
+import {
+  PlaybookUpdatedNotice,
+  ProgressBar,
+  RiskConversationLink,
+  ToneBadge,
+} from "@/components/resolve-display";
 import {
   useActivity,
   useFindingEvidenceItems,
   usePlaybookRevisionWatch,
   useReconcileTicketControls,
+  useSelectRemediationControl,
   useProfiles,
-  useRequestRetest,
   useRiskControls,
-  useSendMessage,
+  useRiskConversationById,
   useSubmitFix,
   useTicket,
   useTicketControlSteps,
   useTicketControls,
   useTicketEvidenceItems,
-  useTicketMessages,
   useUploadTicketEvidence,
 } from "@/hooks/queries";
 import {
-  canRequestReassessment,
   canResumeTicket,
   canSubmitFix,
   canWithdrawTicket,
   controlProgress,
   developerTicketLabel,
+  effectiveSelectedControlId,
   isReconciled,
   liveControls,
-  reconciliationPlan,
+  selectableControls,
+  selectedControl,
+  selectedControlReconciliationPlan,
+  selectionWasReplaced,
+  submitFixBlockedReason,
+  riskConversationPath,
 } from "@/lib/resolve";
-import { errorMessage, formatDate } from "@/lib/utils";
+import { cn, errorMessage, formatDate } from "@/lib/utils";
+import type { ControlDetail } from "@/api/playbook-types";
 
 export default function ResolveTicket() {
   const { ticketId } = useParams<{ ticketId: string }>();
-  const { profile, can } = useAuth();
+  const { can } = useAuth();
   const ticket = useTicket(ticketId);
   const finding = ticket.data?.finding;
   const application = ticket.data?.application;
 
-  const messages = useTicketMessages(ticketId);
+  const { data: conversation } = useRiskConversationById(ticket.data?.risk_conversation_id);
   const { data: profiles } = useProfiles();
   const activity = useActivity("ticket", ticketId);
   const controls = useTicketControls(ticketId);
@@ -73,7 +82,6 @@ export default function ResolveTicket() {
   const findingEvidence = useFindingEvidenceItems(finding?.id);
   const ticketEvidence = useTicketEvidenceItems(ticketId);
 
-  const sendMessage = useSendMessage(ticketId ?? "");
   const uploadEvidence = useUploadTicketEvidence(ticketId);
   const reconcile = useReconcileTicketControls(ticketId);
 
@@ -82,18 +90,35 @@ export default function ResolveTicket() {
     [profiles],
   );
 
-  const plan = useMemo(() => reconciliationPlan(definitions.data ?? []), [definitions.data]);
-  const reconcilable = can("update_control_progress") && canSubmitFix(ticket.data);
+  const selectControl = useSelectRemediationControl(ticketId, finding?.id);
+
+  const candidates = useMemo(() => selectableControls(definitions.data), [definitions.data]);
+  const storedSelection = ticket.data?.selected_control_id ?? null;
+  const activeControlId = effectiveSelectedControlId(storedSelection, candidates);
+  const chosen = selectedControl(candidates, activeControlId);
+  const replaced = selectionWasReplaced(storedSelection, candidates);
+
+  const editable = can("update_control_progress") && canSubmitFix(ticket.data);
+  const plan = useMemo(() => selectedControlReconciliationPlan(chosen), [chosen]);
+
+  const persisting = useRef(false);
+  useEffect(() => {
+    if (!ticketId || !editable || !activeControlId) return;
+    if (storedSelection === activeControlId || persisting.current) return;
+    persisting.current = true;
+    selectControl.mutate(activeControlId, { onSettled: () => (persisting.current = false) });
+  }, [ticketId, editable, activeControlId, storedSelection, selectControl]);
+
   const reconciling = useRef(false);
   useEffect(() => {
-    if (!ticketId || !reconcilable || plan.length === 0) return;
+    if (!ticketId || !editable || plan.length === 0) return;
     if (controls.isLoading || steps.isLoading || reconciling.current) return;
     if (isReconciled(plan, controls.data ?? [], steps.data ?? [])) return;
     reconciling.current = true;
     reconcile.mutate(plan, { onSettled: () => (reconciling.current = false) });
   }, [
     ticketId,
-    reconcilable,
+    editable,
     plan,
     controls.data,
     controls.isLoading,
@@ -104,8 +129,8 @@ export default function ResolveTicket() {
 
   const playbook = usePlaybookRevisionWatch(finding?.platform, !!ticketId);
   const live = useMemo(
-    () => liveControls(definitions.data, controls.data ?? [], steps.data ?? []),
-    [definitions.data, controls.data, steps.data],
+    () => (chosen ? liveControls([chosen], controls.data ?? [], steps.data ?? []) : []),
+    [chosen, controls.data, steps.data],
   );
 
   if (ticket.isLoading) return <LoadingState label="Loading remediation…" />;
@@ -115,8 +140,13 @@ export default function ResolveTicket() {
 
   const label = developerTicketLabel(ticket.data.status);
   const progress = controlProgress(live);
+  const submitBlockedReason = submitFixBlockedReason(ticket.data, {
+    loading: definitions.isLoading || controls.isLoading || steps.isLoading,
+    failed: definitions.isError,
+    replaced,
+    control: live[0],
+  });
   const showSubmitFix = can("submit_fix") && canSubmitFix(ticket.data);
-  const showRequestReassessment = can("request_retest") && canRequestReassessment(ticket.data);
   const showWithdraw = can("withdraw_ticket") && canWithdrawTicket(ticket.data);
   const showResume = can("withdraw_ticket") && canResumeTicket(ticket.data);
 
@@ -167,40 +197,71 @@ export default function ResolveTicket() {
           </Section>
 
           <Section
-            title="Required controls"
+            title="Remediation approach"
             aside={<ProgressBar label="Steps completed" progress={progress} />}
           >
             {definitions.isLoading || controls.isLoading ? (
-              <LoadingState label="Loading remediation controls…" />
+              <LoadingState label="Loading remediation approaches…" />
             ) : definitions.isError ? (
               <ErrorState
                 message="The automation backend could not provide the remediation instructions for this risk."
                 onRetry={() => definitions.refetch()}
               />
             ) : (
-              <ControlChecklist
-                controls={live}
-                linkTo={(controlId) => `/resolve/tickets/${ticket.data!.id}/controls/${controlId}`}
-                emptyMessage={
-                  finding?.test_id
-                    ? "The playbook has no developer controls for this risk yet."
-                    : "This finding is not linked to a playbook risk, so it has no controls."
-                }
-              />
+              <>
+                {replaced && (
+                  <div className="mb-3 rounded-lg border border-warning/40 bg-warning/5 p-3 text-xs text-foreground">
+                    The approach this remediation was following is no longer in the playbook. Your
+                    recorded progress is kept as history but no longer counts.{" "}
+                    {chosen
+                      ? "Review the approach now selected before submitting a fix."
+                      : "No replacement approach is available for this risk."}
+                  </div>
+                )}
+                {!replaced && candidates.length > 1 && (
+                  <div className="mb-3 rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+                    This risk has multiple remediation approaches. The first option is selected by
+                    default, but you can choose another.
+                  </div>
+                )}
+                <ControlChecklist
+                  controls={live}
+                  linkTo={(controlId) => `/resolve/tickets/${ticket.data!.id}/controls/${controlId}`}
+                  emptyMessage={
+                    finding?.test_id
+                      ? "The playbook has no developer controls for this risk yet."
+                      : "This finding is not linked to a playbook risk, so it has no controls."
+                  }
+                />
+                {candidates.length > 1 && (
+                  <ApproachPicker
+                    candidates={candidates}
+                    selectedControlId={activeControlId}
+                    hasProgress={progress.completed > 0}
+                    findingId={finding?.id}
+                    disabled={!editable || selectControl.isPending}
+                    onSelect={(controlId) => selectControl.mutate(controlId)}
+                  />
+                )}
+                {selectControl.isError && (
+                  <p className="mt-2 text-xs text-danger">
+                    {errorMessage(selectControl.error, "Could not change the remediation approach.")}
+                  </p>
+                )}
+              </>
             )}
           </Section>
 
-          <ConversationPanel
-            title="Conversation with security"
-            messages={messages.data}
-            isLoading={messages.isLoading}
-            currentProfileId={profile?.id}
-            profileMap={profileMap}
-            canComment={can("comment_ticket")}
-            onSend={(message) => sendMessage.mutateAsync(message)}
-            sending={sendMessage.isPending}
-            emptyStateDescription="Ask security a question about this finding, or explain what you changed."
-          />
+          <Section title="Talking to security">
+            <RiskConversationLink
+              to={
+                conversation
+                  ? riskConversationPath(conversation, ticket.data?.origin_assessment_id)
+                  : null
+              }
+              unavailableNote="This remediation was opened before risks had their own conversation, so it is not linked to one. Open the full finding above to reach the risk it was raised for."
+            />
+          </Section>
 
           <Section title="Activity">
             <Timeline entries={activity.data ?? []} />
@@ -218,21 +279,24 @@ export default function ResolveTicket() {
               }
             />
             <div className="mt-3 flex flex-wrap gap-2">
-              {showSubmitFix && <SubmitFixDialog ticketId={ticket.data.id} />}
-              {showRequestReassessment && (
-                <RequestReassessmentButton ticketId={ticket.data.id} findingId={finding?.id ?? ""} />
+              {showSubmitFix && (
+                <SubmitFixDialog ticketId={ticket.data.id} blockedReason={submitBlockedReason} />
               )}
               {showResume && <ResumeRemediationButton ticket={ticket.data} />}
               {showWithdraw && <WithdrawRemediationDialog ticket={ticket.data} />}
-              {!showSubmitFix && !showRequestReassessment && !showResume && !showWithdraw && (
+              {!showSubmitFix && !showResume && !showWithdraw && (
                 <p className="text-xs text-muted-foreground">
                   Nothing to do right now — security owns the next step on this finding.
                 </p>
               )}
             </div>
+            {showSubmitFix && submitBlockedReason && (
+              <p className="mt-2 text-xs text-muted-foreground">{submitBlockedReason}</p>
+            )}
             <p className="mt-3 text-xs text-muted-foreground">
-              Completing every control step does not close the finding. Security runs the
-              reassessment and decides whether the risk is reduced.
+              Completing every control step does not close the finding. Ask for a reassessment in
+              the risk conversation, where security runs it and decides whether the risk is
+              reduced.
             </p>
           </Section>
 
@@ -280,7 +344,139 @@ export default function ResolveTicket() {
   );
 }
 
-function SubmitFixDialog({ ticketId }: { ticketId: string }) {
+function ApproachPicker({
+  candidates,
+  selectedControlId,
+  hasProgress,
+  findingId,
+  disabled,
+  onSelect,
+}: {
+  candidates: ControlDetail[];
+  selectedControlId: string | null;
+  hasProgress: boolean;
+  findingId: string | undefined;
+  disabled: boolean;
+  onSelect: (controlId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [pending, setPending] = useState<ControlDetail | null>(null);
+
+  function choose(control: ControlDetail) {
+    if (control.control_id === selectedControlId) return;
+    if (hasProgress) {
+      setPending(control);
+      return;
+    }
+    onSelect(control.control_id);
+    setOpen(false);
+  }
+
+  return (
+    <div className="mt-3">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        className="text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+      >
+        {open
+          ? "Hide other approaches"
+          : `View other approaches (${candidates.length - 1})`}
+      </button>
+
+      {open && (
+        <ul className="mt-2 space-y-2">
+          {candidates.map((control) => {
+            const isSelected = control.control_id === selectedControlId;
+            return (
+              <li key={control.control_id}>
+                <div
+                  className={cn(
+                    "rounded-lg border p-3",
+                    isSelected ? "border-primary bg-primary/5" : "border-border",
+                  )}
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-foreground">{control.title}</p>
+                      {control.summary && (
+                        <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+                          {control.summary}
+                        </p>
+                      )}
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {control.step_count === 1 ? "1 step" : `${control.step_count} steps`}
+                      </p>
+                    </div>
+                    {isSelected && <ToneBadge tone="success" label="Selected" />}
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-3">
+                    {findingId && (
+                      <Link
+                        to={`/findings/${findingId}/controls/${control.control_id}`}
+                        className="text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                      >
+                        Preview
+                      </Link>
+                    )}
+                    {!isSelected && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={disabled}
+                        onClick={() => choose(control)}
+                      >
+                        Use this approach
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <Dialog open={!!pending} onOpenChange={(next) => !next && setPending(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Change remediation approach?</DialogTitle>
+            <DialogDescription>
+              Progress recorded for the current approach will no longer count toward this
+              ticket&apos;s completion. It remains available as historical workflow data.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setPending(null)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={disabled}
+              onClick={() => {
+                if (pending) onSelect(pending.control_id);
+                setPending(null);
+                setOpen(false);
+              }}
+            >
+              Change approach
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function SubmitFixDialog({
+  ticketId,
+  blockedReason,
+}: {
+  ticketId: string;
+  blockedReason: string | null;
+}) {
   const [open, setOpen] = useState(false);
   const [notes, setNotes] = useState("");
   const [version, setVersion] = useState("");
@@ -296,7 +492,9 @@ function SubmitFixDialog({ ticketId }: { ticketId: string }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm">Submit fix</Button>
+        <Button size="sm" disabled={!!blockedReason}>
+          Submit fix
+        </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
@@ -335,33 +533,6 @@ function SubmitFixDialog({ ticketId }: { ticketId: string }) {
         </form>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function RequestReassessmentButton({
-  ticketId,
-  findingId,
-}: {
-  ticketId: string;
-  findingId: string;
-}) {
-  const request = useRequestRetest(ticketId, findingId);
-  return (
-    <div>
-      <Button
-        size="sm"
-        variant="outline"
-        disabled={request.isPending || !findingId}
-        onClick={() => void request.mutateAsync()}
-      >
-        {request.isPending ? "Requesting…" : "Request reassessment"}
-      </Button>
-      {request.isError && (
-        <p className="mt-1 text-xs text-danger">
-          {errorMessage(request.error, "Could not request the reassessment.")}
-        </p>
-      )}
-    </div>
   );
 }
 

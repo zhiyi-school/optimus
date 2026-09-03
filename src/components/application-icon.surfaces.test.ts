@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 /** Every surface that shows an application identity must go through the shared component. */
 const SURFACES = [
   "src/pages/Assessments.tsx",
+  "src/pages/NewAssessment.tsx",
   "src/pages/Findings.tsx",
   "src/pages/Tickets.tsx",
   "src/pages/TicketDetail.tsx",

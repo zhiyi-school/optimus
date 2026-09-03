@@ -1,14 +1,13 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useAuth } from "@/auth/useAuth";
 import { PageHeader, LoadingState, ErrorState, EmptyState } from "@/components/common";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/input";
 import { StatusBadge, SeverityBadge, PlatformBadge, TicketBadge } from "@/components/data-display";
 import { EvidenceViewer } from "@/components/evidence";
 import { Timeline } from "@/components/timeline";
 import { WorkOnRiskButton, AcceptRiskButton } from "@/components/ticket-actions";
+import { RiskConversationLink } from "@/components/resolve-display";
 import { RiskGoal } from "@/components/risk-goal";
 import {
   useFinding,
@@ -19,15 +18,14 @@ import {
   useRiskCatalogue,
   useRiskControls,
   useTestRunHistory,
-  useUpdateFindingStatus,
 } from "@/hooks/queries";
 import { ControlDefinitionList } from "@/components/control-definition-list";
+import { findingStatusConfig } from "@/lib/status";
 import { formatDate } from "@/lib/utils";
-import type { FindingStatus } from "@/data/types";
 
 export default function FindingDetail() {
   const { findingId } = useParams<{ findingId: string }>();
-  const { can, profile } = useAuth();
+  const { can } = useAuth();
   const { data: finding, isLoading, isError, refetch } = useFinding(findingId);
   const application = finding?.application;
 
@@ -69,15 +67,21 @@ export default function FindingDetail() {
           <Field label="Status" value={<StatusBadge status={finding.status} />} />
           <Field label="Date Found" value={formatDate(finding.created_at)} />
           <Field label="Finding ID" value={finding.id.slice(0, 8)} />
-          {can("update_finding") && (
-            <div className="col-span-2 sm:col-span-4">
-              <SecurityStatusOverride findingId={finding.id} currentStatus={finding.status} />
-            </div>
-          )}
         </CardContent>
       </Card>
 
       <div className="space-y-6">
+        <Section title="Risk conversation">
+          <RiskConversationLink
+            to={
+              finding.assessment_id && finding.test_id
+                ? `/assessments/${finding.assessment_id}/tests/${finding.test_id}`
+                : null
+            }
+            unavailableNote="This finding is not linked to an assessment risk, so it has no conversation."
+          />
+        </Section>
+
         <Section title="Description">
           <p className="text-sm text-foreground">{finding.description || "No description provided."}</p>
         </Section>
@@ -161,69 +165,36 @@ export default function FindingDetail() {
           )}
         </Section>
 
-        <Section title="Activity">
-          <Timeline entries={activity ?? []} />
-        </Section>
-      </div>
-
-      {profile?.roles.includes("cio") && (history ?? []).length > 0 && (
-        <Card className="mt-6">
-          <CardContent className="py-4">
-            <h2 className="mb-2 text-sm font-semibold text-foreground">Status History</h2>
-            <ul className="space-y-1 text-sm text-muted-foreground">
-              {(history ?? []).map((h) => (
-                <li key={h.id}>
-                  {formatDate(h.created_at)}: {h.previous_status ?? "—"} → {h.new_status}
+        <Section title="Classification history">
+          {(history ?? []).length === 0 ? (
+            <EmptyState title="No classification changes recorded yet." />
+          ) : (
+            <ul className="space-y-2">
+              {(history ?? []).map((entry) => (
+                <li key={entry.id} className="text-sm">
+                  <span className="text-muted-foreground">{formatDate(entry.created_at)}</span>
+                  {" — "}
+                  <span className="text-foreground">
+                    {entry.previous_status
+                      ? `${findingStatusConfig[entry.previous_status].label} → ${findingStatusConfig[entry.new_status].label}`
+                      : `Set to ${findingStatusConfig[entry.new_status].label}`}
+                  </span>
+                  {entry.reason && (
+                    <p className="text-xs text-muted-foreground">{entry.reason}</p>
+                  )}
                 </li>
               ))}
             </ul>
-          </CardContent>
-        </Card>
-      )}
-    </div>
-  );
-}
+          )}
+          <p className="mt-3 text-xs text-muted-foreground">
+            The classification is changed in the risk conversation, so the decision and its reason
+            sit with the discussion that led to it.
+          </p>
+        </Section>
 
-function SecurityStatusOverride({
-  findingId,
-  currentStatus,
-}: {
-  findingId: string;
-  currentStatus: FindingStatus;
-}) {
-  const [reason, setReason] = useState("");
-  const [status, setStatus] = useState<FindingStatus>(currentStatus);
-  const update = useUpdateFindingStatus(findingId);
-
-  return (
-    <div className="rounded-md border border-border bg-muted/40 p-3">
-      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        Security Team: manual status override
-      </p>
-      <div className="flex flex-wrap items-end gap-2">
-        <select
-          className="h-9 rounded-md border border-border bg-card px-2 text-sm"
-          value={status}
-          onChange={(e) => setStatus(e.target.value as FindingStatus)}
-        >
-          <option value="at_risk">At Risk</option>
-          <option value="reduced_risk">Reduced Risk</option>
-          <option value="inconclusive">Inconclusive</option>
-        </select>
-        <Textarea
-          className="max-w-xs"
-          rows={1}
-          placeholder="Reason (recorded in finding history)"
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-        />
-        <Button
-          size="sm"
-          disabled={update.isPending || status === currentStatus || !reason}
-          onClick={() => update.mutate({ status, reason })}
-        >
-          Update Status
-        </Button>
+        <Section title="Activity">
+          <Timeline entries={activity ?? []} />
+        </Section>
       </div>
     </div>
   );

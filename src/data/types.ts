@@ -4,7 +4,36 @@ export type TeamType = "developer" | "security" | "management";
 
 export type Platform = "ios" | "android";
 
-export type AssessmentStatus = "queued" | "running" | "completed" | "failed";
+export type AssessmentStatus = "queued" | "waiting" | "running" | "completed" | "failed";
+
+export type AssessmentRunRequestStatus =
+  | "queued"
+  | "waiting"
+  | "claimed"
+  | "running"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+export interface AssessmentRunRequest {
+  id: string;
+  assessment_id: string;
+  application_id: string;
+  platform: Platform;
+  status: AssessmentRunRequestStatus;
+  attempts: number;
+  next_attempt_at: string;
+  claimed_at: string | null;
+  lease_expires_at: string | null;
+  worker_id: string | null;
+  blocker_code: string | null;
+  last_error: string | null;
+  requested_by: string | null;
+  created_at: string;
+  updated_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+}
 
 export type FindingStatus = "at_risk" | "reduced_risk" | "inconclusive";
 
@@ -124,6 +153,10 @@ export interface Ticket {
   assigned_user_id: string | null;
   assigned_team_id: string | null;
   target_version: string | null;
+  risk_conversation_id: string | null;
+  origin_assessment_id: string | null;
+  /** Logical reference to a backend playbook control; no playbook content is stored. */
+  selected_control_id: string | null;
   created_at: string;
   updated_at: string;
   closed_at: string | null;
@@ -132,28 +165,42 @@ export interface Ticket {
   withdrawal_reason: string | null;
 }
 
-export interface AssessmentMessage {
+export type RiskConversationEntryKind =
+  | "message"
+  | "classification_changed"
+  | "retest_requested"
+  | "retest_started"
+  | "retest_completed"
+  | "retest_failed"
+  | "remediation_started"
+  | "remediation_withdrawn"
+  | "fix_submitted";
+
+export interface RiskConversation {
   id: string;
-  assessment_id: string;
-  author_id: string;
-  message: string;
+  application_id: string;
+  risk_id: string;
+  origin_assessment_id: string | null;
+  finding_id: string | null;
   created_at: string;
-  updated_at: string | null;
+  updated_at: string;
 }
 
-export interface TicketMessage {
+export interface RiskConversationEntry {
   id: string;
-  ticket_id: string;
-  author_id: string;
-  message: string;
+  conversation_id: string;
+  kind: RiskConversationEntryKind;
+  author_id: string | null;
+  message: string | null;
+  metadata: Record<string, unknown>;
+  source_ticket_id: string | null;
   created_at: string;
-  updated_at: string | null;
+  seq: number;
 }
 
-export interface TicketAttachment {
+export interface RiskConversationAttachment {
   id: string;
-  ticket_id: string;
-  message_id: string | null;
+  entry_id: string;
   uploaded_by: string;
   storage_path: string;
   file_name: string;
@@ -178,7 +225,8 @@ export interface Evidence {
 
 export interface RetestRun {
   id: string;
-  ticket_id: string;
+  conversation_id: string | null;
+  ticket_id: string | null;
   finding_id: string;
   external_test_run_id: string | null;
   requested_by: string;
@@ -210,7 +258,6 @@ export interface TicketControl {
   ticket_id: string;
   control_id: string;
   status: ControlProgressStatus;
-  required: boolean;
   completed_at: string | null;
   completed_by: string | null;
   developer_note: string | null;

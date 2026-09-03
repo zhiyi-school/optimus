@@ -3,8 +3,6 @@ import type { RunRecord } from "@/api/automation-types";
 
 const startRun = vi.fn();
 const getRun = vi.fn();
-const claimForRun = vi.fn();
-const setStatus = vi.fn();
 
 vi.mock("@/api/automation-services", () => ({
   assessmentApi: {
@@ -14,14 +12,7 @@ vi.mock("@/api/automation-services", () => ({
   defaultConfigPath: () => "configs/ios.yaml",
 }));
 
-vi.mock("@/data/services", () => ({
-  assessmentData: {
-    claimForRun: (...args: unknown[]) => claimForRun(...args),
-    setStatus: (...args: unknown[]) => setStatus(...args),
-  },
-}));
-
-const { findActiveRun, findPlatformRun, riskProgressInRun, runAllTests, runAndWait } =
+const { findActiveRun, findPlatformRun, riskProgressInRun, runAndWait } =
   await import("./runs");
 
 function record(status: RunRecord["status"], error: string | null = null): RunRecord {
@@ -39,8 +30,6 @@ const payload = { platform: "ios", config_path: "configs/ios.yaml", apps: "examp
 beforeEach(() => {
   vi.clearAllMocks();
   vi.useRealTimers();
-  claimForRun.mockResolvedValue({ id: "assessment_1" });
-  setStatus.mockResolvedValue(undefined);
 });
 
 describe("runAndWait", () => {
@@ -84,47 +73,6 @@ describe("runAndWait", () => {
 
     expect(result.outcome).toBe("timedOutWaiting");
     expect(result.run.status).toBe("running");
-  });
-});
-
-describe("runAllTests", () => {
-  it("returns notClaimed when another writer holds the assessment", async () => {
-    claimForRun.mockResolvedValue(null);
-
-    await expect(runAllTests({ assessmentId: "a1", platform: "ios", appExternalId: "example_app" })).resolves.toBe(
-      "notClaimed",
-    );
-    expect(startRun).not.toHaveBeenCalled();
-  });
-
-  it("does not mark the assessment failed when only local waiting stopped", async () => {
-    vi.useFakeTimers();
-    startRun.mockResolvedValue(record("running"));
-    getRun.mockResolvedValue(record("running"));
-
-    const pending = runAllTests({ assessmentId: "a1", platform: "ios", appExternalId: "example_app" });
-    await vi.runAllTimersAsync();
-
-    expect(await pending).toBe("timedOutWaiting");
-    expect(setStatus).not.toHaveBeenCalled();
-  });
-
-  it("marks the assessment failed only on a terminal backend failure", async () => {
-    startRun.mockResolvedValue(record("failed", "boom"));
-
-    const outcome = await runAllTests({ assessmentId: "a1", platform: "ios", appExternalId: "example_app" });
-
-    expect(outcome).toBe("failed");
-    expect(setStatus).toHaveBeenCalledWith("a1", "failed");
-  });
-
-  it("releases the claim back to queued when the backend is busy", async () => {
-    startRun.mockRejectedValue(Object.assign(new Error("busy"), { status: 409 }));
-
-    await expect(
-      runAllTests({ assessmentId: "a1", platform: "ios", appExternalId: "example_app" }),
-    ).rejects.toThrow("busy");
-    expect(setStatus).toHaveBeenCalledWith("a1", "queued");
   });
 });
 

@@ -1,11 +1,10 @@
-import { assessmentApi, defaultConfigPath } from "@/api/automation-services";
+import { assessmentApi } from "@/api/automation-services";
 import type {
   AutomationPlatform,
   RunProgressEvent,
   RunRecord,
   StartRunRequest,
 } from "@/api/automation-types";
-import { assessmentData } from "@/data/services";
 import type { RunCancelToken } from "./mapping";
 
 const RUN_POLL_INTERVAL_MS = 3000;
@@ -130,35 +129,4 @@ export function riskProgressInRun(
     return { ...progress, phase: "running" };
   }
   return { ...progress, phase: "queued" };
-}
-
-export async function runAllTests(input: {
-  assessmentId: string;
-  platform: AutomationPlatform;
-  appExternalId: string;
-  riskIds?: string[];
-  triggeredBy?: string | null;
-}): Promise<RunOutcome | "notClaimed"> {
-  const claimed = await assessmentData.claimForRun(input.assessmentId);
-  if (!claimed) return "notClaimed";
-
-  try {
-    const { outcome } = await runAndWait({
-      platform: input.platform,
-      config_path: defaultConfigPath(input.platform),
-      apps: input.appExternalId,
-      ...(input.riskIds?.length ? { risks: input.riskIds.join(",") } : {}),
-    });
-    // Giving up on watching says nothing about whether the run is still executing.
-    if (outcome === "failed") {
-      await assessmentData.setStatus(input.assessmentId, "failed");
-    }
-    return outcome;
-  } catch (err) {
-    const busy = (err as { status?: number } | null)?.status === 409;
-    await assessmentData
-      .setStatus(input.assessmentId, busy ? "queued" : "failed")
-      .catch((releaseErr) => console.warn("Could not release the assessment claim.", releaseErr));
-    throw err;
-  }
 }

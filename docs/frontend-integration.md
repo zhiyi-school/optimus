@@ -90,12 +90,14 @@ merging into an existing project, these are the dependencies:
 
 | Kind | Objects |
 | --- | --- |
-| Tables | `profiles`, `teams`, `applications`, `assessments`, `assessment_messages`, `findings`, `finding_history`, `evidence`, `tickets`, `ticket_messages`, `ticket_attachments`, `retest_runs`, `risk_acceptance`, `activity_log`, `ticket_controls`, `ticket_control_steps` |
+| Tables | `profiles`, `teams`, `applications`, `assessments`, `findings`, `finding_history`, `evidence`, `tickets`, `retest_runs`, `risk_acceptance`, `activity_log`, `ticket_controls`, `ticket_control_steps`, `risk_conversations` (one per `(application_id, risk_id)`), `risk_conversation_entries`, `risk_conversation_attachments`, `assessment_run_requests` (the durable execution queue). `assessment_messages`, `ticket_messages` and `ticket_attachments` are created by `0001`/`0008` and archived by `0020`: they keep their historical rows but no policy grants access to them |
 | Team scoping | a `team_id` column on `profiles`, `developer_team_id` on `applications`, `assigned_team_id` on `tickets` — there is no join table |
 | Contacts | columns on `applications` (`owner_email`, `developer_contact_*`, `contact_emails[]`), added by `0004` and `0009` — not a separate table |
-| RPC | `dashboard_metrics()` — the overview page's fast path; the UI falls back to per-table queries and logs a console warning naming `0012_dashboard_metrics_rpc.sql` if it is absent |
+| RPC | `dashboard_metrics()` — the overview page's fast path; the UI falls back to per-table queries and logs a console warning naming `0012_dashboard_metrics_rpc.sql` if it is absent. `classify_risk()` (`0021`) — **required**: changing a risk classification goes through it, and there is no client-side fallback, because the finding, its history and the conversation event have to be written together |
+| Execution RPC | `request_assessment_run()` (`0023`) — **required**: creating or retrying an assessment run goes through it, and there is no client-side fallback, because it is what keeps one active request per assessment. `claim_assessment_run_request()` and `recover_expired_assessment_run_leases()` are for the worker's service role only |
+| Migration helpers | `merge_duplicate_risk_conversations()` and `place_unlinked_ticket_conversations()` (`0021`) — called by the migration and kept in the schema so the RLS suite exercises them; `execute` is revoked from `public` |
 | Storage | `ticket-attachments` and `evidence` buckets, both private (`0003_storage.sql`) |
-| RLS | policies from `0002_rls.sql`, extended by `0005`, `0006`, `0010`, `0011` |
+| RLS | policies from `0002_rls.sql`, extended by `0005`, `0006`, `0010`, `0011`, `0017`, `0018`, `0020`, `0021`, `0023` |
 | Idempotency | `sync_key` columns and their partial unique indexes (`0013_sync_idempotency_keys.sql`) — **the sync worker fails without these** |
 | Grants | `0014_dashboard_metrics_grants.sql`, then `0015_dashboard_metrics_revoke_anon.sql` |
 | Icon refs | `artifact_sha256`, `icon_ref`, `icon_extraction_status` on `applications` (`0016_application_icon_refs.sql`) — **required if the backend syncs icon references**, since the worker writes these fields on every application row |

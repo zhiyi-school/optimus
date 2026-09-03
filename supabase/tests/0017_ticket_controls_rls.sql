@@ -110,11 +110,11 @@ insert into tickets (id, finding_id, application_id, type, status, title, create
    'b0000000-0000-0000-0000-00000000000b', 'remediation', 'open', 'Remediate: Example finding B',
    '22222222-2222-2222-2222-222222222222');
 
-insert into ticket_controls (id, ticket_id, control_id, required) values
+insert into ticket_controls (id, ticket_id, control_id) values
   ('d0000000-0000-0000-0000-00000000000a', 'c0000000-0000-0000-0000-00000000000a',
-   'example-feature-01-risk-01-control-01', true),
+   'example-feature-01-risk-01-control-01'),
   ('d0000000-0000-0000-0000-00000000000b', 'c0000000-0000-0000-0000-00000000000b',
-   'example-feature-01-risk-01-control-01', true);
+   'example-feature-01-risk-01-control-01');
 
 insert into ticket_control_steps (id, ticket_control_id, step_key) values
   ('e0000000-0000-0000-0000-00000000000a', 'd0000000-0000-0000-0000-00000000000a', 'rotate-example-key'),
@@ -177,6 +177,12 @@ select pg_temp.assert(
   'a developer can submit a fix'
 );
 
+-- A reassessment request is a retest run plus the ticket transition, and 0020
+-- allows one only from a ticket that has a fix submitted.
+insert into retest_runs (id, ticket_id, finding_id, requested_by, status)
+values ('90000000-0000-0000-0000-00000000000a', 'c0000000-0000-0000-0000-00000000000a',
+        'f0000000-0000-0000-0000-00000000000a', auth.uid(), 'queued');
+
 update tickets set status = 'retest_requested' where id = 'c0000000-0000-0000-0000-00000000000a';
 select pg_temp.assert(
   (select status from tickets where id = 'c0000000-0000-0000-0000-00000000000a')
@@ -223,10 +229,6 @@ select pg_temp.assert(
   (select status from findings where id = 'f0000000-0000-0000-0000-00000000000a') = 'at_risk',
   'a developer cannot change a finding''s status'
 );
-
-insert into retest_runs (id, ticket_id, finding_id, requested_by, status)
-values ('90000000-0000-0000-0000-00000000000a', 'c0000000-0000-0000-0000-00000000000a',
-        'f0000000-0000-0000-0000-00000000000a', auth.uid(), 'queued');
 
 update retest_runs set status = 'completed', result = 'Reduced Risk'
   where id = '90000000-0000-0000-0000-00000000000a';

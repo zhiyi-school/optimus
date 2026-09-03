@@ -12,6 +12,8 @@ import {
   SECURITY_FINALISED,
   activeRemediationTicket,
   canRequestReassessment,
+  reassessmentBlockedReason,
+  riskConversationPath,
   canResumeTicket,
   canWithdrawTicket,
   resumableRemediationTicket,
@@ -22,7 +24,12 @@ import {
   isReconciled,
   liveControlStatus,
   liveControls,
-  reconciliationPlan,
+  effectiveSelectedControlId,
+  selectableControls,
+  selectedControlReconciliationPlan,
+  selectionWasReplaced,
+  selectedControlProgress,
+  submitFixBlockedReason,
   developerTicketLabel,
   developerTicketLabels,
   findingProgress,
@@ -64,9 +71,12 @@ function ticket(overrides: Partial<Ticket> = {}): Ticket {
     assigned_user_id: null,
     assigned_team_id: null,
     target_version: null,
+    risk_conversation_id: "conversation-1",
+    origin_assessment_id: "assessment-1",
     withdrawn_at: null,
     withdrawn_by: null,
     withdrawal_reason: null,
+    selected_control_id: "example-feature-01-risk-01-control-01",
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
     closed_at: null,
@@ -80,7 +90,6 @@ function control(overrides: Partial<TicketControl> = {}): TicketControl {
     ticket_id: "ticket-1",
     control_id: "example-feature-01-risk-01-control-01",
     status: "not_started",
-    required: true,
     completed_at: null,
     completed_by: null,
     developer_note: null,
@@ -248,9 +257,12 @@ describe("liveControls", () => {
     ]);
   });
 
-  it("leaves a deprioritised or deprecated control out of current work", () => {
-    expect(liveControls([definition({ status: "deprioritized", required: false })], [], [])).toEqual([]);
-    expect(liveControls([definition({ status: "deprecated", required: true })], [], [])).toEqual([]);
+  it("renders exactly the definitions the caller selected, filtering nothing itself", () => {
+    const chosen = definition();
+    expect(liveControls([chosen], [], []).map((entry) => entry.definition.control_id)).toEqual([
+      chosen.control_id,
+    ]);
+    expect(liveControls([], [control()], [step("tc-1", ROTATE, "completed")])).toEqual([]);
   });
 
   it("shows nothing at all while the backend definitions are unavailable", () => {
@@ -364,7 +376,7 @@ describe("summarizeApplication", () => {
     expect(summary.awaitingReassessment).toBe(3);
   });
 
-  it("counts required controls by their derived step state", () => {
+  it("counts only the ticket's selected approach, never its alternatives", () => {
     const controls = [control(), control({ id: "tc-2", control_id: "c2" })];
     const steps = [
       step("tc-1", "rotate-example-key", "completed"),
@@ -372,15 +384,43 @@ describe("summarizeApplication", () => {
       step("tc-2", "revoke-example-key", "not_started"),
     ];
     const summary = summarizeApplication(APP, [finding()], [ticket()], controls, steps);
-    expect(summary.requiredControls).toBe(2);
-    expect(summary.controlsCompleted).toBe(1);
-    expect(summary.controlsInProgress).toBe(1);
+    expect(summary.controls).toEqual({ completed: 1, total: 1, ratio: 1 });
+  });
+
+  it("counts nothing for a ticket that has not chosen an approach yet", () => {
+    const summary = summarizeApplication(
+      APP,
+      [finding()],
+      [ticket({ selected_control_id: null })],
+      [control()],
+      [step("tc-1", "rotate-example-key", "completed")],
+    );
+    expect(summary.controls).toEqual({ completed: 0, total: 0, ratio: 0 });
+  });
+
+  it("leaves progress from an abandoned approach as history that does not count", () => {
+    const controls = [control(), control({ id: "tc-2", control_id: "c2" })];
+    const steps = [
+      step("tc-1", "rotate-example-key", "completed"),
+      step("tc-1", "revoke-example-key", "completed"),
+      step("tc-2", "rotate-example-key", "not_started"),
+    ];
+    const summary = summarizeApplication(
+      APP,
+      [finding()],
+      [ticket({ selected_control_id: "c2" })],
+      controls,
+      steps,
+    );
+
+    expect(summary.controls).toEqual({ completed: 0, total: 1, ratio: 0 });
+    expect(steps.filter((s) => s.status === "completed")).toHaveLength(2);
   });
 
   it("only counts controls belonging to this application's tickets", () => {
     const controls = [control({ id: "tc-9", ticket_id: "other-ticket" })];
     const summary = summarizeApplication(APP, [finding()], [ticket()], controls, []);
-    expect(summary.requiredControls).toBe(0);
+    expect(summary.controls.total).toBe(0);
   });
 
   describe("overall status", () => {
@@ -483,7 +523,6 @@ describe("dashboard totals against the live playbook", () => {
     const steps = [step("tc-1", "rotate-example-key", "completed"), step("tc-9", "gone", "completed")];
 
     const summary = summarizeApplication(APP, [finding()], [ticket()], controls, steps, liveKeys);
-    expect(summary.requiredControls).toBe(1);
     expect(summary.controls).toEqual({ completed: 1, total: 1, ratio: 1 });
   });
 
@@ -495,7 +534,6 @@ describe("dashboard totals against the live playbook", () => {
 
     const summary = summarizeApplication(APP, [finding()], [ticket()], [control()], steps, liveKeys);
     expect(summary.controls).toEqual({ completed: 1, total: 1, ratio: 1 });
-    expect(summary.controlsCompleted).toBe(1);
   });
 
   it("counts every stored row when the playbook could not be reached", () => {
@@ -512,48 +550,245 @@ describe("dashboard totals against the live playbook", () => {
     const steps = [step("tc-1", "removed-example-step", "completed")];
 
     const summary = summarizeApplication(APP, [finding()], [ticket()], [control()], steps, liveKeys);
-    expect(summary.controlsCompleted).toBe(0);
     expect(summary.controls).toEqual({ completed: 0, total: 0, ratio: 0 });
   });
 });
 
-describe("reconciliationPlan", () => {
-  it("plans a row for every step of an active required control, and no playbook content", () => {
-    expect(reconciliationPlan([definition()])).toEqual([
+describe("selectedControlReconciliationPlan", () => {
+  it("plans a row for every step of the selected control, and no playbook content", () => {
+    expect(selectedControlReconciliationPlan(definition())).toEqual([
       {
         control_id: "example-feature-01-risk-01-control-01",
-        required: true,
         step_keys: ["rotate-example-key", "revoke-example-key"],
       },
     ]);
   });
 
   it("carries no title, ordering, revision or step text into the database", () => {
-    const [plan] = reconciliationPlan([definition()]);
-    expect(Object.keys(plan).sort()).toEqual(["control_id", "required", "step_keys"]);
+    const [plan] = selectedControlReconciliationPlan(definition());
+    expect(Object.keys(plan).sort()).toEqual(["control_id", "step_keys"]);
   });
 
-  it("never plans a deprioritized or deprecated control as required work", () => {
-    expect(reconciliationPlan([definition({ status: "deprioritized", required: false })])).toEqual([]);
-    expect(reconciliationPlan([definition({ status: "deprecated", required: false })])).toEqual([]);
+  it("plans nothing when no approach is selected", () => {
+    expect(selectedControlReconciliationPlan(undefined)).toEqual([]);
   });
 
-  it("still refuses a deprecated control that the catalogue left marked required", () => {
-    expect(reconciliationPlan([definition({ status: "deprecated", required: true })])).toEqual([]);
-    expect(reconciliationPlan([definition({ status: "deprioritized", required: true })])).toEqual([]);
+  it("plans only the selected control, never its alternatives", () => {
+    const other = definition({ control_id: "example-feature-01-risk-01-control-02" });
+    const plan = selectedControlReconciliationPlan(definition());
+    expect(plan).toHaveLength(1);
+    expect(plan[0].control_id).not.toBe(other.control_id);
+  });
+});
+
+describe("selectableControls", () => {
+  it("offers an active remediation control as an approach", () => {
+    expect(selectableControls([definition()]).map((c) => c.control_id)).toEqual([
+      "example-feature-01-risk-01-control-01",
+    ]);
   });
 
-  it("never plans an active control the catalogue marked optional", () => {
-    expect(reconciliationPlan([definition({ required: false })])).toEqual([]);
+  it("never offers a deprioritized or deprecated control", () => {
+    expect(selectableControls([definition({ status: "deprioritized", required: false })])).toEqual([]);
+    expect(selectableControls([definition({ status: "deprecated", required: false })])).toEqual([]);
+    expect(selectableControls([definition({ status: "deprecated", required: true })])).toEqual([]);
+    expect(selectableControls([definition({ status: "deprioritized", required: true })])).toEqual([]);
   });
 
-  it("plans nothing when the risk has no controls", () => {
-    expect(reconciliationPlan([])).toEqual([]);
+  it("never offers an active control the catalogue marked non-remediation", () => {
+    expect(selectableControls([definition({ required: false })])).toEqual([]);
+  });
+
+  it("offers nothing when the risk has no controls", () => {
+    expect(selectableControls([])).toEqual([]);
+    expect(selectableControls(undefined)).toEqual([]);
+  });
+
+  it("keeps the backend's own order", () => {
+    const first = definition({ control_id: "example-feature-01-risk-01-control-01" });
+    const second = definition({ control_id: "example-feature-01-risk-01-control-02" });
+    expect(selectableControls([second, first]).map((c) => c.control_id)).toEqual([
+      "example-feature-01-risk-01-control-02",
+      "example-feature-01-risk-01-control-01",
+    ]);
+  });
+});
+
+describe("effectiveSelectedControlId", () => {
+  const first = definition({ control_id: "example-feature-01-risk-01-control-01" });
+  const second = definition({ control_id: "example-feature-01-risk-01-control-02" });
+
+  it("selects the only control when there is one", () => {
+    expect(effectiveSelectedControlId(null, [first])).toBe(first.control_id);
+  });
+
+  it("defaults to the first control the backend returned", () => {
+    expect(effectiveSelectedControlId(null, [second, first])).toBe(second.control_id);
+  });
+
+  it("keeps a stored selection that is still on offer", () => {
+    expect(effectiveSelectedControlId(first.control_id, [second, first])).toBe(first.control_id);
+  });
+
+  it("is unaffected by the backend reordering its controls", () => {
+    expect(effectiveSelectedControlId(second.control_id, [first, second])).toBe(second.control_id);
+    expect(effectiveSelectedControlId(second.control_id, [second, first])).toBe(second.control_id);
+  });
+
+  it("replaces a stored selection the playbook no longer offers", () => {
+    expect(effectiveSelectedControlId("example-removed-control", [first])).toBe(first.control_id);
+    expect(selectionWasReplaced("example-removed-control", [first])).toBe(true);
+    expect(selectionWasReplaced(first.control_id, [first])).toBe(false);
+  });
+
+  it("treats a blank stored id as no selection", () => {
+    expect(effectiveSelectedControlId("   ", [first])).toBe(first.control_id);
+    expect(selectionWasReplaced("   ", [first])).toBe(false);
+  });
+
+  it("selects nothing when no approach is available", () => {
+    expect(effectiveSelectedControlId(null, [])).toBeNull();
+    expect(effectiveSelectedControlId("example-removed-control", [])).toBeNull();
+  });
+});
+
+describe("selected-control progress", () => {
+  const first = definition({ control_id: "example-feature-01-risk-01-control-01" });
+  const second = definition({
+    control_id: "example-feature-01-risk-01-control-02",
+    steps: [first.steps[0]],
+  });
+
+  it("counts only the selected control's current steps", () => {
+    const live = selectedControlProgress(
+      [first, second],
+      first.control_id,
+      [control(), control({ id: "tc-2", control_id: second.control_id })],
+      [
+        step("tc-1", ROTATE, "completed"),
+        step("tc-1", REVOKE, "not_started"),
+        step("tc-2", ROTATE, "completed"),
+      ],
+    );
+
+    expect(live?.progress).toEqual({ completed: 1, total: 2, ratio: 0.5 });
+  });
+
+  it("shows the new totals immediately after switching approach", () => {
+    const rows = [control(), control({ id: "tc-2", control_id: second.control_id })];
+    const steps = [step("tc-1", ROTATE, "completed"), step("tc-1", REVOKE, "completed")];
+
+    expect(selectedControlProgress([first, second], first.control_id, rows, steps)?.progress)
+      .toEqual({ completed: 2, total: 2, ratio: 1 });
+    expect(selectedControlProgress([first, second], second.control_id, rows, steps)?.progress)
+      .toEqual({ completed: 0, total: 1, ratio: 0 });
+  });
+
+  it("counts a step the playbook has added as outstanding", () => {
+    const grown = definition({ steps: [...first.steps, { ...first.steps[0], step_key: "new-step" }] });
+    const live = selectedControlProgress(
+      [grown],
+      grown.control_id,
+      [control()],
+      [step("tc-1", ROTATE, "completed"), step("tc-1", REVOKE, "completed")],
+    );
+
+    expect(live?.progress).toEqual({ completed: 2, total: 3, ratio: 2 / 3 });
+  });
+
+  it("stops counting a step the playbook has removed", () => {
+    const shrunk = definition({ steps: [first.steps[0]] });
+    const live = selectedControlProgress(
+      [shrunk],
+      shrunk.control_id,
+      [control()],
+      [step("tc-1", ROTATE, "completed"), step("tc-1", REVOKE, "completed")],
+    );
+
+    expect(live?.progress).toEqual({ completed: 1, total: 1, ratio: 1 });
+  });
+
+  it("keeps progress when the playbook reorders the same stable steps", () => {
+    const reordered = definition({ steps: [first.steps[1], first.steps[0]] });
+    const live = selectedControlProgress(
+      [reordered],
+      reordered.control_id,
+      [control()],
+      [step("tc-1", ROTATE, "completed")],
+    );
+
+    expect(live?.progress).toEqual({ completed: 1, total: 2, ratio: 0.5 });
+    expect(live?.steps.map((entry) => entry.step.step_key)).toEqual([REVOKE, ROTATE]);
+  });
+
+  it("has no progress at all when the selection is not on offer", () => {
+    expect(selectedControlProgress([first], "example-removed-control", [control()], []))
+      .toBeUndefined();
+  });
+});
+
+describe("submitFixBlockedReason", () => {
+  const first = definition();
+  const rows = [control()];
+  const done = [step("tc-1", ROTATE, "completed"), step("tc-1", REVOKE, "completed")];
+  const partial = [step("tc-1", ROTATE, "completed"), step("tc-1", REVOKE, "not_started")];
+
+  function reason(overrides: Parameters<typeof submitFixBlockedReason>[1], t = ticket()) {
+    return submitFixBlockedReason(t, overrides);
+  }
+
+  it("allows submission once every current selected step is complete", () => {
+    const live = selectedControlProgress([first], first.control_id, rows, done);
+    expect(reason({ loading: false, replaced: false, control: live })).toBeNull();
+  });
+
+  it("blocks while any current selected step is outstanding", () => {
+    const live = selectedControlProgress([first], first.control_id, rows, partial);
+    expect(reason({ loading: false, replaced: false, control: live })).toContain("Complete all 2 steps");
+  });
+
+  it("ignores an incomplete alternative", () => {
+    const second = definition({
+      control_id: "example-feature-01-risk-01-control-02",
+      steps: [first.steps[0]],
+    });
+    const live = selectedControlProgress(
+      [first, second],
+      first.control_id,
+      [...rows, control({ id: "tc-2", control_id: second.control_id })],
+      done,
+    );
+
+    expect(reason({ loading: false, replaced: false, control: live })).toBeNull();
+  });
+
+  it("blocks while the approaches are still loading", () => {
+    expect(reason({ loading: true, replaced: false, control: undefined })).toContain("Loading");
+  });
+
+  it("blocks when the approaches could not be loaded", () => {
+    expect(reason({ loading: false, failed: true, replaced: false, control: undefined }))
+      .toContain("could not be loaded");
+  });
+
+  it("blocks until a replaced approach has been reviewed", () => {
+    const live = selectedControlProgress([first], first.control_id, rows, done);
+    expect(reason({ loading: false, replaced: true, control: live })).toContain("no longer in the playbook");
+  });
+
+  it("blocks when no approach is available at all", () => {
+    expect(reason({ loading: false, replaced: false, control: undefined })).toContain("Select a remediation approach");
+  });
+
+  it("blocks when the ticket is no longer the developer's to submit", () => {
+    const live = selectedControlProgress([first], first.control_id, rows, done);
+    expect(reason({ loading: false, replaced: false, control: live }, ticket({ status: "under_review" })))
+      .toContain("not yours to submit");
   });
 });
 
 describe("isReconciled", () => {
-  const plan = reconciliationPlan([definition()]);
+  const plan = selectedControlReconciliationPlan(definition());
 
   it("is satisfied once every live control and step has a row", () => {
     expect(
@@ -646,6 +881,95 @@ describe("workflow gates", () => {
   it("offers neither with no ticket at all", () => {
     expect(canSubmitFix(null)).toBe(false);
     expect(canRequestReassessment(undefined)).toBe(false);
+  });
+});
+
+describe("why a reassessment cannot be requested", () => {
+  it("gives no reason when it can be", () => {
+    expect(reassessmentBlockedReason(ticket({ status: "fix_submitted" }))).toBeNull();
+    expect(reassessmentBlockedReason(ticket({ status: "rejected" }))).toBeNull();
+  });
+
+  it("points a developer with no ticket at starting a remediation", () => {
+    expect(reassessmentBlockedReason(null)).toMatch(/start a remediation/i);
+    expect(reassessmentBlockedReason(ticket({ type: "risk_acceptance" }))).toMatch(
+      /start a remediation/i,
+    );
+  });
+
+  it("asks for the fix first while the developer still holds the ticket", () => {
+    for (const status of ["open", "in_progress"] as TicketStatus[]) {
+      expect(reassessmentBlockedReason(ticket({ status })), status).toMatch(/submit your fix/i);
+    }
+  });
+
+  it("says security already has it once verification has started", () => {
+    for (const status of [
+      "retest_requested",
+      "retest_in_progress",
+      "under_review",
+    ] as TicketStatus[]) {
+      expect(reassessmentBlockedReason(ticket({ status })), status).toMatch(/already verifying/i);
+    }
+  });
+
+  it("says a withdrawn remediation has to be resumed first", () => {
+    expect(reassessmentBlockedReason(ticket({ status: "withdrawn" }))).toMatch(/resume/i);
+  });
+
+  it("says security has finished once the ticket is closed or accepted", () => {
+    for (const status of ["closed", "accepted"] as TicketStatus[]) {
+      expect(reassessmentBlockedReason(ticket({ status })), status).toMatch(/finished/i);
+    }
+  });
+
+  it("always explains itself rather than going quiet", () => {
+    for (const status of [
+      "open",
+      "in_progress",
+      "retest_requested",
+      "retest_in_progress",
+      "under_review",
+      "accepted",
+      "closed",
+      "withdrawn",
+    ] as TicketStatus[]) {
+      const reason = reassessmentBlockedReason(ticket({ status }));
+      expect(reason, status).toBeTruthy();
+      expect((reason ?? "").length, status).toBeGreaterThan(10);
+    }
+  });
+});
+
+describe("the path to a risk conversation", () => {
+  it("uses the assessment the caller arrived from", () => {
+    expect(
+      riskConversationPath(
+        { risk_id: "example-feature-01-risk-01", origin_assessment_id: "first-assessment" },
+        "current-assessment",
+      ),
+    ).toBe("/assessments/current-assessment/tests/example-feature-01-risk-01");
+  });
+
+  it("falls back to the assessment the conversation was opened under", () => {
+    expect(
+      riskConversationPath({
+        risk_id: "example-feature-01-risk-01",
+        origin_assessment_id: "first-assessment",
+      }),
+    ).toBe("/assessments/first-assessment/tests/example-feature-01-risk-01");
+  });
+
+  it("offers no path rather than a broken one when no assessment is known", () => {
+    expect(
+      riskConversationPath({ risk_id: "example-feature-01-risk-01", origin_assessment_id: null }),
+    ).toBeNull();
+    expect(
+      riskConversationPath(
+        { risk_id: "example-feature-01-risk-01", origin_assessment_id: null },
+        null,
+      ),
+    ).toBeNull();
   });
 });
 
@@ -757,10 +1081,7 @@ describe("withdrawn tickets in the dashboard", () => {
     const active = summarizeApplication(APP, [finding()], [ticket()], controls, steps);
     const withdrawn = summarizeApplication(APP, [finding()], [withdrawnTicket], controls, steps);
 
-    expect(active.requiredControls).toBe(1);
-    expect(active.controlsCompleted).toBe(1);
-    expect(withdrawn.requiredControls).toBe(0);
-    expect(withdrawn.controlsCompleted).toBe(0);
+    expect(active.controls).toEqual({ completed: 1, total: 1, ratio: 1 });
     expect(withdrawn.controls.total).toBe(0);
   });
 

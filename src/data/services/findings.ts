@@ -119,4 +119,29 @@ export const findingData = {
 
     return data;
   },
+
+  /**
+   * The risk classification is the finding's status. One database function
+   * writes the status, its history row and the conversation event together, so
+   * the decision can never land without the record of who made it and why. It
+   * also refuses a finding that belongs to a different application risk than
+   * the conversation it was requested from.
+   */
+  async classify(input: {
+    findingId: string;
+    conversationId: string;
+    status: FindingStatus;
+    reason: string;
+  }): Promise<Finding> {
+    const trimmed = input.reason.trim();
+    if (!trimmed) throw new Error("Changing the risk classification needs a reason.");
+    const { data, error } = await supabase.rpc("classify_risk", {
+      p_finding_id: input.findingId,
+      p_conversation_id: input.conversationId,
+      p_status: input.status,
+      p_reason: trimmed,
+    });
+    if (error) throw error;
+    return data as Finding;
+  },
 };

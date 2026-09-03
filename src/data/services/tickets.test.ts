@@ -31,6 +31,7 @@ let actor = DEVELOPER;
 let actorIsSecurity = false;
 let ticketRow: Ticket;
 let activity: Record<string, unknown>[] = [];
+let entries: Record<string, unknown>[] = [];
 let ticketWrites = 0;
 
 function baseTicket(overrides: Partial<Ticket> = {}): Ticket {
@@ -46,12 +47,15 @@ function baseTicket(overrides: Partial<Ticket> = {}): Ticket {
     assigned_user_id: null,
     assigned_team_id: "example-team-id",
     target_version: null,
+    risk_conversation_id: "example-conversation-id",
+    origin_assessment_id: "example-assessment-id",
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
     closed_at: null,
     withdrawn_at: null,
     withdrawn_by: null,
     withdrawal_reason: null,
+    selected_control_id: null,
     ...overrides,
   };
 }
@@ -114,6 +118,17 @@ function table(name: string) {
       },
     };
   }
+  if (name === "risk_conversation_entries") {
+    const chain = {
+      insert(payload: Record<string, unknown>) {
+        entries.push(payload);
+        return chain;
+      },
+      select: () => chain,
+      single: () => Promise.resolve({ data: { id: "example-entry-id" }, error: null }),
+    };
+    return chain;
+  }
   if (name !== "tickets") throw new Error(`unexpected table ${name}`);
 
   let pending: Partial<Ticket> = {};
@@ -156,6 +171,7 @@ beforeEach(() => {
   actorIsSecurity = false;
   ticketRow = baseTicket();
   activity = [];
+  entries = [];
   ticketWrites = 0;
 });
 

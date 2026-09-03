@@ -15,8 +15,10 @@ import {
 import {
   activeRemediationTicket,
   developerTicketLabel,
+  effectiveSelectedControlId,
   remediationStatusLabels,
   resumableRemediationTicket,
+  selectedControl,
   summarizeApplication,
 } from "@/lib/resolve";
 import { severityLabelOf } from "@/lib/status";
@@ -94,14 +96,14 @@ export default function ResolveApplication() {
         <CardContent className="py-4">
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
             <Metric label="Findings needing action" value={summary.findingsRequiringAction} />
-            <Metric label="Controls awaiting completion" value={summary.requiredControls - summary.controlsCompleted} />
+            <Metric label="Fixes submitted" value={summary.fixesSubmitted} />
             <Metric label="Awaiting security verification" value={summary.awaitingReassessment} />
             <Metric label="Resolved findings" value={summary.resolvedFindings} />
             <Metric label="Withdrawn" value={summary.withdrawnTickets} />
           </div>
           <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <ProgressBar label="Findings resolved" progress={summary.findings} />
-            <ProgressBar label="Control steps completed" progress={summary.controls} />
+            <ProgressBar label="Remediation steps completed" progress={summary.controls} />
           </div>
           <p className="mt-3 text-xs text-muted-foreground">
             Remediation progress tracks developer work on findings. It is separate from how far
@@ -122,6 +124,15 @@ export default function ResolveApplication() {
                   const withdrawn = resumableRemediationTicket(finding.id, tickets.data);
                   const ticket = active ?? withdrawn;
                   const label = developerTicketLabel(ticket?.status);
+                  const candidates = finding.test_id
+                    ? (liveKeys?.candidatesByRisk.get(finding.test_id) ?? [])
+                    : [];
+                  const approach = active
+                    ? selectedControl(
+                        candidates,
+                        effectiveSelectedControlId(active.selected_control_id, candidates),
+                      )
+                    : undefined;
                   return (
                     <li key={finding.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
                       <div className="min-w-0">
@@ -134,6 +145,12 @@ export default function ResolveApplication() {
                         <p className="mt-0.5 text-xs text-muted-foreground">
                           {severityLabelOf(finding.severity)} · {finding.test_id ?? "No linked risk"}
                         </p>
+                        {approach && (
+                          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                            Approach: {approach.title}
+                            {candidates.length > 1 && " · alternatives available"}
+                          </p>
+                        )}
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
                         <StatusBadge status={finding.status} />
@@ -162,7 +179,7 @@ export default function ResolveApplication() {
             )}
           </Section>
 
-          <Section title="Recent conversations">
+          <Section title="Recent remediation activity">
             {(tickets.data ?? []).length === 0 ? (
               <EmptyState title="No remediation tickets yet." />
             ) : (
@@ -207,8 +224,8 @@ export default function ResolveApplication() {
 
           <Section title="Activity">
             <p className="text-sm text-muted-foreground">
-              Activity and conversation are recorded per remediation ticket. Open a finding above to
-              see its history.
+              Remediation progress is recorded per ticket, and every discussion of a risk lives in
+              that risk&apos;s conversation. Open a finding above to reach both.
             </p>
           </Section>
         </div>

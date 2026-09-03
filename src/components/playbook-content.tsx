@@ -1,26 +1,47 @@
 import { useMemo } from "react";
 import { ImageOff } from "lucide-react";
 import { automationAssetUrl } from "@/api/automation-client";
-import type { PlaybookBlock, PlaybookImageBlock, PlaybookTableBlock } from "@/api/playbook-types";
+import type { PlaybookBlock, PlaybookTableBlock } from "@/api/playbook-types";
 import { renderInline } from "@/lib/inline-markdown";
 import { renderableBlocks } from "@/lib/playbook";
 
-function PlaybookImage({ block }: { block: PlaybookImageBlock }) {
-  const label = block.caption || block.alt || "Playbook screenshot";
-  if (!block.exists || !block.url) {
+/**
+ * The one screenshot treatment, shared by playbook blocks and manual test
+ * steps: never upscaled past its own size, capped so a tall screenshot cannot
+ * push the card, and never wider than its container on a small screen.
+ */
+export function PlaybookFigure({
+  url,
+  caption,
+  alt,
+  exists,
+  unavailableLabel = "Screenshot unavailable.",
+}: {
+  url: string | null | undefined;
+  caption?: string | null;
+  alt?: string | null;
+  exists?: boolean;
+  unavailableLabel?: string;
+}) {
+  if (exists === false || !url) {
     return (
       <div className="flex items-center gap-2 rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground">
         <ImageOff className="h-3.5 w-3.5 shrink-0" />
-        {block.caption ? `${block.caption} — screenshot unavailable.` : "Screenshot unavailable."}
+        {caption ? `${caption} — screenshot unavailable.` : unavailableLabel}
       </div>
     );
   }
   return (
-    <figure className="overflow-hidden rounded-lg border border-border">
-      <img src={automationAssetUrl(block.url)} alt={label} className="w-full" loading="lazy" />
-      {block.caption && (
+    <figure className="w-fit max-w-full overflow-hidden rounded-lg border border-border">
+      <img
+        src={automationAssetUrl(url)}
+        alt={caption || alt || "Screenshot"}
+        className="h-auto max-h-[32rem] w-auto max-w-[min(100%,42rem)] object-contain"
+        loading="lazy"
+      />
+      {caption && (
         <figcaption className="border-t border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-          {renderInline(block.caption)}
+          {renderInline(caption)}
         </figcaption>
       )}
     </figure>
@@ -94,7 +115,15 @@ export function PlaybookBlockView({ block }: { block: PlaybookBlock }) {
     case "table":
       return <PlaybookTable block={block} />;
     case "image":
-      return <PlaybookImage block={block} />;
+      return (
+        <PlaybookFigure
+          url={block.url}
+          caption={block.caption}
+          alt={block.alt}
+          exists={block.exists}
+          unavailableLabel="Screenshot unavailable."
+        />
+      );
     default:
       return null;
   }

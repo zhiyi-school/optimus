@@ -165,7 +165,12 @@ supabase/migrations/
 ├── 0008_assessment_messages.sql
 ├── 0009_application_contact_emails.sql
 ├── 0010_applications_delete.sql
-└── 0011_application_provisioning.sql
+├── 0011_application_provisioning.sql
+├── ...
+├── 0020_risk_conversations.sql
+├── 0021_application_risk_conversations.sql
+├── 0022_selected_remediation_control.sql
+└── 0023_assessment_run_requests.sql
 ```
 
 ## Routes
@@ -245,7 +250,8 @@ so `/runs/:runTimestamp` is the *whole run's* view — status, progress, and
 one summary row per (app, risk) tested, sourced straight from the backend
 via `useRunStatus`, `useRunEvents`, and `useRunResults` regardless of whether
 anything has synced into Supabase yet. `/assessments/:id/tests/:testId(/runs/:runId)` is scoped the
-other way — one specific test's conversation-style history across *every*
-run it's ever appeared in, which is why it fans out across
-`GET /reports` (see [AUTOMATION_API.md](./automation-api.md)) instead of
-reading a single run.
+other way — one risk's whole story on one application, which is why it fans out
+across `GET /reports` (see [AUTOMATION_API.md](./automation-api.md)) instead of
+reading a single run. Those runs are merged with the risk's stored conversation
+entries into one timeline, so every assessment of the application contributes to
+the same page; `:runId` highlights one of them.

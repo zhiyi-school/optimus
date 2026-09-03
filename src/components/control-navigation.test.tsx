@@ -67,7 +67,6 @@ function progressRow(overrides: Partial<TicketControl> = {}): TicketControl {
     ticket_id: "example-ticket-id",
     control_id: CONTROL_ID,
     status: "not_started",
-    required: true,
     completed_at: null,
     completed_by: null,
     developer_note: null,
@@ -350,9 +349,9 @@ describe("ControlDefinitionList card navigation", () => {
     expect(path()).toBe(PREVIEW_ROUTE);
   });
 
-  it("opens the preview from the required badge", () => {
+  it("opens the preview from the approach badge", () => {
     render(previewList());
-    click(withText("Required"));
+    click(withText("Approach"));
     expect(path()).toBe(PREVIEW_ROUTE);
   });
 
@@ -421,7 +420,7 @@ describe("ControlDefinitionList card navigation", () => {
     expect(container.textContent).not.toContain("1 steps");
   });
 
-  it("marks an active control required and a deprioritised one optional", () => {
+  it("offers an active control as an approach and a deprioritised one not at all", () => {
     render(
       previewList({
         controls: [
@@ -430,22 +429,20 @@ describe("ControlDefinitionList card navigation", () => {
             control_id: SECOND_CONTROL_ID,
             title: "Control 2",
             status: "deprioritized",
-            required: false,
           }),
         ],
       }),
     );
 
-    expect(container.textContent).toContain("Required");
-    expect(container.textContent).toContain("Optional");
+    expect(container.textContent).toContain("Approach");
+    expect(container.textContent).toContain("Not offered");
     expect(container.textContent).toContain("Deprioritised");
-    expect(container.textContent).toContain("Not counted as required remediation work.");
+    expect(container.textContent).toContain("Not offered as a remediation approach.");
   });
 
-  it("treats a deprecated control the catalogue still marks required as optional", () => {
+  it("never offers a deprecated control the catalogue still marks required", () => {
     render(previewList({ controls: [definition({ status: "deprecated", required: true })] }));
-    expect(container.textContent).toContain("Optional");
-    expect(container.textContent).not.toContain("Required");
+    expect(container.textContent).toContain("Not offered");
   });
 
   it("offers nothing that could record progress", () => {

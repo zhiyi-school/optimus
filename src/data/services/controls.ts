@@ -9,7 +9,6 @@ import { activityData } from "./activity";
 
 export interface ControlReconciliation {
   control_id: string;
-  required: boolean;
   step_keys: string[];
 }
 
@@ -92,11 +91,7 @@ export const controlProgressData = {
 
     if (missing.length > 0) {
       const { error } = await supabase.from("ticket_controls").upsert(
-        missing.map((control) => ({
-          ticket_id: ticketId,
-          control_id: control.control_id,
-          required: control.required,
-        })),
+        missing.map((control) => ({ ticket_id: ticketId, control_id: control.control_id })),
         { onConflict: "ticket_id,control_id", ignoreDuplicates: true },
       );
       if (error) throw error;

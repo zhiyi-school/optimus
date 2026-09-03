@@ -1,48 +1,35 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef } from "react";
+import { Link, useParams } from "react-router-dom";
 import { useAuth } from "@/auth/useAuth";
-import { syncService } from "@/data/sync";
-import { errorMessage } from "@/lib/utils";
-import { automatedRiskIds } from "@/lib/risk-automation";
-import { LoadingState, ErrorState, DismissibleBanner } from "@/components/common";
+import { errorMessage, formatDate } from "@/lib/utils";
+import { assessmentRunState } from "@/lib/status";
+import { LoadingState, ErrorState } from "@/components/common";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { ToneBadge } from "@/components/resolve-display";
 import { AssessmentSidebar } from "@/components/assessment-sidebar";
 import { EnvironmentSetupStages } from "@/components/assessment-progress";
-import { ConversationPanel } from "@/components/conversation-panel";
 import {
   useAppProvisioning,
   useAssessment,
-  useAssessmentMessages,
+  useAssessmentRunRequest,
   useFindings,
-  useProfiles,
+  useRequestAssessmentRun,
   useRiskCatalogue,
-  useSendAssessmentMessage,
   useTickets,
   useUpdateApplication,
 } from "@/hooks/queries";
 import type { Application, Finding } from "@/data/types";
 
-interface ProvisioningTicketState {
-  provisioningTicket?: { id: string; title: string };
-}
-
 export default function AssessmentDetail() {
   const { assessmentId } = useParams<{ assessmentId: string }>();
-  const navigate = useNavigate();
-  const location = useLocation();
-  const { profile, can } = useAuth();
+  const { can } = useAuth();
   const canRunTest = can("run_test");
-  const canCommentTicket = can("comment_ticket");
-  const queryClient = useQueryClient();
   const { data: assessment, isLoading, isError, refetch } = useAssessment(assessmentId);
   const application = assessment?.application;
   const platform = application?.platform;
   const { data: risks } = useRiskCatalogue(platform);
   const { data: findings } = useFindings({ applicationId: assessment?.application_id });
-  const { data: profiles } = useProfiles();
-  const { data: messages, isLoading: messagesLoading } = useAssessmentMessages(assessmentId);
-  const sendMessage = useSendAssessmentMessage(assessmentId ?? "");
 
   const { data: provisioningTickets } = useTickets(
     assessment?.application_id
@@ -51,9 +38,15 @@ export default function AssessmentDetail() {
   );
   const provisioningTicket = assessment?.application_id ? provisioningTickets?.[0] : undefined;
 
-  const awaitingSetup = application?.provisioning_status === "pending";
+  const runRequest = useAssessmentRunRequest(assessmentId, assessment);
+  const run = assessmentRunState(assessment, runRequest.data);
+  const requestRun = useRequestAssessmentRun(assessmentId);
+
+  // Device readiness is decided apart from configuration, so setup progress is
+  // still polled while the assessment has not started.
+  const unsettled = assessment?.status === "queued" || assessment?.status === "waiting";
   const { data: provisioning } = useAppProvisioning(platform, application?.external_id, {
-    poll: awaitingSetup,
+    poll: unsettled,
   });
 
   // Mirrored into Supabase so other sessions see it without polling too.
@@ -75,65 +68,6 @@ export default function AssessmentDetail() {
     });
   }, [provisioning, application, updateApplicationStatus]);
 
-  // Trigger 1: start the full test run as soon as setup completes. A stage
-  // reported "unknown" was never actually verified (no device connected, for
-  // instance), so it does not count as ready for an unattended run even though
-  // it doesn't block the overall status.
-  const [autoStartError, setAutoStartError] = useState<string | null>(null);
-  const autoStartedAssessmentRef = useRef<string | null>(null);
-  const verifiedReady =
-    provisioning?.status === "ready" && !provisioning.stages.some((s) => s.state === "unknown");
-  const runnableRiskIds = useMemo(() => automatedRiskIds(risks), [risks]);
-  useEffect(() => {
-    if (!canRunTest) return;
-    if (!verifiedReady || !assessment || assessment.status !== "queued") return;
-    if (!platform || !application?.external_id) return;
-    if (runnableRiskIds.length === 0) return;
-    if (autoStartedAssessmentRef.current === assessment.id) return;
-    autoStartedAssessmentRef.current = assessment.id;
-    void syncService
-      .runAllTests({
-        assessmentId: assessment.id,
-        platform,
-        appExternalId: application.external_id,
-        riskIds: runnableRiskIds,
-        triggeredBy: profile?.id ?? null,
-      })
-      .then((outcome) => {
-        if (outcome === "failed") {
-          setAutoStartError("The automated run failed. Results appear once the automation host records it.");
-        } else if (outcome === "cancelledWaiting" || outcome === "timedOutWaiting") {
-          setAutoStartError(
-            "Stopped waiting for this run. It is still going on the automation host, which syncs the results on its own.",
-          );
-        }
-        return queryClient.invalidateQueries({ queryKey: ["assessment", assessmentId] });
-      })
-      .catch((err) => {
-        autoStartedAssessmentRef.current = null;
-        setAutoStartError(errorMessage(err, "Automated testing could not be started."));
-      });
-  }, [
-    verifiedReady,
-    assessment,
-    platform,
-    application?.external_id,
-    runnableRiskIds,
-    canRunTest,
-    profile?.id,
-    queryClient,
-    assessmentId,
-  ]);
-
-  const [justCreated, setJustCreated] = useState(
-    () => (location.state as ProvisioningTicketState | null)?.provisioningTicket,
-  );
-
-  useEffect(() => {
-    if (!(location.state as ProvisioningTicketState | null)?.provisioningTicket) return;
-    navigate(location.pathname, { replace: true, state: {} });
-  }, [location.pathname, location.state, navigate]);
-
   const findingByTestId = useMemo(() => {
     const map = new Map<string, Finding & { application: Application | null }>();
     for (const f of findings ?? []) {
@@ -141,8 +75,6 @@ export default function AssessmentDetail() {
     }
     return map;
   }, [findings]);
-
-  const profileMap = useMemo(() => new Map((profiles ?? []).map((p) => [p.id, p])), [profiles]);
 
   if (isLoading) return <LoadingState label="Loading assessment…" />;
   if (isError || !assessment)
@@ -153,8 +85,9 @@ export default function AssessmentDetail() {
   const backendStatus = provisioning?.status ?? application?.provisioning_status ?? null;
   const setupReady = backendStatus ? backendStatus === "ready" : ticketDone;
   const setupFailed = backendStatus === "failed";
-  const settingUp = assessment.status === "queued" || assessment.status === "running";
   const setupError = provisioning?.error ?? application?.provisioning_error ?? null;
+  const settingUp = assessment.status !== "completed";
+  const showRetry = canRunTest && run.canRetry;
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -168,68 +101,77 @@ export default function AssessmentDetail() {
       </div>
 
       <div className="space-y-6 lg:col-span-2">
-        {justCreated && (
-          <DismissibleBanner
-            tone="success"
-            message={`Assessment created. A provisioning ticket was opened for "${justCreated.title}".`}
-            action={
-              <Link
-                to={`/tickets/${justCreated.id}`}
-                className="text-xs font-medium hover:underline"
-              >
-                View ticket →
-              </Link>
-            }
-            onDismiss={() => setJustCreated(undefined)}
-          />
-        )}
-
         {settingUp && (
-          <Card className={setupFailed ? "border-danger/50" : "border-primary/40"}>
+          <Card className={run.tone === "danger" ? "border-danger/50" : "border-primary/40"}>
             <CardContent className="py-5">
-              <h2 className="text-sm font-semibold text-foreground">
-                {setupFailed
-                  ? "Setup couldn't be completed"
-                  : setupReady
-                    ? "Environment is ready"
-                    : "Setting up assessment environment"}
-              </h2>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-sm font-semibold text-foreground">
+                  {setupFailed ? "Setup couldn't be completed" : run.label}
+                </h2>
+                <ToneBadge tone={run.tone} label={run.label} />
+              </div>
+
               <p className="mb-4 mt-1 text-sm text-muted-foreground">
                 {setupFailed
                   ? `${application?.name ?? "This app"} can't be tested yet — resolve the step below and it'll re-check automatically.`
-                  : setupReady
-                    ? `${application?.name ?? "This app"} is provisioned and ready — pick a security test to get started.`
-                    : `We're preparing an environment for ${application?.name ?? "this app"}. You can safely leave this page and come back — security tests can be run once setup is done.`}
+                  : run.detail ||
+                    (setupReady
+                      ? `${application?.name ?? "This app"} is provisioned. You can safely leave this page — testing continues on the automation host.`
+                      : `We're preparing an environment for ${application?.name ?? "this app"}. You can safely leave this page and come back.`)}
               </p>
+
+              {run.autoRetry && (
+                <p className="mb-4 -mt-2 text-xs text-muted-foreground">
+                  This retries automatically
+                  {run.nextAttemptAt ? `, next at ${formatDate(run.nextAttemptAt)}` : ""}.
+                </p>
+              )}
+
               <EnvironmentSetupStages
                 ready={setupReady}
                 stages={provisioning?.stages}
                 assessment={assessment}
               />
+
               {setupError && <p className="mt-3 text-xs text-danger">{setupError}</p>}
-              {autoStartError && <p className="mt-3 text-xs text-danger">{autoStartError}</p>}
-              {provisioningTicket && !setupReady && (
-                <Link
-                  to={`/tickets/${provisioningTicket.id}`}
-                  className="mt-4 inline-block text-xs font-medium text-primary hover:underline"
-                >
-                  Track provisioning ticket →
-                </Link>
+
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                {showRetry && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={requestRun.isPending}
+                    onClick={() => requestRun.mutate()}
+                  >
+                    {requestRun.isPending ? "Retrying…" : "Retry now"}
+                  </Button>
+                )}
+                {run.needsConfiguration && application && (
+                  <Link
+                    to={`/settings?app=${application.id}`}
+                    className="text-xs font-medium text-primary hover:underline"
+                  >
+                    Review the app configuration →
+                  </Link>
+                )}
+                {provisioningTicket && !setupReady && (
+                  <Link
+                    to={`/tickets/${provisioningTicket.id}`}
+                    className="text-xs font-medium text-primary hover:underline"
+                  >
+                    Track provisioning ticket →
+                  </Link>
+                )}
+              </div>
+
+              {requestRun.isError && (
+                <p className="mt-2 text-xs text-danger">
+                  {errorMessage(requestRun.error, "Could not queue this assessment for testing.")}
+                </p>
               )}
             </CardContent>
           </Card>
         )}
-
-        <ConversationPanel
-          messages={messages}
-          isLoading={messagesLoading}
-          currentProfileId={profile?.id}
-          profileMap={profileMap}
-          canComment={canCommentTicket}
-          onSend={(message) => sendMessage.mutateAsync(message)}
-          sending={sendMessage.isPending}
-          emptyStateDescription="Discuss this assessment with the rest of the team."
-        />
       </div>
     </div>
   );

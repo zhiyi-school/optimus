@@ -6,6 +6,7 @@ import {
   resolveAccess,
   roleCan,
   roleCapabilities,
+  type Capability,
 } from "./permissions";
 
 function profile(overrides: Partial<Profile> = {}): Profile {
@@ -128,20 +129,39 @@ describe("defaultRouteFor", () => {
     expect(defaultRouteFor(profile({ team_id: null }))).toBe("/resolve");
   });
 
-  it("keeps a security account on the shared dashboard", () => {
-    expect(defaultRouteFor(profile({ roles: ["security"] }))).toBe("/");
+  it("sends anyone holding the developer role there, whatever else they hold", () => {
+    for (const roles of [
+      ["developer"],
+      ["developer", "security"],
+      ["developer", "admin"],
+      ["developer", "cio"],
+      ["security", "developer"],
+    ] as UserRole[][]) {
+      expect(defaultRouteFor(profile({ roles })), roles.join("+")).toBe("/resolve");
+    }
   });
 
-  it("keeps a user who holds both on the shared dashboard", () => {
-    expect(defaultRouteFor(profile({ roles: ["developer", "security"] }))).toBe("/");
-  });
-
-  it("keeps an admin on the shared dashboard", () => {
-    expect(defaultRouteFor(profile({ roles: ["developer", "admin"] }))).toBe("/");
+  it("keeps every account without the developer role on the shared dashboard", () => {
+    for (const roles of [["security"], ["cio"], ["admin"], ["security", "cio"]] as UserRole[][]) {
+      expect(defaultRouteFor(profile({ roles })), roles.join("+")).toBe("/");
+    }
   });
 
   it("falls back to the dashboard with no profile", () => {
     expect(defaultRouteFor(null)).toBe("/");
+    expect(defaultRouteFor(undefined)).toBe("/");
+  });
+
+  it("falls back to the dashboard for a profile with no usable role", () => {
+    expect(defaultRouteFor(profile({ roles: [] }))).toBe("/");
+    expect(defaultRouteFor(profile({ roles: ["nonsense" as UserRole] }))).toBe("/");
+  });
+
+  it("does not change which role labels or role-sensitive UI a user gets", () => {
+    expect(primaryRole(["developer", "security"])).toBe("security");
+    expect(roleCan(["developer", "security"], "run_test")).toBe(true);
+    expect(roleCan(["developer", "security"], "view_assessments")).toBe(true);
+    expect(roleCan(["developer", "admin"], "access_admin")).toBe(true);
   });
 });
 
@@ -163,5 +183,42 @@ describe("withdrawal capability", () => {
 
   it("reaches a user who holds the developer role alongside another", () => {
     expect(roleCan(["developer", "cio"], "withdraw_ticket")).toBe(true);
+  });
+});
+
+describe("risk conversation capabilities", () => {
+  it("let a developer read and post in the risk conversation", () => {
+    expect(roleCan(["developer"], "view_risk_conversation")).toBe(true);
+    expect(roleCan(["developer"], "comment_risk_conversation")).toBe(true);
+  });
+
+  it("let security read and post too", () => {
+    expect(roleCan(["security"], "view_risk_conversation")).toBe(true);
+    expect(roleCan(["security"], "comment_risk_conversation")).toBe(true);
+  });
+
+  it("keep the CIO read-only", () => {
+    expect(roleCan(["cio"], "view_risk_conversation")).toBe(true);
+    expect(roleCan(["cio"], "comment_risk_conversation")).toBe(false);
+  });
+
+  it("do not come with testing or classification authority", () => {
+    for (const capability of ["run_test", "update_finding", "view_assessments"] as const) {
+      expect(roleCan(["developer"], capability), capability).toBe(false);
+    }
+  });
+
+  it("admit a developer to the risk page without the assessment capability", () => {
+    const risk: Capability[] = ["view_assessments", "view_risk_conversation"];
+    expect(risk.some((capability) => roleCan(["developer"], capability))).toBe(true);
+    expect(risk.some((capability) => roleCan(["security"], capability))).toBe(true);
+    expect(risk.some((capability) => roleCan(["cio"], capability))).toBe(true);
+    expect(risk.some((capability) => roleCan(["admin"], capability))).toBe(false);
+  });
+
+  it("replaced the ticket-scoped comment capability entirely", () => {
+    for (const capabilities of Object.values(roleCapabilities)) {
+      expect(capabilities).not.toContain("comment_ticket" as Capability);
+    }
   });
 });

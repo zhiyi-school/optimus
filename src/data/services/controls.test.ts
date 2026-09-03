@@ -41,7 +41,7 @@ vi.mock("@/data/supabase", () => ({
 const { controlProgressData } = await import("./controls");
 
 const plan: ControlReconciliation[] = [
-  { control_id: CONTROL_ID, required: true, step_keys: ["rotate-example-key", "revoke-example-key"] },
+  { control_id: CONTROL_ID, step_keys: ["rotate-example-key", "revoke-example-key"] },
 ];
 
 beforeEach(() => {
@@ -79,7 +79,7 @@ describe("controlProgressData.reconcile", () => {
         expect(row, forbidden).not.toHaveProperty(forbidden);
       }
     }
-    expect(Object.keys(inserts[0].rows[0]).sort()).toEqual(["control_id", "required", "ticket_id"]);
+    expect(Object.keys(inserts[0].rows[0]).sort()).toEqual(["control_id", "ticket_id"]);
     expect(Object.keys(inserts[1].rows[0]).sort()).toEqual(["step_key", "ticket_control_id"]);
   });
 

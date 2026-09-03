@@ -6,41 +6,33 @@ import { Card, CardContent } from "@/components/ui/card";
 import { StatusBadge, TicketBadge, PlatformBadge } from "@/components/data-display";
 import { Timeline } from "@/components/timeline";
 import { TicketActions, WithdrawalNotice } from "@/components/ticket-actions";
-import { ConversationPanel } from "@/components/conversation-panel";
 import { ControlChecklist } from "@/components/control-checklist";
-import { ProgressBar } from "@/components/resolve-display";
+import { ProgressBar, RiskConversationLink } from "@/components/resolve-display";
 import {
   useActivity,
   useProfiles,
   useRiskAcceptance,
   useRiskControls,
-  useSendMessage,
+  useRiskConversationById,
   useTicket,
-  useTicketAttachments,
   useTicketControlSteps,
   useTicketControls,
-  useTicketMessages,
-  useTicketRetests,
-  useUploadAttachment,
 } from "@/hooks/queries";
-import { controlProgress, liveControls } from "@/lib/resolve";
+import { controlProgress, liveControls, riskConversationPath } from "@/lib/resolve";
 import { formatDate as fmt } from "@/lib/utils";
 import { ticketTypeConfig as typeConfig } from "@/lib/status";
-import type { TicketAttachment } from "@/data/types";
 import { ApplicationIcon } from "@/components/application-icon";
 
 export default function TicketDetail() {
   const { ticketId } = useParams<{ ticketId: string }>();
-  const { profile, can } = useAuth();
+  const { can } = useAuth();
   const { data: ticket, isLoading, isError, refetch } = useTicket(ticketId);
-  const { data: messages, isLoading: messagesLoading } = useTicketMessages(ticketId);
-  const { data: attachments } = useTicketAttachments(ticketId);
   const { data: profiles } = useProfiles();
   const { data: activity } = useActivity("ticket", ticketId);
   const { data: riskAcceptance } = useRiskAcceptance(
     ticket?.type === "risk_acceptance" ? ticketId : undefined,
   );
-  const { data: retests } = useTicketRetests(ticketId);
+  const { data: conversation } = useRiskConversationById(ticket?.risk_conversation_id);
   const { data: controls } = useTicketControls(ticketId);
   const { data: controlSteps } = useTicketControlSteps(ticketId);
   const { data: controlDefinitions } = useRiskControls(
@@ -48,28 +40,14 @@ export default function TicketDetail() {
     ticket?.finding?.test_id,
   );
 
-  const sendMessage = useSendMessage(ticketId ?? "");
-  const uploadAttachment = useUploadAttachment(ticketId ?? "");
-
   const profileMap = useMemo(
     () => new Map((profiles ?? []).map((p) => [p.id, p])),
     [profiles],
   );
-  const attachmentsByMessage = useMemo(() => {
-    const map = new Map<string, TicketAttachment[]>();
-    for (const a of attachments ?? []) {
-      if (!a.message_id) continue;
-      const bucket = map.get(a.message_id) ?? [];
-      bucket.push(a);
-      map.set(a.message_id, bucket);
-    }
-    return map;
-  }, [attachments]);
 
   if (isLoading) return <LoadingState label="Loading ticket…" />;
   if (isError || !ticket) return <ErrorState message="Unable to load this ticket." onRetry={() => refetch()} />;
 
-  const pendingRetest = (retests ?? []).find((r) => r.status === "queued" || r.status === "running");
   const controlBase = can("view_resolve") ? `/resolve/tickets/${ticket.id}` : `/tickets/${ticket.id}`;
   const live = liveControls(controlDefinitions, controls ?? [], controlSteps ?? []);
 
@@ -89,18 +67,18 @@ export default function TicketDetail() {
 
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
-          <ConversationPanel
-            messages={messages}
-            isLoading={messagesLoading}
-            currentProfileId={profile?.id}
-            profileMap={profileMap}
-            canComment={can("comment_ticket")}
-            onSend={(message) => sendMessage.mutateAsync(message)}
-            sending={sendMessage.isPending}
-            attachments={attachments}
-            attachmentsByMessage={attachmentsByMessage}
-            onUploadAttachment={(file) => uploadAttachment.mutateAsync(file)}
-          />
+          <Card>
+            <CardContent className="py-4">
+              <RiskConversationLink
+                to={
+                  conversation
+                    ? riskConversationPath(conversation, ticket.origin_assessment_id)
+                    : null
+                }
+                unavailableNote="This ticket was opened before risks had their own conversation, so it is not linked to one. Open its finding to reach the risk it was raised for."
+              />
+            </CardContent>
+          </Card>
 
           {ticket.type === "remediation" && live.length > 0 && (
             <Card>
@@ -198,11 +176,8 @@ export default function TicketDetail() {
               <h2 className="mb-3 text-sm font-semibold text-foreground">Actions</h2>
               <TicketActions
                 ticket={ticket}
-                finding={ticket.finding}
-                application={ticket.application}
                 can={can}
                 riskAcceptanceId={riskAcceptance?.id}
-                pendingRetestId={pendingRetest?.id}
               />
             </CardContent>
           </Card>

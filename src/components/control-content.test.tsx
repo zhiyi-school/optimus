@@ -340,3 +340,91 @@ describe("implementation example", () => {
     expect(container.textContent).toBe("");
   });
 });
+
+describe("screenshots inside a control step", () => {
+  function image() {
+    return container.querySelector("img")!;
+  }
+
+  it("caps how large a screenshot can get", () => {
+    render(<ControlSteps control={definition()} />);
+
+    expect(image().className).toContain("max-h-[32rem]");
+    expect(image().className).toContain("max-w-[min(100%,42rem)]");
+  });
+
+  it("never stretches a small screenshot to the width of the card", () => {
+    render(<ControlSteps control={definition()} />);
+
+    expect(image().className).toContain("w-auto");
+    expect(image().className).not.toContain("w-full");
+    expect(image().closest("figure")?.className).toContain("w-fit");
+  });
+
+  it("keeps the aspect ratio rather than cropping", () => {
+    render(<ControlSteps control={definition()} />);
+
+    expect(image().className).toContain("object-contain");
+    expect(image().className).toContain("h-auto");
+    expect(image().className).not.toContain("object-cover");
+  });
+
+  it("cannot push the page sideways on a narrow screen", () => {
+    render(<ControlSteps control={definition()} />);
+
+    expect(image().className).toContain("max-w-[min(100%,42rem)]");
+    expect(image().closest("figure")?.className).toContain("max-w-full");
+  });
+
+  it("uses the same treatment a manual test step does", () => {
+    const manual = readFileSync("src/pages/ManualTestSteps.tsx", "utf8");
+    expect(manual).toContain("PlaybookFigure");
+    expect(manual).not.toContain("<img");
+  });
+
+  it("keeps a caption with its own image", () => {
+    render(<ControlSteps control={definition()} />);
+
+    const figure = image().closest("figure")!;
+    expect(figure.querySelector("figcaption")?.textContent).toContain("Example caption");
+  });
+
+  it("spaces several screenshots apart", () => {
+    const control = definition();
+    control.steps[0].content = [
+      ...control.steps[0].content,
+      {
+        type: "image",
+        path: "screenshots/second.png",
+        alt: "Second screenshot",
+        caption: "Second caption",
+        url: "/platforms/ios/controls/example/assets/screenshots/second.png",
+        exists: true,
+      },
+    ];
+    render(<ControlSteps control={control} />);
+
+    const figures = container.querySelectorAll("figure");
+    expect(figures).toHaveLength(2);
+    expect(figures[0].parentElement?.className).toContain("space-y-3");
+  });
+
+  it("says so plainly when a screenshot is missing, instead of a broken image", () => {
+    const control = definition();
+    control.steps[0].content = [
+      { type: "image", path: "gone.png", alt: undefined, caption: undefined, url: null, exists: false },
+    ];
+    render(<ControlSteps control={control} />);
+
+    expect(container.querySelector("img")).toBeNull();
+    expect(container.textContent).toContain("Screenshot unavailable.");
+  });
+
+  it("leaves code blocks scrolling on their own", () => {
+    const control = definition();
+    control.steps[0].content = [{ type: "code", text: "example --flag", language: "bash" }];
+    render(<ControlSteps control={control} />);
+
+    expect(container.querySelector("pre")?.className).toContain("overflow-x-auto");
+  });
+});

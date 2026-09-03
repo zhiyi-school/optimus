@@ -115,10 +115,9 @@ export default function Resolve() {
                       </div>
                     </div>
 
-                    <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                    <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
                       <Metric label="Affected findings" value={summary.affectedFindings} />
-                      <Metric label="Required controls" value={summary.requiredControls} />
-                      <Metric label="Controls in progress" value={summary.controlsInProgress} />
+                      <Metric label="Findings needing action" value={summary.findingsRequiringAction} />
                       <Metric label="Fixes submitted" value={summary.fixesSubmitted} />
                       <Metric label="Awaiting security" value={summary.awaitingReassessment} />
                       <Metric label="Resolved findings" value={summary.resolvedFindings} />
@@ -126,7 +125,7 @@ export default function Resolve() {
 
                     <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <ProgressBar label="Findings resolved" progress={summary.findings} />
-                      <ProgressBar label="Control steps completed" progress={summary.controls} />
+                      <ProgressBar label="Remediation steps completed" progress={summary.controls} />
                     </div>
                   </CardContent>
                 </Card>

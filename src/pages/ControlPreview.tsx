@@ -11,7 +11,7 @@ import {
 } from "@/components/control-content";
 import { WorkOnRiskButton } from "@/components/ticket-actions";
 import { useControlDetail, useControlSource, useFinding } from "@/hooks/queries";
-import { isRequiredControl, playbookControlStatusLabels } from "@/lib/resolve";
+import { isRemediationControl, playbookControlStatusLabels } from "@/lib/resolve";
 
 export default function ControlPreview() {
   const { findingId, controlId } = useParams<{ findingId: string; controlId: string }>();
@@ -42,7 +42,7 @@ export default function ControlPreview() {
   }
 
   const status = playbookControlStatusLabels[control.data.status];
-  const required = isRequiredControl(control.data);
+  const selectable = isRemediationControl(control.data);
 
   return (
     <div>
@@ -55,8 +55,8 @@ export default function ControlPreview() {
           <div className="flex flex-wrap items-center gap-2">
             <ToneBadge tone={status.tone} label={status.label} />
             <ToneBadge
-              tone={required ? "warning" : "neutral"}
-              label={required ? "Required" : "Optional"}
+              tone={selectable ? "info" : "neutral"}
+              label={selectable ? "Remediation approach" : "Not a remediation approach"}
             />
           </div>
         }
@@ -76,13 +76,22 @@ export default function ControlPreview() {
             security uses to demonstrate the risk. Start remediation when you want to track your
             progress through them.
           </p>
-          {!required && (
+          {selectable ? (
             <p className="text-xs text-muted-foreground">
-              This control is marked <strong>{control.data.status}</strong> and is not counted as
-              required remediation work.
+              A risk may offer several approaches. Starting remediation from here selects this one;
+              you can change it later on the remediation.
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              This control is marked <strong>{control.data.status}</strong>, so it is not offered as
+              a remediation approach.
             </p>
           )}
-          <WorkOnRiskButton finding={finding.data} application={finding.data.application} />
+          <WorkOnRiskButton
+            finding={finding.data}
+            application={finding.data.application}
+            preferredControlId={selectable ? control.data.control_id : undefined}
+          />
         </CardContent>
       </Card>
 

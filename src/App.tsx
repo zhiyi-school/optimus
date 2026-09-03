@@ -1,7 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { lazy, Suspense, type ReactNode } from "react";
 import { useAuth } from "@/auth/useAuth";
-import type { Capability } from "@/auth/permissions";
+import { defaultRouteFor, type Capability } from "@/auth/permissions";
 import { Layout } from "@/components/Layout";
 import { LoadingState } from "@/components/common";
 import { ResolveGuard } from "@/components/resolve-guard";
@@ -34,15 +34,25 @@ function RequireAuth({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+/** The index is whatever `defaultRouteFor` says, so no page owns a competing rule. */
+function RoleHome() {
+  const { profile, loading } = useAuth();
+  if (loading) return <LoadingState label="Loading…" />;
+  const home = defaultRouteFor(profile);
+  return home === "/" ? <Dashboard /> : <Navigate to={home} replace />;
+}
+
+/** Any one of the listed capabilities admits: RLS still scopes what is visible. */
 function RequireCapability({
   capability,
   children,
 }: {
-  capability: Capability;
+  capability: Capability | Capability[];
   children: ReactNode;
 }) {
   const { can } = useAuth();
-  if (!can(capability)) return <Navigate to="/" replace />;
+  const allowed = Array.isArray(capability) ? capability : [capability];
+  if (!allowed.some(can)) return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 
@@ -58,7 +68,7 @@ export default function App() {
             </RequireAuth>
           }
         >
-          <Route index element={<Dashboard />} />
+          <Route index element={<RoleHome />} />
 
           <Route
             path="assessments"
@@ -87,7 +97,7 @@ export default function App() {
           <Route
             path="assessments/:assessmentId/tests/:testId"
             element={
-              <RequireCapability capability="view_assessments">
+              <RequireCapability capability={["view_assessments", "view_risk_conversation"]}>
                 <TestDetail />
               </RequireCapability>
             }
@@ -95,7 +105,7 @@ export default function App() {
           <Route
             path="assessments/:assessmentId/tests/:testId/runs/:runId"
             element={
-              <RequireCapability capability="view_assessments">
+              <RequireCapability capability={["view_assessments", "view_risk_conversation"]}>
                 <TestDetail />
               </RequireCapability>
             }

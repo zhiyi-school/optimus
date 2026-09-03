@@ -68,20 +68,46 @@ and will be deleted by whoever hits it next.
 
 ## Database tests
 
-Two SQL files in `supabase/tests/` check the rules the developer workflow
+Six SQL files in `supabase/tests/` check the rules the developer workflow
 depends on at the table level, where they are actually enforced:
 
 | File | What it proves |
 |---|---|
 | `0017_ticket_controls_rls.sql` | team scoping on control progress, a developer with no team seeing nothing, and every security-owned action refused for a developer |
 | `0018_ticket_withdrawal_rls.sql` | a withdrawal must carry a reason and name its author, is refused once security verification has started, never sets `closed_at`, leaves the finding unresolved, cannot be edited afterwards, resumes only as `in_progress`, and never lets a developer reopen or close what security finalised |
+| `0020_risk_conversations_rls.sql` | entries that belong to one conversation only, security-only classification and retest events, a reassessment request that still needs an eligible remediation ticket, a read-only CIO, an append-only feed, a ticket that keeps the conversation it was opened against, and legacy message tables no policy exposes |
+| `0021_application_risk_conversations_rls.sql` | one conversation per application risk that cannot be moved and is reached from any of that application's assessments, a merge that carries every entry, attachment, ticket link and retest record into the oldest thread, a ticket that keeps the assessment it was raised against, access decided by the application so no other organisation is reachable, a classification function that writes all three records or none and refuses anyone but security, one reassessment in flight per risk, and an idempotent historical placement |
+| `0022_selected_remediation_control_rls.sql` | one chosen remediation approach per ticket, changeable only while the developer still owns it |
+| `0023_assessment_run_requests_rls.sql` | only security may queue a run and only where it has access, one active request per assessment however often it is asked for, an atomic claim two workers cannot both win, an expired lease returned to the queue, a manual retry that wakes the existing request rather than opening another, a queue no client can write to directly, and assessment transitions that refuse to restart a completed assessment |
 
-Neither is part of `npm test` — they need a database. Paste one into the
+None is part of `npm test` — they need a database. Paste one into the
 Supabase SQL Editor and run it. Each creates its own placeholder fixtures,
 impersonates each role by setting `request.jwt.claims`, asserts, and ends with
 `rollback`, so it leaves nothing behind and is safe against a live project. A
-failed assertion raises; a clean run prints `0017 RLS checks passed` or
-`0018 withdrawal checks passed`.
+failed assertion raises; a clean run prints `0017 RLS checks passed`,
+`0018 withdrawal checks passed`, `0020 risk conversation checks passed`,
+`0021 application risk conversation checks passed`, `0022 selection checks
+passed` or `0023 assessment run request checks passed`.
+
+**A migration that replaces a shared trigger has to carry forward what earlier
+ones added.** `0022` rewrote `enforce_ticket_update_permissions` with
+`create or replace` and silently dropped the two write-once guards `0021` had
+added to it, which let a developer repoint a ticket's conversation again. The
+RLS suites caught it; `0023` restores them. When a migration replaces a function
+an earlier migration also touched, diff the bodies rather than assuming.
+
+**Test the migration's own logic, not a copy of it.** `0021`'s merge and
+historical placement live in `merge_duplicate_risk_conversations()` and
+`place_unlinked_ticket_conversations()`, which the migration calls and the suite
+calls too. An earlier version mirrored those statements inside the test file,
+and mutation testing showed the mirror hid three real defects in the migration:
+the copy passed while the migration was wrong.
+
+**An `update` or `delete` that no policy allows matches no rows rather than
+raising.** So `assert_refused` proves nothing about a table with no `update`
+policy: run the statement and assert the row is unchanged instead. Several of
+`0020`'s append-only assertions were passing for the wrong reason until that was
+fixed.
 
 **Write these assertions so they can only pass for the right reason.** An
 assertion that a developer cannot withdraw a risk-acceptance ticket proves

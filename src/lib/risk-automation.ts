@@ -6,11 +6,6 @@ import type { RiskDefinition } from "@/api/automation-types";
  */
 const MANUAL_ONLY_RISKS = new Set<string>([]);
 
-/** Ids of every risk an automated run should actually cover. */
-export function automatedRiskIds(risks: RiskDefinition[] | undefined): string[] {
-  return (risks ?? []).filter(hasAutomation).map((risk) => risk.risk_id);
-}
-
 export function hasAutomation(
   risk: Pick<RiskDefinition, "risk_id"> | undefined | null,
 ): boolean {

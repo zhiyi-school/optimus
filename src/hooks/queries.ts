@@ -13,29 +13,34 @@ import {
   activityData,
   applicationData,
   assessmentData,
-  assessmentMessageData,
-  attachmentData,
+  assessmentRunRequestData,
   controlProgressData,
   evidenceData,
   findingData,
-  messageData,
   metricsData,
   retestData,
   riskAcceptanceData,
+  riskConversationData,
   teamData,
   ticketData,
   userData,
 } from "@/data/services";
+import { isTransitionalRunState } from "@/lib/status";
 import type {
+  Assessment,
   ControlProgressStatus,
   FindingStatus,
   RiskAcceptanceDecision,
+  RiskConversationAttachment,
+  RiskConversationEntry,
   TicketControl,
   TicketControlStep,
   TicketStatus,
   UserRole,
 } from "@/data/types";
 import type { ControlReconciliation, FindingFilters, TicketFilters } from "@/data/services";
+import type { ControlDetail } from "@/api/playbook-types";
+import { selectableControls } from "@/lib/resolve";
 
 export function useProfiles() {
   return useQuery({ queryKey: ["profiles"], queryFn: userData.listProfiles });
@@ -61,6 +66,43 @@ export function useAssessment(id: string | undefined) {
     queryKey: ["assessment", id],
     queryFn: () => assessmentData.getWithApplication(id as string),
     enabled: !!id,
+  });
+}
+
+const RUN_REQUEST_POLL_INTERVAL_MS = 10_000;
+const RUN_REQUEST_SETTLED_POLL_INTERVAL_MS = 60_000;
+
+/**
+ * Polls while the assessment is still moving. Configuration reporting `ready`
+ * is not a reason to stop: device readiness is decided separately and may still
+ * be unresolved.
+ */
+export function useAssessmentRunRequest(
+  assessmentId: string | undefined,
+  assessment: Pick<Assessment, "status"> | null | undefined,
+) {
+  return useQuery({
+    queryKey: ["assessmentRunRequest", assessmentId],
+    queryFn: () => assessmentRunRequestData.findForAssessment(assessmentId as string),
+    enabled: !!assessmentId,
+    refetchOnWindowFocus: true,
+    refetchInterval: (query) =>
+      isTransitionalRunState(assessment, query.state.data ?? null)
+        ? RUN_REQUEST_POLL_INTERVAL_MS
+        : RUN_REQUEST_SETTLED_POLL_INTERVAL_MS,
+  });
+}
+
+export function useRequestAssessmentRun(assessmentId: string | undefined) {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: () => assessmentRunRequestData.request(assessmentId as string),
+    onSuccess: () =>
+      invalidate([
+        ["assessmentRunRequest", assessmentId],
+        ["assessment", assessmentId],
+        ["assessments"],
+      ]),
   });
 }
 
@@ -156,12 +198,16 @@ const DASHBOARD_QUERY_KEYS = [
   "findingRetests",
   "assessment",
   "assessments",
+  "assessmentRunRequest",
   "tickets",
   "ticket",
   "ticketsWithRelations",
   "ticketRetests",
   "activity",
   "dashboardMetrics",
+  "riskConversation",
+  "riskConversationEntries",
+  "testRunHistory",
 ];
 
 export function useRunSyncStatus(runId: string | undefined) {
@@ -446,67 +492,128 @@ export function useTicket(id: string | undefined) {
   });
 }
 
-export function useTicketMessages(ticketId: string | undefined) {
+const EMPTY_ENTRIES: RiskConversationEntry[] = [];
+const EMPTY_ATTACHMENTS: RiskConversationAttachment[] = [];
+
+/**
+ * The conversation is keyed by application and risk, so opening the same risk
+ * from a different assessment of the same application resolves to the same
+ * thread. `create` is the caller's permission to open it: a read-only viewer
+ * only looks one up, so no conversation is created on their behalf.
+ */
+export function useRiskConversation(
+  applicationId: string | undefined,
+  riskId: string | undefined,
+  findingId: string | null | undefined,
+  opts: { create: boolean; originAssessmentId?: string | null },
+) {
+  return useQuery({
+    queryKey: ["riskConversation", applicationId, riskId, findingId ?? null, opts.create],
+    queryFn: () =>
+      opts.create
+        ? riskConversationData.getOrCreate({
+            applicationId: applicationId as string,
+            riskId: riskId as string,
+            findingId,
+            originAssessmentId: opts.originAssessmentId,
+          })
+        : riskConversationData.find(applicationId as string, riskId as string),
+    enabled: !!applicationId && !!riskId,
+  });
+}
+
+export function useRiskConversationById(conversationId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["riskConversationById", conversationId],
+    queryFn: () => riskConversationData.get(conversationId as string),
+    enabled: !!conversationId,
+  });
+}
+
+/** One subscription per open conversation; an insert refetches the keyed list, so nothing doubles up. */
+export function useRiskConversationEntries(conversationId: string | undefined) {
   const queryClient = useQueryClient();
   const query = useQuery({
-    queryKey: ["ticketMessages", ticketId],
-    queryFn: () => messageData.listForTicket(ticketId as string),
-    enabled: !!ticketId,
+    queryKey: ["riskConversationEntries", conversationId],
+    queryFn: () => riskConversationData.listEntries(conversationId as string),
+    enabled: !!conversationId,
   });
 
   useEffect(() => {
-    if (!ticketId) return;
-    return messageData.subscribeToTicket(ticketId, () => {
-      void queryClient.invalidateQueries({ queryKey: ["ticketMessages", ticketId] });
+    if (!conversationId) return;
+    return riskConversationData.subscribeToConversation(conversationId, () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["riskConversationEntries", conversationId],
+      });
     });
-  }, [ticketId, queryClient]);
+  }, [conversationId, queryClient]);
 
-  return query;
+  return { ...query, data: query.data ?? (query.isLoading ? undefined : EMPTY_ENTRIES) };
 }
 
-export function useAssessmentMessages(assessmentId: string | undefined) {
-  const queryClient = useQueryClient();
+export function useRiskConversationAttachments(entryIds: string[]) {
+  const key = [...entryIds].sort();
   const query = useQuery({
-    queryKey: ["assessmentMessages", assessmentId],
-    queryFn: () => assessmentMessageData.listForAssessment(assessmentId as string),
-    enabled: !!assessmentId,
+    queryKey: ["riskConversationAttachments", key],
+    queryFn: () => riskConversationData.listAttachments(key),
+    enabled: key.length > 0,
   });
-
-  useEffect(() => {
-    if (!assessmentId) return;
-    return assessmentMessageData.subscribeToAssessment(assessmentId, () => {
-      void queryClient.invalidateQueries({ queryKey: ["assessmentMessages", assessmentId] });
-    });
-  }, [assessmentId, queryClient]);
-
-  return query;
+  return query.data ?? EMPTY_ATTACHMENTS;
 }
 
-export function useSendAssessmentMessage(assessmentId: string) {
+const CONVERSATION_KEYS = (conversationId: string) => [
+  ["riskConversationEntries", conversationId],
+  ["riskConversationAttachments"],
+];
+
+export function useSendRiskMessage(conversationId: string | undefined) {
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: (message: string) => assessmentMessageData.send(assessmentId, message),
-    onSuccess: () =>
+    mutationFn: async (input: { message: string; file?: File }) => {
+      const entry = await riskConversationData.addEntry({
+        conversation_id: conversationId as string,
+        kind: "message",
+        message: input.message,
+      });
+      if (input.file) {
+        await riskConversationData.uploadAttachment(
+          conversationId as string,
+          entry.id,
+          input.file,
+        );
+      }
+      return entry;
+    },
+    onSuccess: () => invalidate(CONVERSATION_KEYS(conversationId as string)),
+  });
+}
+
+export function useRequestReassessment(conversationId: string | undefined) {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (input: { findingId: string; ticketId?: string | null }) =>
+      retestData.requestRetest({
+        conversationId: conversationId as string,
+        findingId: input.findingId,
+        ticketId: input.ticketId,
+      }),
+    onSuccess: (_data, variables) =>
       invalidate([
-        ["assessmentMessages", assessmentId],
-        ["activity", "assessment", assessmentId],
+        ...CONVERSATION_KEYS(conversationId as string),
+        ["findingRetests", variables.findingId],
+        ["ticketsWithRelations"],
+        ["tickets"],
+        ["assessment"],
+        ["assessments"],
+        ["dashboardMetrics"],
+        ...(variables.ticketId
+          ? [
+              ["ticket", variables.ticketId],
+              ["ticketRetests", variables.ticketId],
+              ["activity", "ticket", variables.ticketId],
+            ]
+          : []),
       ]),
-  });
-}
-
-export function useTicketRetests(ticketId: string | undefined) {
-  return useQuery({
-    queryKey: ["ticketRetests", ticketId],
-    queryFn: () => retestData.listForTicket(ticketId as string),
-    enabled: !!ticketId,
-  });
-}
-
-export function useTicketAttachments(ticketId: string | undefined) {
-  return useQuery({
-    queryKey: ["ticketAttachments", ticketId],
-    queryFn: () => attachmentData.listForTicket(ticketId as string),
-    enabled: !!ticketId,
   });
 }
 
@@ -561,24 +668,52 @@ const TICKET_LIFECYCLE_KEYS = (ticketId: string, findingId: string | null | unde
   ["ticketsWithRelations"],
   ["tickets"],
   ["activity", "ticket", ticketId],
+  ["riskConversationEntries"],
   ["dashboardMetrics"],
   ...(findingId ? [["finding", findingId], ["activity", "finding", findingId]] : []),
 ];
 
+/**
+ * The conversation is resolved here, not on the page: a new remediation reuses
+ * the application's existing conversation for that risk, and the ticket records
+ * the assessment it was opened against before a later run moves the finding's
+ * own assessment reference on.
+ */
 export function useStartRemediation() {
   const invalidate = useInvalidate();
   return useMutation({
     mutationFn: async (input: {
       ticket: Parameters<typeof ticketData.createRemediationTicket>[0];
       plan: ControlReconciliation[];
+      risk?: { applicationId: string; riskId: string; originAssessmentId?: string | null } | null;
     }) => {
-      const ticket = await ticketData.createRemediationTicket(input.ticket);
+      let conversationId: string | null = null;
+      if (input.risk) {
+        const conversation = await riskConversationData.getOrCreate({
+          applicationId: input.risk.applicationId,
+          riskId: input.risk.riskId,
+          findingId: input.ticket.finding_id,
+          originAssessmentId: input.risk.originAssessmentId,
+        });
+        conversationId = conversation.id;
+      }
+      const ticket = await ticketData.createRemediationTicket({
+        ...input.ticket,
+        risk_conversation_id: conversationId,
+        origin_assessment_id: input.risk?.originAssessmentId ?? null,
+      });
       if (input.plan.length > 0) {
         await controlProgressData.reconcile(ticket.id, input.plan);
       }
       return ticket;
     },
-    onSuccess: (ticket) => invalidate(TICKET_LIFECYCLE_KEYS(ticket.id, ticket.finding_id)),
+    onSuccess: (ticket) =>
+      invalidate([
+        ...TICKET_LIFECYCLE_KEYS(ticket.id, ticket.finding_id),
+        ...(ticket.risk_conversation_id
+          ? CONVERSATION_KEYS(ticket.risk_conversation_id)
+          : []),
+      ]),
   });
 }
 
@@ -611,23 +746,6 @@ export function useCreateRiskAcceptanceTicket() {
   });
 }
 
-export function useSendMessage(ticketId: string) {
-  const invalidate = useInvalidate();
-  return useMutation({
-    mutationFn: (message: string) => messageData.send(ticketId, message),
-    onSuccess: () => invalidate([["ticketMessages", ticketId], ["activity", "ticket", ticketId]]),
-  });
-}
-
-export function useUploadAttachment(ticketId: string) {
-  const invalidate = useInvalidate();
-  return useMutation({
-    mutationFn: (file: File) => attachmentData.upload(ticketId, file),
-    onSuccess: () =>
-      invalidate([["ticketAttachments", ticketId], ["activity", "ticket", ticketId]]),
-  });
-}
-
 export function useSubmitFix(ticketId: string) {
   const invalidate = useInvalidate();
   return useMutation({
@@ -637,7 +755,7 @@ export function useSubmitFix(ticketId: string) {
       invalidate([
         ["ticket", ticketId],
         ["ticketsWithRelations"],
-        ["ticketMessages", ticketId],
+        ["riskConversationEntries"],
         ["tickets"],
         ["activity", "ticket", ticketId],
         ["dashboardMetrics"],
@@ -660,33 +778,26 @@ export function useUpdateTicketStatus(ticketId: string) {
   });
 }
 
-export function useRequestRetest(ticketId: string, findingId: string) {
+export function useClassifyRisk(findingId: string | undefined, conversationId: string | undefined) {
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: () => retestData.requestRetest(ticketId, findingId),
-    onSuccess: () =>
-      invalidate([
-        ["ticket", ticketId],
-        ["ticketsWithRelations"],
-        ["tickets"],
-        ["findingRetests", findingId],
-        ["activity", "ticket", ticketId],
-        ["dashboardMetrics"],
-      ]),
-  });
-}
-
-export function useUpdateFindingStatus(findingId: string) {
-  const invalidate = useInvalidate();
-  return useMutation({
-    mutationFn: (input: { status: FindingStatus; reason?: string }) =>
-      findingData.updateStatus(findingId, input.status, input.reason),
+    mutationFn: (input: { status: FindingStatus; reason: string }) =>
+      findingData.classify({
+        findingId: findingId as string,
+        conversationId: conversationId as string,
+        status: input.status,
+        reason: input.reason,
+      }),
     onSuccess: () =>
       invalidate([
         ["finding", findingId],
         ["findingHistory", findingId],
         ["findings"],
+        ["assessment"],
+        ["ticketsWithRelations"],
+        ["tickets"],
         ["dashboardMetrics"],
+        ...(conversationId ? CONVERSATION_KEYS(conversationId) : []),
       ]),
   });
 }
@@ -803,6 +914,22 @@ const CONTROL_PROGRESS_KEYS = (ticketId: string) => [
   ["activity", "ticket", ticketId],
 ];
 
+export function useSelectRemediationControl(
+  ticketId: string | undefined,
+  findingId: string | null | undefined,
+) {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (controlId: string) =>
+      ticketData.setSelectedControl(ticketId as string, controlId),
+    onSuccess: () =>
+      invalidate([
+        ...CONTROL_PROGRESS_KEYS(ticketId as string),
+        ...TICKET_LIFECYCLE_KEYS(ticketId as string, findingId),
+      ]),
+  });
+}
+
 export function useReconcileTicketControls(ticketId: string | undefined) {
   const invalidate = useInvalidate();
   return useMutation({
@@ -874,13 +1001,17 @@ export function useLiveControlKeys(risks: { platform: AutomationPlatform; riskId
     if (results.length === 0 || results.some((result) => !result.isSuccess)) return undefined;
     const controlIds = new Set<string>();
     const stepKeys = new Set<string>();
-    for (const result of results) {
-      for (const control of result.data ?? []) {
+    const candidatesByRisk = new Map<string, ControlDetail[]>();
+    results.forEach((result, index) => {
+      const risk = unique[index];
+      const candidates = selectableControls(result.data);
+      if (risk) candidatesByRisk.set(risk.riskId, candidates);
+      for (const control of candidates) {
         controlIds.add(control.control_id);
         for (const step of control.steps) stepKeys.add(step.step_key);
       }
-    }
-    return { controlIds, stepKeys };
+    });
+    return { controlIds, stepKeys, candidatesByRisk };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [results.map((r) => `${r.status}:${r.dataUpdatedAt}`).join("|")]);
 }

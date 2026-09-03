@@ -10,6 +10,7 @@ import {
 import { useAuth } from "@/auth/useAuth";
 import { defaultRouteFor } from "@/auth/permissions";
 import { Button } from "@/components/ui/button";
+import { LoadingState } from "@/components/common";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
@@ -53,7 +54,10 @@ export default function Login() {
   const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  if (session && !authLoading) return <Navigate to={defaultRouteFor(profile)} replace />;
+  // The landing route reads roles, so it waits for the profile rather than
+  // falling back to the dashboard while one is still being fetched.
+  if (session && authLoading) return <LoadingState label="Loading your workspace…" />;
+  if (session) return <Navigate to={defaultRouteFor(profile)} replace />;
 
   function switchMode(next: Mode) {
     setMode(next);

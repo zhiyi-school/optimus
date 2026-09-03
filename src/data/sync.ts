@@ -1,7 +1,7 @@
 export { mapVerdictToFindingStatus } from "./sync/mapping";
 export type { RunCancelToken } from "./sync/mapping";
 export { addApp } from "./sync/provisioning";
-export { findActiveRun, findPlatformRun, riskProgressInRun, runAllTests, runAndWait } from "./sync/runs";
+export { findActiveRun, findPlatformRun, riskProgressInRun, runAndWait } from "./sync/runs";
 export type {
   ActiveRunFilter,
   RiskRunPhase,
@@ -11,10 +11,9 @@ export type {
 } from "./sync/runs";
 
 import { addApp } from "./sync/provisioning";
-import { runAllTests, runAndWait } from "./sync/runs";
+import { runAndWait } from "./sync/runs";
 
 export const syncService = {
   addApp,
-  runAllTests,
   runAndWait,
 };

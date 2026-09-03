@@ -1,7 +1,8 @@
-import { supabase, ATTACHMENTS_BUCKET } from "@/data/supabase";
-import type { Application, Finding, RetestRun, RiskAcceptance, RiskAcceptanceDecision, Ticket, TicketAttachment, TicketMessage, TicketStatus, TicketType } from "@/data/types";
+import { supabase } from "@/data/supabase";
+import type { Application, Finding, RetestRun, RiskAcceptance, RiskAcceptanceDecision, Ticket, TicketStatus, TicketType } from "@/data/types";
 import { requireUserId } from "./common";
 import { activityData } from "./activity";
+import { riskConversationData } from "./assessments";
 
 export interface TicketFilters {
   type?: TicketType;
@@ -11,53 +12,6 @@ export interface TicketFilters {
   createdBy?: string;
   findingId?: string;
 }
-
-export const messageData = {
-  async listForTicket(ticketId: string): Promise<TicketMessage[]> {
-    const { data, error } = await supabase
-      .from("ticket_messages")
-      .select("*")
-      .eq("ticket_id", ticketId)
-      .order("created_at", { ascending: true });
-    if (error) throw error;
-    return data;
-  },
-
-  async send(ticketId: string, message: string): Promise<TicketMessage> {
-    const userId = await requireUserId();
-    const { data, error } = await supabase
-      .from("ticket_messages")
-      .insert({ ticket_id: ticketId, author_id: userId, message })
-      .select()
-      .single();
-    if (error) throw error;
-    await activityData.log({
-      entity_type: "ticket",
-      entity_id: ticketId,
-      action: "message_added",
-    });
-    return data;
-  },
-
-  subscribeToTicket(ticketId: string, onChange: () => void) {
-    const channel = supabase
-      .channel(`ticket-messages-${ticketId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "ticket_messages",
-          filter: `ticket_id=eq.${ticketId}`,
-        },
-        onChange,
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  },
-};
 
 export const ticketData = {
   async list(filters: TicketFilters = {}): Promise<Ticket[]> {
@@ -142,6 +96,9 @@ export const ticketData = {
     description?: string;
     target_version?: string;
     assigned_team_id?: string;
+    risk_conversation_id?: string | null;
+    origin_assessment_id?: string | null;
+    selected_control_id?: string | null;
   }): Promise<Ticket> {
     const userId = await requireUserId();
     const { data, error } = await supabase
@@ -155,11 +112,21 @@ export const ticketData = {
         description: input.description ?? null,
         target_version: input.target_version ?? null,
         assigned_team_id: input.assigned_team_id ?? null,
+        risk_conversation_id: input.risk_conversation_id ?? null,
+        origin_assessment_id: input.origin_assessment_id ?? null,
+        selected_control_id: input.selected_control_id?.trim() || null,
         created_by: userId,
       })
       .select()
       .single();
     if (error) throw error;
+    if (data.risk_conversation_id) {
+      await riskConversationData.addEntry({
+        conversation_id: data.risk_conversation_id,
+        kind: "remediation_started",
+        source_ticket_id: data.id,
+      });
+    }
     await activityData.log({
       entity_type: "ticket",
       entity_id: data.id,
@@ -269,6 +236,36 @@ export const ticketData = {
     return data;
   },
 
+  /**
+   * The caller has already checked the id against the controls the backend
+   * currently offers; Supabase cannot validate against the playbook catalogue.
+   * The status filter makes initialisation idempotent across tabs — a second
+   * writer sees the selection already stored and returns it unchanged.
+   */
+  async setSelectedControl(ticketId: string, controlId: string): Promise<Ticket> {
+    const trimmed = controlId.trim();
+    if (!trimmed) throw new Error("A remediation approach needs a control id.");
+
+    const current = await ticketData.get(ticketId);
+    if (!current) throw new Error("That remediation could not be found.");
+    if (current.selected_control_id === trimmed) return current;
+
+    const { data, error } = await supabase
+      .from("tickets")
+      .update({ selected_control_id: trimmed, updated_at: new Date().toISOString() })
+      .eq("id", ticketId)
+      .select()
+      .single();
+    if (error) throw error;
+    await activityData.log({
+      entity_type: "ticket",
+      entity_id: ticketId,
+      action: "remediation_approach_selected",
+      metadata: { control_id: trimmed, previous_control_id: current.selected_control_id },
+    });
+    return data;
+  },
+
   async submitFix(
     ticketId: string,
     input: { notes: string; target_version?: string },
@@ -284,7 +281,14 @@ export const ticketData = {
       .select()
       .single();
     if (error) throw error;
-    await messageData.send(ticketId, input.notes);
+    if (data.risk_conversation_id) {
+      await riskConversationData.addEntry({
+        conversation_id: data.risk_conversation_id,
+        kind: "fix_submitted",
+        message: input.notes,
+        source_ticket_id: ticketId,
+      });
+    }
     await activityData.log({
       entity_type: "ticket",
       entity_id: ticketId,
@@ -310,6 +314,14 @@ export const ticketData = {
       .select()
       .single();
     if (error) throw error;
+    if (data.risk_conversation_id) {
+      await riskConversationData.addEntry({
+        conversation_id: data.risk_conversation_id,
+        kind: "remediation_withdrawn",
+        message: trimmed,
+        source_ticket_id: ticketId,
+      });
+    }
     await activityData.log({
       entity_type: "ticket",
       entity_id: ticketId,
@@ -336,60 +348,6 @@ export const ticketData = {
   },
 };
 
-export const attachmentData = {
-  async listForTicket(ticketId: string): Promise<TicketAttachment[]> {
-    const { data, error } = await supabase
-      .from("ticket_attachments")
-      .select("*")
-      .eq("ticket_id", ticketId)
-      .order("created_at", { ascending: true });
-    if (error) throw error;
-    return data;
-  },
-
-  async upload(
-    ticketId: string,
-    file: File,
-    messageId?: string,
-  ): Promise<TicketAttachment> {
-    const userId = await requireUserId();
-    const storagePath = `${ticketId}/${Date.now()}-${file.name}`;
-    const { error: uploadError } = await supabase.storage
-      .from(ATTACHMENTS_BUCKET)
-      .upload(storagePath, file);
-    if (uploadError) throw uploadError;
-
-    const { data, error } = await supabase
-      .from("ticket_attachments")
-      .insert({
-        ticket_id: ticketId,
-        message_id: messageId ?? null,
-        uploaded_by: userId,
-        storage_path: storagePath,
-        file_name: file.name,
-        mime_type: file.type || null,
-      })
-      .select()
-      .single();
-    if (error) throw error;
-
-    await activityData.log({
-      entity_type: "ticket",
-      entity_id: ticketId,
-      action: "evidence_added",
-      metadata: { file_name: file.name },
-    });
-
-    return data;
-  },
-
-  getSignedUrl(storagePath: string) {
-    return supabase.storage
-      .from(ATTACHMENTS_BUCKET)
-      .createSignedUrl(storagePath, 3600);
-  },
-};
-
 export const retestData = {
   async listForFinding(findingId: string): Promise<RetestRun[]> {
     const { data, error } = await supabase
@@ -401,37 +359,73 @@ export const retestData = {
     return data;
   },
 
-  async listForTicket(ticketId: string): Promise<RetestRun[]> {
+  async findActiveForConversation(conversationId: string): Promise<RetestRun | null> {
     const { data, error } = await supabase
       .from("retest_runs")
       .select("*")
-      .eq("ticket_id", ticketId)
-      .order("created_at", { ascending: false });
+      .eq("conversation_id", conversationId)
+      .in("status", ["queued", "running"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
     if (error) throw error;
     return data;
   },
 
-  async requestRetest(ticketId: string, findingId: string): Promise<RetestRun> {
+  /**
+   * A ticket-originated request keeps its ticket, so the linked remediation
+   * still transitions. Every step is safe to repeat: the database allows one
+   * active reassessment per risk, the conversation event is keyed to the run,
+   * and a ticket already in `retest_requested` is left alone. A retry after a
+   * half-finished attempt therefore completes it instead of duplicating it.
+   */
+  async requestRetest(input: {
+    conversationId: string;
+    findingId: string;
+    ticketId?: string | null;
+  }): Promise<RetestRun> {
     const userId = await requireUserId();
-    const { data, error } = await supabase
-      .from("retest_runs")
-      .insert({
-        ticket_id: ticketId,
-        finding_id: findingId,
-        requested_by: userId,
-        status: "queued",
-      })
-      .select()
-      .single();
-    if (error) throw error;
+    let run = await retestData.findActiveForConversation(input.conversationId);
+    if (!run) {
+      const { data, error } = await supabase
+        .from("retest_runs")
+        .insert({
+          conversation_id: input.conversationId,
+          ticket_id: input.ticketId ?? null,
+          finding_id: input.findingId,
+          requested_by: userId,
+          status: "queued",
+        })
+        .select()
+        .single();
+      if (error) {
+        const raced = await retestData.findActiveForConversation(input.conversationId);
+        if (!raced) throw error;
+        run = raced;
+      } else {
+        run = data as RetestRun;
+      }
+    }
 
-    await ticketData.updateStatus(ticketId, "retest_requested");
-    await activityData.log({
-      entity_type: "ticket",
-      entity_id: ticketId,
-      action: "retest_requested",
+    await riskConversationData.addEntryOnce({
+      conversation_id: input.conversationId,
+      kind: "retest_requested",
+      source_ticket_id: input.ticketId ?? null,
+      sync_key: `retest-requested::${run.id}`,
     });
-    return data;
+
+    if (input.ticketId) {
+      const ticket = await ticketData.get(input.ticketId);
+      if (ticket && ticket.status !== "retest_requested") {
+        await ticketData.updateStatus(input.ticketId, "retest_requested");
+        await activityData.log({
+          entity_type: "ticket",
+          entity_id: input.ticketId,
+          action: "retest_requested",
+        });
+      }
+    }
+    return run;
   },
 
   async markRunning(id: string, externalTestRunId: string): Promise<RetestRun> {
@@ -447,6 +441,15 @@ export const retestData = {
       .select()
       .single();
     if (error) throw error;
+    if (data.conversation_id) {
+      await riskConversationData.addEntryOnce({
+        conversation_id: data.conversation_id,
+        kind: "retest_started",
+        metadata: { run_timestamp: externalTestRunId },
+        source_ticket_id: data.ticket_id,
+        sync_key: `retest-started::${id}::${externalTestRunId}`,
+      });
+    }
     return data;
   },
 

@@ -1,7 +1,6 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { FileText, ImageOff, Info, X } from "lucide-react";
-import { automationAssetUrl } from "@/api/automation-client";
+import { FileText, Info, X } from "lucide-react";
 import type {
   DemonstrationBlock,
   DemonstrationImage,
@@ -10,8 +9,10 @@ import type {
   DemonstrationTableBlock,
 } from "@/api/automation-types";
 import { EmptyState, LoadingState } from "@/components/common";
+import { PlaybookFigure } from "@/components/playbook-content";
 import { RiskGoal } from "@/components/risk-goal";
 import { renderInline } from "@/lib/inline-markdown";
+import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useRiskCatalogue, useAssessment } from "@/hooks/queries";
@@ -61,36 +62,30 @@ function SetupTable({ block }: { block: DemonstrationTableBlock }) {
 }
 
 function StepImage({ image }: { image: DemonstrationImage }) {
-  if (image.exists === false || !image.url) {
-    return (
-      <div className="flex items-center gap-2 rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground">
-        <ImageOff className="h-3.5 w-3.5 shrink-0" />
-        {image.caption || "Reference screenshot unavailable."}
-      </div>
-    );
-  }
   return (
-    <figure className="overflow-hidden rounded-lg border border-border">
-      <img
-        src={automationAssetUrl(image.url)}
-        alt={image.caption || "Reference screenshot"}
-        className="w-full"
-        loading="lazy"
-      />
-      {image.caption && (
-        <figcaption className="border-t border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-          {renderInline(image.caption)}
-        </figcaption>
-      )}
-    </figure>
+    <PlaybookFigure
+      url={image.url}
+      caption={image.caption}
+      alt="Reference screenshot"
+      exists={image.exists}
+      unavailableLabel="Reference screenshot unavailable."
+    />
   );
 }
 
-function Step({ step, index }: { step: DemonstrationStep; index: number }) {
+function Step({
+  step,
+  number,
+  anchorId,
+}: {
+  step: DemonstrationStep;
+  number: number;
+  anchorId: string;
+}) {
   return (
-    <div className="flex gap-3">
+    <div id={anchorId} className="flex scroll-mt-6 gap-3">
       <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-        {index + 1}
+        {number}
       </div>
       <div className="min-w-0 flex-1 space-y-3 pb-6">
         <p className="text-sm text-foreground">{renderInline(step.text)}</p>
@@ -110,7 +105,7 @@ function Step({ step, index }: { step: DemonstrationStep; index: number }) {
   );
 }
 
-function Steps({ block }: { block: DemonstrationStepsBlock }) {
+function Steps({ block, numbering }: { block: DemonstrationStepsBlock; numbering: StepAnchors }) {
   if (!block.items?.length) return null;
   return (
     <div>
@@ -120,18 +115,95 @@ function Steps({ block }: { block: DemonstrationStepsBlock }) {
         </p>
       )}
       <div>
-        {block.items.map((step, index) => (
-          <Step key={step.id || index} step={step} index={index} />
-        ))}
+        {block.items.map((step, index) => {
+          const entry = numbering.get(`${block.id}:${index}`);
+          return (
+            <Step
+              key={entry?.anchorId ?? index}
+              step={step}
+              number={entry?.number ?? index + 1}
+              anchorId={entry?.anchorId ?? `manual-step-${index + 1}`}
+            />
+          );
+        })}
       </div>
     </div>
   );
 }
 
-function Block({ block }: { block: DemonstrationBlock }) {
+function Block({ block, numbering }: { block: DemonstrationBlock; numbering: StepAnchors }) {
   if (block.type === "table") return <SetupTable block={block} />;
-  if (block.type === "steps") return <Steps block={block} />;
+  if (block.type === "steps") return <Steps block={block} numbering={numbering} />;
   return null;
+}
+
+interface StepAnchor {
+  number: number;
+  anchorId: string;
+  label: string;
+}
+
+type StepAnchors = Map<string, StepAnchor>;
+
+/** One running number across every steps block, anchored on the backend step id where there is one. */
+function stepAnchors(blocks: DemonstrationBlock[]): { order: StepAnchor[]; byPosition: StepAnchors } {
+  const order: StepAnchor[] = [];
+  const byPosition: StepAnchors = new Map();
+  let number = 0;
+  blocks.forEach((block) => {
+    if (block.type !== "steps") return;
+    (block.items ?? []).forEach((_step, index) => {
+      number += 1;
+      const entry = { number, anchorId: `manual-step-${number}`, label: `Step ${number}` };
+      order.push(entry);
+      byPosition.set(`${block.id}:${index}`, entry);
+    });
+  });
+  return { order, byPosition };
+}
+
+function StepNavigation({
+  steps,
+  activeAnchorId,
+  onSelect,
+}: {
+  steps: StepAnchor[];
+  activeAnchorId: string | null;
+  onSelect: (anchorId: string) => void;
+}) {
+  if (steps.length === 0) return null;
+  return (
+    <nav aria-label="Manual testing steps" className="lg:sticky lg:top-6">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        Steps
+      </p>
+      <ul className="flex max-h-[60vh] gap-2 overflow-x-auto overflow-y-hidden pb-2 [scrollbar-gutter:stable] lg:max-h-[calc(100vh-12rem)] lg:flex-col lg:gap-1 lg:overflow-x-hidden lg:overflow-y-auto lg:pb-0 lg:pr-3">
+        {steps.map((step) => {
+          const active = step.anchorId === activeAnchorId;
+          return (
+            <li key={step.anchorId} className="shrink-0 lg:shrink">
+              <a
+                href={`#${step.anchorId}`}
+                aria-current={active ? "step" : undefined}
+                onClick={(event) => {
+                  event.preventDefault();
+                  onSelect(step.anchorId);
+                }}
+                className={cn(
+                  "block min-h-[2.25rem] rounded-md px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                  active
+                    ? "bg-primary/10 font-medium text-primary"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+              >
+                {step.label}
+              </a>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
 }
 
 export default function ManualTestSteps() {
@@ -144,6 +216,36 @@ export default function ManualTestSteps() {
     () => (risk?.demonstration ?? []).filter((block) => block && typeof block === "object"),
     [risk],
   );
+  const { order, byPosition } = useMemo(() => stepAnchors(blocks), [blocks]);
+  const [chosenAnchorId, setChosenAnchorId] = useState<string | null>(null);
+  const activeAnchorId =
+    chosenAnchorId && order.some((step) => step.anchorId === chosenAnchorId)
+      ? chosenAnchorId
+      : (order[0]?.anchorId ?? null);
+
+  useEffect(() => {
+    if (order.length === 0 || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+        if (visible) setChosenAnchorId(visible.target.id);
+      },
+      { rootMargin: "-10% 0px -70% 0px" },
+    );
+    for (const step of order) {
+      const element = document.getElementById(step.anchorId);
+      if (element) observer.observe(element);
+    }
+    return () => observer.disconnect();
+  }, [order]);
+
+  function goToStep(anchorId: string) {
+    setChosenAnchorId(anchorId);
+    const element = document.getElementById(anchorId);
+    element?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  }
 
   if (isLoading) return <LoadingState label="Loading…" />;
 
@@ -182,10 +284,17 @@ export default function ManualTestSteps() {
         {blocks.length === 0 ? (
           <EmptyState title="Manual steps for this test haven't been written yet." />
         ) : (
-          <div className="space-y-6">
-            {blocks.map((block, index) => (
-              <Block key={block.id || index} block={block} />
-            ))}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[13rem_minmax(0,1fr)]">
+            <StepNavigation
+              steps={order}
+              activeAnchorId={activeAnchorId}
+              onSelect={goToStep}
+            />
+            <div className="min-w-0 space-y-6">
+              {blocks.map((block, index) => (
+                <Block key={block.id || index} block={block} numbering={byPosition} />
+              ))}
+            </div>
           </div>
         )}
 

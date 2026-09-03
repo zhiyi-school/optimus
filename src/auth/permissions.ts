@@ -7,7 +7,8 @@ export type Capability =
   | "view_tickets"
   | "view_resolve"
   | "create_ticket"
-  | "comment_ticket"
+  | "view_risk_conversation"
+  | "comment_risk_conversation"
   | "submit_fix"
   | "request_retest"
   | "update_control_progress"
@@ -27,7 +28,8 @@ export const roleCapabilities: Record<UserRole, Capability[]> = {
     "view_tickets",
     "view_resolve",
     "create_ticket",
-    "comment_ticket",
+    "view_risk_conversation",
+    "comment_risk_conversation",
     "submit_fix",
     "request_retest",
     "update_control_progress",
@@ -39,7 +41,8 @@ export const roleCapabilities: Record<UserRole, Capability[]> = {
     "view_assessments",
     "view_findings",
     "view_tickets",
-    "comment_ticket",
+    "view_risk_conversation",
+    "comment_risk_conversation",
     "run_test",
     "update_finding",
     "request_changes",
@@ -52,6 +55,7 @@ export const roleCapabilities: Record<UserRole, Capability[]> = {
     "view_assessments",
     "view_findings",
     "view_tickets",
+    "view_risk_conversation",
     "view_executive_metrics",
   ],
 
@@ -84,9 +88,9 @@ export function resolveAccess(profile: ProfileLike | null | undefined, loading =
   return "ready";
 }
 
-/** Post-login landing route: a developer-only account starts in its own workspace. */
+/** Post-login landing route: holding the developer role starts you in Resolve, whatever else you hold. */
 export function defaultRouteFor(profile: ProfileLike | null | undefined): string {
   if (!profile) return "/";
-  if (roleCan(profile.roles, "view_assessments") || roleCan(profile.roles, "access_admin")) return "/";
-  return roleCan(profile.roles, "view_resolve") ? "/resolve" : "/";
+  const isDeveloper = profile.roles?.includes("developer") ?? false;
+  return isDeveloper && roleCan(profile.roles, "view_resolve") ? "/resolve" : "/";
 }

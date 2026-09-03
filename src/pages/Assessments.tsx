@@ -200,6 +200,7 @@ export default function Assessments() {
         <Select value={statusFilter} onChange={(e) => setParam("status", e.target.value)}>
           <option value="">All statuses</option>
           <option value="queued">Queued</option>
+          <option value="waiting">Waiting to start</option>
           <option value="running">Assessing in progress</option>
           <option value="completed">Completed</option>
           <option value="failed">Failed</option>
@@ -223,19 +224,22 @@ export default function Assessments() {
           columns={columns}
           rows={rows}
           onRowClick={(r) => navigate(`/assessments/${r.id}`)}
+          rowLabel={(r) => `Open the assessment for ${r.application?.name ?? "this application"}`}
           expandedRowId={expandedRowId}
           onToggleExpand={(r) => setExpandedRowId((current) => (current === r.id ? null : r.id))}
           renderExpanded={(r) => {
-            if (r.status !== "queued" && r.status !== "running") return null;
+            if (!["queued", "waiting", "running"].includes(r.status)) return null;
             const ready = r.application?.provisioning_status === "ready";
             return (
               <div>
                 <p className="mb-3 text-sm text-foreground">
                   {r.status === "running"
                     ? "Tests are running on the backend. Check Automation Runs for live status, then sync reports once the run completes."
-                    : ready
-                      ? "Setup is complete. Security tests can be run against this app."
-                      : "This assessment is still being set up — the app has to be prepared for testing before any security test can run against it."}
+                    : r.status === "waiting"
+                      ? "This assessment is waiting for an execution dependency, such as a test device. It retries on its own — open it to see why and to retry now."
+                      : ready
+                        ? "Setup is complete. This assessment is queued for automated testing."
+                        : "This assessment is still being set up — the app has to be prepared for testing before any security test can run against it."}
                 </p>
                 <p className="mb-2 text-sm font-semibold text-foreground">Activities</p>
                 <EnvironmentSetupStages ready={ready} assessment={r} />

@@ -40,13 +40,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     });
 
+    // A session appears before its profile is fetched. Routing that reads roles
+    // must not run in that window, or a developer is sent to the dashboard.
     const { data: listener } = supabase.auth.onAuthStateChange(
       async (_event, nextSession) => {
         setSession(nextSession);
         if (nextSession) {
+          setLoading(true);
           await loadProfile();
+          setLoading(false);
         } else {
           setProfile(null);
+          setLoading(false);
         }
       },
     );

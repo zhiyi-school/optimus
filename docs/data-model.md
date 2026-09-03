@@ -9,7 +9,10 @@ The schema itself lives in `supabase/migrations/` (`0001_schema.sql` /
 `0013_sync_idempotency_keys.sql` / `0014_dashboard_metrics_grants.sql` /
 `0015_dashboard_metrics_revoke_anon.sql` / `0016_application_icon_refs.sql` /
 `0017_ticket_controls.sql` / `0018_ticket_withdrawal.sql` /
-`0019_live_playbook_progress.sql`) —
+`0019_live_playbook_progress.sql` / `0020_risk_conversations.sql` /
+`0021_application_risk_conversations.sql` /
+`0022_selected_remediation_control.sql` /
+`0023_assessment_run_requests.sql`) —
 this doc covers the *why* behind a few decisions that aren't obvious from
 reading the SQL alone.
 
@@ -65,14 +68,167 @@ authorization boundary.
   `applications_delete` policy for `security` or `admin` users only, used
   for duplicate cleanup from the app-add flow. Cascading deletes are
   expected from the existing foreign keys.
-- **Assessment messages follow the same access shape as ticket messages.**
-  `0008_assessment_messages.sql` adds `can_access_assessment()`, selects by
-  application visibility, and inserts only when the author is the caller
-  and has `developer` or `security`.
+- **Conversation access resolves through the application.**
+  `can_access_risk_conversation()` reads the conversation's own
+  `application_id` and chains to `can_access_application()`, so team scoping on
+  applications carries through to every conversation with no separate rule to
+  keep in sync.
 - **Dashboard metrics are still RLS-scoped.** `dashboard_metrics()` in
   `0012` is granted only to authenticated users and queries the base tables
   without `SECURITY DEFINER`, so each count is limited by the caller's
   existing RLS visibility.
+
+## Risk conversations
+
+Every application feature-risk has one canonical conversation, replacing the
+assessment-wide thread (`0008`) and the per-ticket thread (`0001`).
+`risk_conversations` is keyed `unique (application_id, risk_id)`, and
+`risk_conversation_entries` holds both ordinary messages and structured workflow
+events in one feed.
+
+- **The conversation belongs to the application, not to one assessment.** An
+  application is assessed repeatedly; keying the thread to an assessment
+  (`0020`) restarted the discussion on every run. `risk_id` is the automation
+  catalogue's risk/test identifier — the same value as `findings.test_id` — so
+  opening the same risk from any assessment of that application reaches the same
+  thread, and a new assessment never opens a second one.
+- **Assessment context is explicit rather than structural.**
+  `risk_conversations.origin_assessment_id` records the assessment the thread
+  was first opened under, and `tickets.origin_assessment_id` the one a
+  remediation was raised against. Both are navigation and audit context only.
+  Both are write-once — a finding's own `assessment_id` follows the newest run,
+  so it cannot say where an older ticket belongs — and both are cleared rather
+  than blocked when their assessment is deleted, which is what their foreign
+  keys do. A conversation outlives any one run.
+- **A conversation can exist before a finding does.** `finding_id` is nullable
+  and filled in when a finding for that risk appears, so a risk can be
+  discussed while it is still being tested.
+- **Ordering is by `created_at` then `seq`.** `seq` is an identity column, so
+  two entries written in one transaction — a classification change and its
+  reason, say — still render in the order they happened rather than by a random
+  id tie-break. Merging two threads carries both values across untouched, so the
+  merged feed still reads in the order things actually happened.
+- **The feed is append-only.** There are `select` and `insert` policies and no
+  `update` or `delete` policy on entries or attachments, and RLS denies whatever
+  no policy allows. Not even security can rewrite a past workflow event.
+- **Who may write what is decided by `kind`.** `classification_changed`,
+  `retest_started`, `retest_completed` and `retest_failed` require
+  `has_role('security')`; `message`, `retest_requested`, `remediation_started`,
+  `remediation_withdrawn` and `fix_submitted` accept `developer` or `security`.
+  Every authenticated insert must set `author_id = auth.uid()`, so nobody can
+  post under another name. Entries with no author come from the sync worker,
+  which holds the service-role key and is not subject to these policies.
+- **`metadata` carries only what an event summary needs.** A classification
+  change stores its previous and new status; a retest event stores the run
+  timestamp. No copy of a finding, ticket, evidence or playbook content lives
+  there, and the dashboard never renders the raw value.
+- **Automated test history is combined in the frontend, never copied in.** The
+  runs shown alongside the discussion come from the automation backend's
+  `/apps/{app}/risks/{risk}/history` endpoint and are merged with the stored
+  entries by `src/lib/conversation-timeline.ts` at render time. The automation
+  host stays their only source of truth, so nothing has to be kept in step.
+- **Classification is one server-side operation.** `classify_risk()` writes the
+  finding's status, its `finding_history` row, the `classification_changed`
+  entry and the activity-log row in a single statement, and refuses a caller
+  without `has_role('security')`, an empty reason, or a finding belonging to a
+  different application risk than the conversation it was called from. Driving
+  those writes from the browser left a window in which the finding could change
+  without the conversation ever recording who changed it or why.
+- **A ticket records the conversation it was opened against, once.**
+  `tickets.risk_conversation_id` is immutable for everyone once set — the
+  trigger refuses to repoint it even for security.
+- **A retest belongs to the conversation, and optionally to a ticket.**
+  `retest_runs.conversation_id` was added and `ticket_id` made nullable, with
+  `check (conversation_id is not null or ticket_id is not null)`. Security can
+  run a retest with no remediation behind it; a ticket-originated request keeps
+  its ticket so the linked remediation still transitions.
+- **One reassessment is in flight per risk.** A partial unique index on
+  `retest_runs (conversation_id) where status in ('queued', 'running')` makes
+  that the database's rule rather than the UI's, so two people cannot queue the
+  same reassessment twice.
+- **Opening a conversation is not a way around the remediation workflow.**
+  `enforce_retest_request_permissions` requires a caller without
+  `has_role('security')` to name a remediation ticket in `fix_submitted` or
+  `rejected`, and refuses anyone a ticket raised against a different risk. A
+  developer with no eligible ticket can still post a message and ask a question;
+  they cannot create a retest run.
+- **Legacy message tables are archived, not dropped.** `assessment_messages`,
+  `ticket_messages` and `ticket_attachments` keep their rows, but every policy
+  on them is dropped, so nothing in the dashboard can read or add to them.
+  Destructive removal waits for an agreed retention period and explicit
+  approval.
+- **Historical ticket messages moved where the mapping is exact.** A ticket
+  names an application and its finding names a risk, and together those are the
+  conversation, so `place_unlinked_ticket_conversations()` links any remediation
+  ticket that has no conversation and migrates its archived messages and their
+  attachments. `ticket_messages.migrated_entry_id` and
+  `ticket_attachments.migrated_attachment_id` make that idempotent and leave an
+  unmigrated record visibly unmigrated. A ticket whose finding names no risk is
+  still left unlinked rather than guessed at, and assessment-wide messages name
+  no risk, so none were ever moved.
+- **The merge is what `0021` ran, and what the tests run.**
+  `merge_duplicate_risk_conversations()` folds every conversation sharing an
+  `(application_id, risk_id)` into the oldest of the set — `created_at` then
+  `id`, so the choice is deterministic — moving entries, retests and ticket
+  links first and refusing to delete anything that still holds a reference.
+  Both it and `place_unlinked_ticket_conversations()` are kept in the schema
+  rather than inlined in the migration, so the RLS suite exercises the
+  migration's own logic instead of a copy that can drift from it.
+
+`supabase/tests/0020_risk_conversations_rls.sql` covers the model and its
+policies; `supabase/tests/0021_application_risk_conversations_rls.sql` covers
+the identity, the merge and the historical placement. Both run against a live
+database, own fixtures and all, ending in `rollback`.
+
+## Assessment execution
+
+An assessment is a record; getting it run is a separate, durable request.
+`assessment_run_requests` holds one row per attempt to execute an assessment,
+and the backend worker in `mobile_playbook/assessment_worker.py` drains it.
+
+- **Configuration readiness and execution readiness are different questions.**
+  An app can be fully configured while its device is unplugged, so the
+  automation host reports `configuration_ready`, `device_required`,
+  `device_ready`, `platform_available` and `runnable` separately, with a
+  `blocker_code` and a `retryable` flag. The dashboard branches on those rather
+  than reading a message.
+- **Execution does not depend on a page being open.** Creating an assessment
+  creates a request; the worker starts the run. Refreshing, leaving, or opening
+  the assessment in three tabs changes nothing.
+- **One active request per assessment**, enforced by a partial unique index over
+  `status in ('queued', 'waiting', 'claimed', 'running')`. `request_assessment_run()`
+  returns the request already in flight instead of opening a second one, so a
+  repeated retry is a no-op rather than a duplicate run.
+- **The queue is written only through functions.** There is a select policy and
+  no insert, update or delete policy, so neither a developer nor security can
+  edit the queue by hand and bypass the state machine.
+  `request_assessment_run()` refuses a caller without `has_role('security')`, an
+  assessment outside their access, and one that has already completed.
+- **Claims are atomic and leased.** `claim_assessment_run_request()` uses
+  `for update skip locked`, so two workers polling at the same instant take
+  different rows rather than the same one. A claim carries
+  `lease_expires_at`; `recover_expired_assessment_run_leases()` returns an
+  abandoned request to the queue with `blocker_code = 'lease_expired'`, which is
+  how a worker that was killed mid-claim is recovered.
+- **A blocked attempt waits rather than failing.** `status = 'waiting'` with a
+  `blocker_code` and a `next_attempt_at` set by bounded exponential backoff
+  (30s doubling to a 900s ceiling, 20 attempts). The assessment stays visible
+  and retryable; no second assessment is created.
+- **The request's job ends when the run starts.** It is marked `completed` once
+  the automation host accepts the run, so its lease cannot expire mid-test and
+  cause a duplicate. The sync worker then moves the assessment to `completed` or
+  `failed`.
+- **Assessment transitions are enforced.** `enforce_assessment_status_transition`
+  permits `queued → waiting → running → completed`, a retryable `failed → queued`,
+  and a fresh `completed → queued` cycle, but refuses `completed → running`, so
+  stale frontend state cannot restart a finished assessment.
+- **Only the platform lock decides who touches the device.** The database claim
+  says which worker owns a *request*; the automation host's own per-platform
+  lock still decides whether a run may start, and answers `409` when it may not.
+  That is treated as a retryable blocker.
+
+`supabase/tests/0023_assessment_run_requests_rls.sql` exercises all of this
+against a live database, own fixtures and all, ending in `rollback`.
 
 ## Developer remediation progress
 
@@ -142,8 +298,9 @@ A developer who decides not to continue needs a way out that is not `closed`.
 - **Withdrawal details are written once.** After the withdrawing update they
   cannot be edited, so the record of why work stopped survives a later resume.
 - **Resuming is the only way back, and only to `in_progress`.** A withdrawn
-  ticket keeps its conversation, evidence, control progress, activity, creator,
-  application and finding; resuming changes the status and nothing else.
+  ticket keeps its risk conversation, evidence, control progress, activity,
+  creator, application and finding; resuming changes the status and nothing
+  else.
 - **Security keeps closure over everything.** Security can still read, work on
   and close a withdrawn ticket, and a developer can never reopen a ticket
   security has closed or accepted.
@@ -184,8 +341,11 @@ URLs (`src/data/services.ts`), never public URLs. The storage RLS policies
 in `0003_storage.sql` parse access from the object path, so upload code and
 policy must agree on these conventions:
 
-- `ticket-attachments/<ticket_id>/<filename>` — `can_access_ticket_object`
-  reads the first path segment directly as the ticket's UUID.
+- `ticket-attachments/conversation-<conversation_id>/<filename>` —
+  `can_access_attachment_object` (`0020`) reads the `conversation-` prefix and
+  checks the risk conversation. A bare `<ticket_id>/<filename>` first segment is
+  also accepted, because a ticket attachment migrated into a conversation entry
+  keeps the object path it was uploaded to.
 - `evidence/finding-<finding_id>/<filename>` or
   `evidence/ticket-<ticket_id>/<filename>` — `can_access_evidence_object`
   reads the `finding-`/`ticket-` prefix to decide which table to check

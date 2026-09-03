@@ -14,15 +14,16 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  useClassifyRisk,
   useCreateRiskAcceptanceTicket,
   useFindingTickets,
-  useRequestRetest,
+  useRequestReassessment,
   useResumeTicket,
   useReviewRiskAcceptance,
   useRiskControls,
   useActiveRun,
   useRunEvents,
-  useSendMessage,
+  useSendRiskMessage,
   useStartRemediation,
   useSubmitFix,
   useUpdateTicketStatus,
@@ -37,19 +38,33 @@ import {
   canResumeTicket,
   canSubmitFix,
   canWithdrawTicket,
-  reconciliationPlan,
+  reassessmentBlockedReason,
+  effectiveSelectedControlId,
+  selectableControls,
+  selectedControl,
+  selectedControlReconciliationPlan,
   resumableRemediationTicket,
 } from "@/lib/resolve";
 import { errorMessage, formatDate } from "@/lib/utils";
-import type { Finding, Ticket, Application } from "@/data/types";
+import type {
+  Application,
+  Finding,
+  FindingStatus,
+  RetestRun,
+  RiskConversation,
+  Ticket,
+} from "@/data/types";
 import type { Capability } from "@/auth/permissions";
 
 export function WorkOnRiskButton({
   finding,
   application,
+  preferredControlId,
 }: {
   finding: Finding;
   application: Application | null | undefined;
+  /** Set when remediation starts from a control preview, so that control is the initial approach. */
+  preferredControlId?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [notes, setNotes] = useState("");
@@ -69,6 +84,11 @@ export function WorkOnRiskButton({
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    const candidates = selectableControls(definitions.data);
+    const initial = selectedControl(
+      candidates,
+      effectiveSelectedControlId(preferredControlId, candidates),
+    );
     const ticket = await start.mutateAsync({
       ticket: {
         finding_id: finding.id,
@@ -78,8 +98,16 @@ export function WorkOnRiskButton({
           .filter(Boolean)
           .join("\n\n"),
         target_version: targetVersion || undefined,
+        selected_control_id: initial?.control_id ?? null,
       },
-      plan: reconciliationPlan(definitions.data ?? []),
+      plan: selectedControlReconciliationPlan(initial),
+      risk: finding.test_id
+        ? {
+            applicationId: finding.application_id,
+            riskId: finding.test_id,
+            originAssessmentId: finding.assessment_id,
+          }
+        : null,
     });
     setOpen(false);
     navigate(ticketPath(ticket.id));
@@ -370,15 +398,21 @@ export function WithdrawalNotice({
   );
 }
 
-function RequestChangesDialog({ ticketId }: { ticketId: string }) {
+function RequestChangesDialog({
+  ticketId,
+  conversationId,
+}: {
+  ticketId: string;
+  conversationId: string | null;
+}) {
   const [open, setOpen] = useState(false);
   const [comment, setComment] = useState("");
   const updateStatus = useUpdateTicketStatus(ticketId);
-  const sendMessage = useSendMessage(ticketId);
+  const sendMessage = useSendRiskMessage(conversationId ?? undefined);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    await sendMessage.mutateAsync(comment);
+    if (conversationId) await sendMessage.mutateAsync({ message: comment });
     await updateStatus.mutateAsync("rejected");
     setOpen(false);
     setComment("");
@@ -395,8 +429,8 @@ function RequestChangesDialog({ ticketId }: { ticketId: string }) {
         <DialogHeader>
           <DialogTitle>Request changes from the developer</DialogTitle>
           <DialogDescription>
-            This sends the ticket back for more work. It does not change the finding&apos;s
-            technical status.
+            This sends the ticket back for more work and posts your comment in the risk
+            conversation. It does not change the risk classification.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="space-y-3">
@@ -525,13 +559,14 @@ function ReviewRiskAcceptanceDialog({
   );
 }
 
+/** A conversation-owned retest has no ticket to move, so the ticket is optional. */
 function RunRetestButton({
   ticket,
   finding,
   application,
   retestId,
 }: {
-  ticket: Ticket;
+  ticket: Ticket | null | undefined;
   finding: Finding;
   application: Application | null | undefined;
   retestId: string;
@@ -542,7 +577,7 @@ function RunRetestButton({
   const [startedRunId, setStartedRunId] = useState<string | undefined>();
   const [runError, setRunError] = useState<string | null>(null);
   const [stoppedWatchingRunId, setStoppedWatchingRunId] = useState<string | undefined>();
-  const updateStatus = useUpdateTicketStatus(ticket.id);
+  const updateStatus = useUpdateTicketStatus(ticket?.id ?? "");
   const cancelRef = useRef<RunCancelToken>({ cancelled: false });
 
   const appExternalId = application?.external_id ?? undefined;
@@ -571,7 +606,7 @@ function RunRetestButton({
     cancelRef.current = { cancelled: false };
     let errored = false;
     try {
-      await updateStatus.mutateAsync("retest_in_progress");
+      if (ticket) await updateStatus.mutateAsync("retest_in_progress");
 
       const { run: runRecord, outcome } = await syncService.runAndWait(
         {
@@ -593,14 +628,15 @@ function RunRetestButton({
       // The automation host writes the terminal retest state when it syncs the run.
       if (outcome === "failed") {
         setRunError(
-          runRecord.error ?? "The run failed. This ticket updates once the automation host records it.",
+          runRecord.error ??
+            "The run failed. The result appears here once the automation host records it.",
         );
         errored = true;
       } else if (outcome !== "completed") {
         setRunError(
           outcome === "cancelledWaiting"
-            ? "Stopped watching this retest. It is still running on the automation host, which will complete it and move this ticket."
-            : "Stopped waiting after the polling window. The run is still going on the automation host, which will complete it and move this ticket.",
+            ? "Stopped watching this retest. It is still running on the automation host, which records the result on its own."
+            : "Stopped waiting after the polling window. The run is still going on the automation host, which records the result on its own.",
         );
         errored = true;
       }
@@ -608,7 +644,7 @@ function RunRetestButton({
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["finding", finding.id] }),
         queryClient.invalidateQueries({ queryKey: ["findingRetests", finding.id] }),
-        queryClient.invalidateQueries({ queryKey: ["ticketRetests", ticket.id] }),
+        queryClient.invalidateQueries({ queryKey: ["riskConversationEntries"] }),
       ]);
     } catch (err) {
       setRunError(errorMessage(err, "Unable to run retest."));
@@ -683,29 +719,230 @@ function RunRetestButton({
   );
 }
 
-export function TicketActions({
-  ticket,
+export function RequestReassessmentButton({
+  conversationId,
+  findingId,
+  ticketId,
+}: {
+  conversationId: string;
+  findingId: string;
+  ticketId: string | null;
+}) {
+  const request = useRequestReassessment(conversationId);
+  return (
+    <div>
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={request.isPending}
+        onClick={() => void request.mutateAsync({ findingId, ticketId })}
+      >
+        {request.isPending ? "Requesting…" : "Request reassessment"}
+      </Button>
+      {request.isError && (
+        <p className="mt-1 text-xs text-danger">
+          {errorMessage(request.error, "Could not request the reassessment.")}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function ClassifyRiskDialog({
+  finding,
+  conversationId,
+}: {
+  finding: Finding;
+  conversationId: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [status, setStatus] = useState<FindingStatus>(finding.status);
+  const [reason, setReason] = useState("");
+  const classify = useClassifyRisk(finding.id, conversationId);
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    await classify.mutateAsync({ status, reason });
+    setOpen(false);
+    setReason("");
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm">Change classification</Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Change the risk classification</DialogTitle>
+          <DialogDescription>
+            This records the decision in the finding history and posts it in this conversation. A
+            later automated result supersedes it.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={onSubmit} className="space-y-3">
+          <div>
+            <label
+              htmlFor="risk-classification"
+              className="mb-1 block text-xs font-medium text-muted-foreground"
+            >
+              Classification
+            </label>
+            <select
+              id="risk-classification"
+              className="h-9 w-full rounded-md border border-border bg-card px-2 text-sm"
+              value={status}
+              onChange={(e) => setStatus(e.target.value as FindingStatus)}
+            >
+              <option value="at_risk">At Risk</option>
+              <option value="reduced_risk">Reduced Risk</option>
+              <option value="inconclusive">Inconclusive</option>
+            </select>
+          </div>
+          <div>
+            <label
+              htmlFor="risk-classification-reason"
+              className="mb-1 block text-xs font-medium text-muted-foreground"
+            >
+              Reason *
+            </label>
+            <Textarea
+              id="risk-classification-reason"
+              rows={3}
+              required
+              placeholder="Why is this the right classification?"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+            />
+          </div>
+          {classify.isError && (
+            <p className="text-xs text-danger">
+              {errorMessage(classify.error, "Could not update the classification.")}
+            </p>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={
+                classify.isPending || !reason.trim() || status === finding.status
+              }
+            >
+              {classify.isPending ? "Updating…" : "Update classification"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** A control that stays visible when it cannot be used, and says why. */
+function UnavailableAction({ label, note }: { label: string; note: string }) {
+  return (
+    <div>
+      <Button size="sm" variant="outline" disabled className="cursor-not-allowed">
+        {label}
+      </Button>
+      <p className="mt-1 max-w-xs text-xs text-muted-foreground">{note}</p>
+    </div>
+  );
+}
+
+/**
+ * Everything that acts on the risk, beside its conversation. Retests are found
+ * by finding rather than by conversation, so a reassessment requested before
+ * the conversation model existed is still runnable here.
+ */
+export function RiskConversationActions({
+  conversation,
   finding,
   application,
+  ticket,
+  retests,
   can,
-  riskAcceptanceId,
-  pendingRetestId,
 }: {
-  ticket: Ticket;
+  conversation: RiskConversation | null | undefined;
   finding: Finding | null | undefined;
   application: Application | null | undefined;
+  ticket: Ticket | null | undefined;
+  retests: RetestRun[] | undefined;
+  can: (capability: Capability) => boolean;
+}) {
+  const pending = (retests ?? []).find(
+    (retest) => retest.status === "queued" || retest.status === "running",
+  );
+  const mayClassify = can("update_finding");
+  const mayRequest = can("request_retest");
+  const mayRun = can("run_test");
+  if (!mayClassify && !mayRequest && !mayRun) return null;
+
+  const blocked = reassessmentBlockedReason(ticket);
+
+  return (
+    <div className="flex flex-wrap items-start gap-3">
+      {mayClassify &&
+        (!conversation ? (
+          <UnavailableAction
+            label="Change classification"
+            note="This conversation has not loaded, so there is nowhere to record the decision yet."
+          />
+        ) : !finding ? (
+          <UnavailableAction
+            label="Change classification"
+            note="No result has been published for this risk yet, so there is no classification to change. Run the test to produce one."
+          />
+        ) : (
+          <ClassifyRiskDialog finding={finding} conversationId={conversation.id} />
+        ))}
+
+      {mayRequest &&
+        (pending ? (
+          <UnavailableAction
+            label="Request reassessment"
+            note="A reassessment has been requested. Security runs it from this conversation."
+          />
+        ) : !conversation || !finding ? (
+          <UnavailableAction
+            label="Request reassessment"
+            note="No result has been published for this risk yet, so there is nothing to reassess."
+          />
+        ) : blocked ? (
+          <UnavailableAction label="Request reassessment" note={blocked} />
+        ) : (
+          <RequestReassessmentButton
+            conversationId={conversation.id}
+            findingId={finding.id}
+            ticketId={ticket?.id ?? null}
+          />
+        ))}
+
+      {mayRun && pending && finding && application && (
+        <RunRetestButton
+          key={pending.id}
+          ticket={ticket}
+          finding={finding}
+          application={application}
+          retestId={pending.id}
+        />
+      )}
+    </div>
+  );
+}
+
+export function TicketActions({
+  ticket,
+  can,
+  riskAcceptanceId,
+}: {
+  ticket: Ticket;
   can: (capability: Capability) => boolean;
   riskAcceptanceId?: string;
-  pendingRetestId?: string;
 }) {
   const updateStatus = useUpdateTicketStatus(ticket.id);
-  const requestRetest = useRequestRetest(ticket.id, finding?.id ?? "");
-
   const isDeveloperFlow = ticket.type === "remediation";
-  const canRequestRetest =
-    isDeveloperFlow &&
-    can("request_retest") &&
-    ["fix_submitted", "open", "in_progress"].includes(ticket.status);
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -721,17 +958,6 @@ export function TicketActions({
         <ResumeRemediationButton ticket={ticket} />
       )}
 
-      {canRequestRetest && (
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={requestRetest.isPending}
-          onClick={() => void requestRetest.mutateAsync()}
-        >
-          Request Retest
-        </Button>
-      )}
-
       {ticket.type === "risk_acceptance" &&
         ticket.status === "under_review" &&
         can("review_risk_acceptance") &&
@@ -742,20 +968,9 @@ export function TicketActions({
       {isDeveloperFlow &&
         can("request_changes") &&
         ["fix_submitted", "retest_requested", "under_review"].includes(ticket.status) && (
-          <RequestChangesDialog ticketId={ticket.id} />
-        )}
-
-      {ticket.status === "retest_requested" &&
-        can("run_test") &&
-        finding &&
-        application &&
-        pendingRetestId && (
-          <RunRetestButton
-            key={pendingRetestId}
-            ticket={ticket}
-            finding={finding}
-            application={application}
-            retestId={pendingRetestId}
+          <RequestChangesDialog
+            ticketId={ticket.id}
+            conversationId={ticket.risk_conversation_id}
           />
         )}
 

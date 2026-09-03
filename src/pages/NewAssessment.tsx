@@ -8,9 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input, Select } from "@/components/ui/input";
 import { AssessmentStatusBadge, PlatformBadge } from "@/components/data-display";
+import { ApplicationIcon } from "@/components/application-icon";
 import { useAssessments } from "@/hooks/queries";
 import { syncService } from "@/data/sync";
-import { appTypeIcon } from "@/lib/entity-icons";
+import { assessmentRunRequestData } from "@/data/services";
 import { latestAssessmentPerApp } from "@/lib/assessments";
 import { errorMessage, formatDate, cn } from "@/lib/utils";
 import type { Platform } from "@/data/types";
@@ -30,23 +31,29 @@ const CONNECTORS = [
     icon: ShieldCheck,
     name: "custom-appsec",
     description: "AppSec's own automation backend — runs the configured automated security tests against this app.",
-    connected: true,
+    available: true,
   },
   {
     id: "mobsf",
     icon: Boxes,
     name: "mobsf",
     description: "Mobile Security Framework (MobSF) static analysis.",
-    connected: false,
+    available: false,
   },
   {
     id: "owasp-zap",
     icon: Terminal,
     name: "owasp-zap",
     description: "OWASP ZAP dynamic analysis tool.",
-    connected: false,
+    available: false,
   },
 ];
+
+function ConnectorStatusBadge({ available }: { available: boolean }) {
+  return (
+    <Badge tone={available ? "success" : "neutral"}>{available ? "Available" : "Unavailable"}</Badge>
+  );
+}
 
 export default function NewAssessment() {
   const queryClient = useQueryClient();
@@ -104,7 +111,7 @@ export default function NewAssessment() {
     setSaving(true);
     setError(null);
     try {
-      const { assessment, ticket } = await syncService.addApp({
+      const { assessment } = await syncService.addApp({
         name: name.trim(),
         platform,
         version: version.trim(),
@@ -113,16 +120,23 @@ export default function NewAssessment() {
         contactEmails: emails.map((e) => e.trim()).filter(Boolean),
       });
 
+      // The run is requested durably rather than started here, so leaving this
+      // page cannot lose it.
+      try {
+        await assessmentRunRequestData.request(assessment.id);
+      } catch (err) {
+        console.warn("The assessment was created but could not be queued for testing.", err);
+      }
+
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["assessments"] }),
+        queryClient.invalidateQueries({ queryKey: ["assessmentRunRequest"] }),
         queryClient.invalidateQueries({ queryKey: ["applications"] }),
         queryClient.invalidateQueries({ queryKey: ["ticketsWithRelations"] }),
         queryClient.invalidateQueries({ queryKey: ["dashboardMetrics"] }),
       ]);
 
-      navigate(`/assessments/${assessment.id}`, {
-        state: ticket ? { provisioningTicket: { id: ticket.id, title: ticket.title } } : {},
-      });
+      navigate("/");
     } catch (err) {
       setError(errorMessage(err, "Unable to add app."));
     } finally {
@@ -143,38 +157,25 @@ export default function NewAssessment() {
 
   return (
     <Card className="overflow-hidden">
-      <div className="grid grid-cols-1 lg:grid-cols-12">
-        <div className="border-b border-border/70 p-5 lg:col-span-5 lg:border-b-0 lg:border-r">
+      <div className="grid grid-cols-1 lg:grid-cols-[18rem_minmax(0,1fr)] xl:grid-cols-[20rem_minmax(0,1fr)]">
+        <aside
+          aria-label="Assessments"
+          className="min-w-0 border-b border-border/70 p-5 lg:border-b-0 lg:border-r"
+        >
           <AssessmentsMiniList />
-        </div>
+        </aside>
 
-        <div className="p-6 lg:col-span-7">
+        <div className="min-w-0 p-6">
           <div className="mb-6 flex items-start justify-between gap-3">
             <div>
-              {screen === "review" ? (
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setScreen("form")}
-                    className="text-muted-foreground hover:text-foreground"
-                  >
-                    <ChevronLeft className="h-5 w-5" />
-                  </button>
-                  <div>
-                    <h1 className="text-xl font-bold text-foreground">Review &amp; Confirm</h1>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Review all details before creating this security assessment.
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <h1 className="text-xl font-bold text-foreground">New Assessment</h1>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Provide the details below to start a new security assessment.
-                  </p>
-                </div>
-              )}
+              <h1 className="text-xl font-bold text-foreground">
+                {screen === "review" ? "Review & Confirm" : "New Assessment"}
+              </h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {screen === "review"
+                  ? "Review all details before creating this security assessment."
+                  : "Provide the details below to start a new security assessment."}
+              </p>
             </div>
             <Link to="/assessments" className="text-muted-foreground hover:text-foreground">
               <X className="h-5 w-5" />
@@ -322,13 +323,13 @@ export default function NewAssessment() {
                         <button
                           key={c.id}
                           type="button"
-                          disabled={!c.connected}
+                          disabled={!c.available}
                           onClick={() => setConnector(c.id)}
                           className={cn(
                             "flex w-full items-start gap-3 rounded-lg border p-3 text-left",
                             selected
                               ? "border-primary bg-primary/5"
-                              : c.connected
+                              : c.available
                                 ? "border-border hover:border-primary/40"
                                 : "cursor-not-allowed border-border opacity-60",
                           )}
@@ -345,9 +346,7 @@ export default function NewAssessment() {
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2">
                               <span className="text-sm font-semibold text-foreground">{c.name}</span>
-                              <Badge tone={c.connected ? "success" : "neutral"}>
-                                {c.connected ? "Connected" : "Not connected"}
-                              </Badge>
+                              <ConnectorStatusBadge available={c.available} />
                             </div>
                             <p className="mt-0.5 text-xs text-muted-foreground">{c.description}</p>
                           </div>
@@ -408,7 +407,7 @@ export default function NewAssessment() {
                     <div className="flex items-center gap-2">
                       <selectedConnector.icon className="h-4 w-4 text-primary" />
                       <span className="text-sm font-medium text-foreground">{selectedConnector.name}</span>
-                      <Badge tone="success">Connected</Badge>
+                      <ConnectorStatusBadge available={selectedConnector.available} />
                     </div>
                   ) : (
                     <p className="text-sm text-danger">No connector selected.</p>
@@ -474,36 +473,39 @@ function AssessmentsMiniList() {
         <p className="py-6 text-center text-sm text-muted-foreground">No assessments yet.</p>
       )}
       {!isLoading && assessments.length > 0 && (
-        <ul className="max-h-[36rem] divide-y divide-border overflow-y-auto">
+        <ul className="max-h-[min(28rem,60vh)] divide-y divide-border overflow-y-auto overflow-x-hidden pr-3 [scrollbar-gutter:stable] lg:max-h-[calc(100vh-18rem)]">
           {assessments.map((a) => {
-            const Icon = appTypeIcon(a.application?.app_type);
             const pct =
               a.total_tests > 0 ? Math.min(100, Math.round((a.completed_tests / a.total_tests) * 100)) : 0;
             return (
               <li key={a.id}>
                 <Link
                   to={`/assessments/${a.id}`}
-                  className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-3 hover:bg-muted/50"
+                  className="flex items-center gap-3 rounded-lg px-2 py-3 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                 >
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-muted/40">
-                    <Icon className="h-4 w-4 text-foreground" />
-                  </div>
+                  <ApplicationIcon application={a.application} />
                   <div className="min-w-0 flex-1">
                     <div className="mb-1 flex items-center justify-between gap-2">
                       <span className="min-w-0 truncate text-sm font-medium text-foreground">
                         {a.application?.name ?? "—"}
                       </span>
-                      {a.application && <PlatformBadge platform={a.application.platform} />}
+                      {a.application && (
+                        <span className="shrink-0">
+                          <PlatformBadge platform={a.application.platform} />
+                        </span>
+                      )}
                     </div>
-                    <p className="mb-1 text-xs text-muted-foreground">
+                    <p className="mb-1 truncate text-xs text-muted-foreground">
                       {a.completed_tests} of {a.total_tests}
                     </p>
                     <div className="mb-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted">
                       <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} />
                     </div>
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
                       <AssessmentStatusBadge status={a.status} />
-                      <span className="text-xs text-muted-foreground">{formatDate(a.created_at)}</span>
+                      <span className="truncate text-xs text-muted-foreground">
+                        {formatDate(a.created_at)}
+                      </span>
                     </div>
                   </div>
                 </Link>

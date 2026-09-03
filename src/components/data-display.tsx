@@ -79,6 +79,7 @@ export function DataTable<T extends { id: string }>({
   columns,
   rows,
   onRowClick,
+  rowLabel,
   expandedRowId,
   onToggleExpand,
   renderExpanded,
@@ -86,10 +87,11 @@ export function DataTable<T extends { id: string }>({
   columns: DataTableColumn<T>[];
   rows: T[];
   onRowClick?: (row: T) => void;
+  rowLabel?: (row: T) => string;
   /** Id of the row currently expanded, if any — pairs with `renderExpanded`. */
   expandedRowId?: string | null;
   onToggleExpand?: (row: T) => void;
-  /** Returning null/undefined for a row means it isn't expandable — falls back to `onRowClick`. */
+  /** An expandable row still navigates on click; the chevron is its own control. */
   renderExpanded?: (row: T) => ReactNode;
 }) {
   return (
@@ -115,13 +117,19 @@ export function DataTable<T extends { id: string }>({
             return (
               <Fragment key={row.id}>
                 <tr
-                  onClick={() => {
-                    if (expandedContent) onToggleExpand?.(row);
-                    else onRowClick?.(row);
+                  onClick={() => onRowClick?.(row)}
+                  onKeyDown={(event) => {
+                    if (!onRowClick) return;
+                    if (event.key !== "Enter" && event.key !== " ") return;
+                    event.preventDefault();
+                    onRowClick(row);
                   }}
+                  tabIndex={onRowClick ? 0 : undefined}
+                  role={onRowClick ? "link" : undefined}
+                  aria-label={onRowClick ? rowLabel?.(row) : undefined}
                   className={cn(
-                    "transition-colors hover:bg-muted/60",
-                    (onRowClick || expandedContent) && "cursor-pointer",
+                    "transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+                    onRowClick && "cursor-pointer",
                   )}
                 >
                   {columns.map((col) => (
@@ -132,7 +140,20 @@ export function DataTable<T extends { id: string }>({
                   {(onRowClick || renderExpanded) && (
                     <td className="px-2 align-middle text-muted-foreground">
                       {expandedContent ? (
-                        <ChevronDown className={cn("h-4 w-4 transition-transform", isExpanded && "rotate-180")} />
+                        <button
+                          type="button"
+                          aria-expanded={isExpanded}
+                          aria-label={isExpanded ? "Hide details" : "Show details"}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onToggleExpand?.(row);
+                          }}
+                          className="rounded p-1 hover:bg-muted hover:text-foreground"
+                        >
+                          <ChevronDown
+                            className={cn("h-4 w-4 transition-transform", isExpanded && "rotate-180")}
+                          />
+                        </button>
                       ) : onRowClick ? (
                         <ChevronRight className="h-4 w-4" />
                       ) : null}

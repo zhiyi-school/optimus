@@ -115,17 +115,29 @@ insert into tickets (id, finding_id, application_id, type, status, title, create
 update tickets set status = 'closed', closed_at = now()
   where id = 'c0000000-0000-0000-0000-000000000003';
 
-insert into ticket_controls (id, ticket_id, control_id, required)
+insert into ticket_controls (id, ticket_id, control_id)
 values ('d0000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001',
-        'example-feature-01-risk-01-control-01', true);
+        'example-feature-01-risk-01-control-01');
 
 insert into ticket_control_steps (id, ticket_control_id, step_key, status)
 values ('e0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000001',
         'rotate-example-key', 'completed');
 
-insert into ticket_messages (id, ticket_id, author_id, message)
-values ('11100000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001',
-        '11111111-1111-1111-1111-111111111111', 'Example developer message.');
+insert into assessments (id, external_id, application_id, status)
+values ('b0000000-0000-0000-0000-00000000000a', 'example-run-1::example_app_a',
+        'a0000000-0000-0000-0000-00000000000a', 'completed');
+
+insert into risk_conversations
+  (id, application_id, risk_id, origin_assessment_id, finding_id)
+values ('c1000000-0000-0000-0000-00000000000a', 'a0000000-0000-0000-0000-00000000000a',
+        'example-feature-01-risk-01', 'b0000000-0000-0000-0000-00000000000a',
+        'f0000000-0000-0000-0000-00000000000a');
+
+update tickets set risk_conversation_id = 'c1000000-0000-0000-0000-00000000000a';
+
+insert into risk_conversation_entries (id, conversation_id, kind, author_id, message)
+values ('11100000-0000-0000-0000-000000000001', 'c1000000-0000-0000-0000-00000000000a',
+        'message', '11111111-1111-1111-1111-111111111111', 'Example developer message.');
 
 -- ---------------------------------------------------------------------------
 -- Developer A: a withdrawal must be complete and honest
@@ -245,9 +257,9 @@ select pg_temp.assert(
      where ticket_id = 'c0000000-0000-0000-0000-000000000001') = 1
   and (select status from ticket_control_steps
          where id = 'e0000000-0000-0000-0000-000000000001') = 'completed'
-  and (select count(*) from ticket_messages
-         where ticket_id = 'c0000000-0000-0000-0000-000000000001') = 1,
-  'control progress and conversation survive the withdrawal'
+  and (select count(*) from risk_conversation_entries
+         where conversation_id = 'c1000000-0000-0000-0000-00000000000a') = 1,
+  'control progress and the risk conversation survive the withdrawal'
 );
 
 select pg_temp.assert_refused(
