@@ -1,10 +1,9 @@
 import { useMemo } from "react";
-import { Link } from "react-router-dom";
-import { useAuth } from "@/auth/useAuth";
+import { useNavigate } from "react-router-dom";
+import { RefreshCw } from "lucide-react";
 import { PageHeader, LoadingState, ErrorState, EmptyState } from "@/components/common";
-import { Card, CardContent } from "@/components/ui/card";
+import { DataTable, type DataTableColumn } from "@/components/data-display";
 import { ApplicationIcon } from "@/components/application-icon";
-import { PlatformBadge } from "@/components/data-display";
 import { ProgressBar, ToneBadge } from "@/components/resolve-display";
 import {
   useApplications,
@@ -14,10 +13,23 @@ import {
   useTeams,
   useTickets,
 } from "@/hooks/queries";
-import { remediationStatusLabels, summarizeApplication } from "@/lib/resolve";
-import { formatDate } from "@/lib/utils";
+import { useAuth } from "@/auth/useAuth";
+import {
+  remediationStatusLabels,
+  summarizeApplication,
+  type ApplicationRemediation,
+} from "@/lib/resolve";
+import { compareByName, formatDate } from "@/lib/utils";
+import type { Application } from "@/data/types";
+
+interface Row {
+  id: string;
+  application: Application;
+  summary: ApplicationRemediation;
+}
 
 export default function Resolve() {
+  const navigate = useNavigate();
   const { profile } = useAuth();
   const { data: teams } = useTeams();
   const team = teams?.find((candidate) => candidate.id === profile?.team_id);
@@ -37,9 +49,10 @@ export default function Resolve() {
   );
   const liveKeys = useLiveControlKeys(risks);
 
-  const rows = useMemo(() => {
+  const rows = useMemo<Row[]>(() => {
     return (applications.data ?? [])
       .map((application) => ({
+        id: application.id,
         application,
         summary: summarizeApplication(
           application.id,
@@ -50,20 +63,69 @@ export default function Resolve() {
           liveKeys,
         ),
       }))
-      .sort((a, b) => b.summary.findingsRequiringAction - a.summary.findingsRequiringAction);
+      .sort((a, b) => compareByName(a.application.name, b.application.name, a.application.id, b.application.id));
   }, [applications.data, findings.data, tickets.data, controls.controls, controls.steps, liveKeys]);
 
-  const isLoading = applications.isLoading || findings.isLoading || tickets.isLoading;
+  const columns: DataTableColumn<Row>[] = useMemo(
+    () => [
+      {
+        key: "app",
+        header: "App",
+        render: (row) => (
+          <div className="flex items-center gap-3">
+            <ApplicationIcon application={row.application} />
+            <span className="font-medium text-foreground">{row.application.name}</span>
+          </div>
+        ),
+      },
+      { key: "version", header: "Version", render: (row) => row.application.version ?? "—" },
+      {
+        key: "progress",
+        header: "Progress",
+        render: (row) => (
+          <div className="w-40">
+            <ProgressBar label="Remediation steps" progress={row.summary.controls} />
+          </div>
+        ),
+      },
+      {
+        key: "status",
+        header: "Status",
+        render: (row) => {
+          const status = remediationStatusLabels[row.summary.status];
+          return <ToneBadge tone={status.tone} label={status.label} />;
+        },
+      },
+      {
+        key: "updated",
+        header: "Created At",
+        render: (row) => formatDate(row.summary.lastUpdatedAt),
+      },
+    ],
+    [],
+  );
+
+  // Only a first load with nothing cached replaces the table; a background
+  // refetch of any of these leaves the rows on screen.
+  const isLoading = rows.length === 0 && (applications.isLoading || findings.isLoading || tickets.isLoading);
+  const isFetching = applications.isFetching || findings.isFetching || tickets.isFetching;
   const isError = applications.isError || findings.isError || tickets.isError;
 
   return (
     <div>
       <PageHeader
         title="Resolve"
-        description={
-          team
-            ? `Remediation work for ${team.name}.`
-            : "Remediation work for the applications your team owns."
+        description="View and resolve findings from your application assessments."
+        actions={
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            {team?.name}
+            {isFetching && !isLoading && (
+              <RefreshCw
+                aria-label="Refreshing"
+                className="h-3 w-3 animate-spin text-muted-foreground/70 motion-reduce:animate-none"
+              />
+            )}
+          </span>
         }
       />
 
@@ -87,62 +149,35 @@ export default function Resolve() {
       )}
 
       {!isLoading && !isError && rows.length > 0 && (
-        <div className="space-y-3">
-          {rows.map(({ application, summary }) => {
-            const status = remediationStatusLabels[summary.status];
+        <DataTable
+          columns={columns}
+          rows={rows}
+          onRowClick={(row) => navigate(`/resolve/applications/${row.application.id}`)}
+          rowLabel={(row) => `Open remediation work for ${row.application.name}`}
+          renderCard={(row) => {
+            const status = remediationStatusLabels[row.summary.status];
             return (
-              <Link key={application.id} to={`/resolve/applications/${application.id}`}>
-                <Card className="transition-all hover:border-primary/40 hover:shadow-card-hover">
-                  <CardContent className="py-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="flex min-w-0 items-start gap-3">
-                        <ApplicationIcon application={application} />
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-foreground">
-                            {application.name}
-                          </p>
-                          <p className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
-                            <PlatformBadge platform={application.platform} />
-                            {application.version ? `Version ${application.version}` : "Version unknown"}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex flex-col items-end gap-1">
-                        <ToneBadge tone={status.tone} label={status.label} />
-                        <span className="text-xs text-muted-foreground">
-                          Updated {formatDate(summary.lastUpdatedAt)}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-                      <Metric label="Affected findings" value={summary.affectedFindings} />
-                      <Metric label="Findings needing action" value={summary.findingsRequiringAction} />
-                      <Metric label="Fixes submitted" value={summary.fixesSubmitted} />
-                      <Metric label="Awaiting security" value={summary.awaitingReassessment} />
-                      <Metric label="Resolved findings" value={summary.resolvedFindings} />
-                    </div>
-
-                    <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <ProgressBar label="Findings resolved" progress={summary.findings} />
-                      <ProgressBar label="Remediation steps completed" progress={summary.controls} />
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
+              <span className="flex items-center gap-3">
+                <ApplicationIcon application={row.application} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium text-foreground">
+                    {row.application.name}
+                  </span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    {row.application.version
+                      ? `Version ${row.application.version}`
+                      : "Version unknown"}{" "}
+                    · {row.summary.controls.completed} of {row.summary.controls.total} steps
+                  </span>
+                  <span className="mt-1 block">
+                    <ToneBadge tone={status.tone} label={status.label} />
+                  </span>
+                </span>
+              </span>
             );
-          })}
-        </div>
+          }}
+        />
       )}
-    </div>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: number }) {
-  return (
-    <div>
-      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="mt-0.5 text-lg font-semibold text-foreground">{value}</p>
     </div>
   );
 }

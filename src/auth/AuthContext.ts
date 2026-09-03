@@ -6,8 +6,13 @@ import type { Capability } from "@/auth/permissions";
 export interface AuthContextValue {
   session: Session | null;
   profile: Profile | null;
+  /** Blocking initialization only: no usable profile has been established yet. */
   loading: boolean;
+  /** A same-user profile refresh in flight; the current profile stays usable. */
+  profileRefreshing: boolean;
   error: string | null;
+  /** Set when a profile load failed; a background failure keeps the old profile. */
+  profileError: string | null;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (
     email: string,

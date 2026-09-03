@@ -8,27 +8,12 @@ import type { ControlReconciliation } from "@/data/services/controls";
 import type {
   ControlProgressStatus,
   Finding,
-  RiskConversation,
   Ticket,
   TicketControl,
   TicketControlStep,
   TicketStatus,
 } from "@/data/types";
 import type { Tone } from "@/lib/status";
-
-/**
- * The one place a risk conversation lives: a risk page of the application it
- * belongs to. Every assessment of that application reaches the same
- * conversation, so a caller passes the assessment it came from and the
- * conversation's own origin is the fallback.
- */
-export function riskConversationPath(
-  conversation: Pick<RiskConversation, "risk_id" | "origin_assessment_id">,
-  assessmentId?: string | null,
-): string | null {
-  const assessment = assessmentId ?? conversation.origin_assessment_id;
-  return assessment ? `/assessments/${assessment}/tests/${conversation.risk_id}` : null;
-}
 
 export const developerTicketLabels: Record<TicketStatus, { label: string; tone: Tone }> = {
   open: { label: "Action required", tone: "danger" },
@@ -439,6 +424,23 @@ export function resumableRemediationTicket(
     )
     .sort((a, b) => a.updated_at.localeCompare(b.updated_at))
     .at(-1);
+}
+
+/**
+ * The risk a developer should land on when they open an application: the first
+ * finding still needing action, else one they are already remediating, else the
+ * first finding at all. Returns null when there is nothing to open.
+ */
+export function preferredDeveloperRisk(
+  findings: Finding[] | undefined,
+  tickets: Ticket[] | undefined,
+): string | null {
+  const linked = (findings ?? []).filter((finding) => finding.test_id);
+  const needsAction = linked.find(
+    (finding) => finding.status === "at_risk" && !activeRemediationTicket(finding.id, tickets),
+  );
+  const inProgress = linked.find((finding) => activeRemediationTicket(finding.id, tickets));
+  return (needsAction ?? inProgress ?? linked[0])?.test_id ?? null;
 }
 
 /** Session memory only — no playbook state is stored to derive this. */

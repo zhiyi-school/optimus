@@ -25,12 +25,7 @@ import {
 } from "@/components/ticket-actions";
 import { EvidenceViewer } from "@/components/evidence";
 import { Timeline } from "@/components/timeline";
-import {
-  PlaybookUpdatedNotice,
-  ProgressBar,
-  RiskConversationLink,
-  ToneBadge,
-} from "@/components/resolve-display";
+import { PlaybookUpdatedNotice, ProgressBar, ToneBadge } from "@/components/resolve-display";
 import {
   useActivity,
   useFindingEvidenceItems,
@@ -39,7 +34,6 @@ import {
   useSelectRemediationControl,
   useProfiles,
   useRiskControls,
-  useRiskConversationById,
   useSubmitFix,
   useTicket,
   useTicketControlSteps,
@@ -61,19 +55,25 @@ import {
   selectedControlReconciliationPlan,
   selectionWasReplaced,
   submitFixBlockedReason,
-  riskConversationPath,
 } from "@/lib/resolve";
 import { cn, errorMessage, formatDate } from "@/lib/utils";
 import type { ControlDetail } from "@/api/playbook-types";
 
-export default function ResolveTicket() {
-  const { ticketId } = useParams<{ ticketId: string }>();
+/** `embedded` drops the page header and back-link: the risk workspace supplies both. */
+export default function ResolveTicket({
+  ticketId: ticketIdProp,
+  embedded = false,
+}: {
+  ticketId?: string;
+  embedded?: boolean;
+} = {}) {
+  const params = useParams<{ ticketId: string }>();
+  const ticketId = ticketIdProp ?? params.ticketId;
   const { can } = useAuth();
   const ticket = useTicket(ticketId);
   const finding = ticket.data?.finding;
   const application = ticket.data?.application;
 
-  const { data: conversation } = useRiskConversationById(ticket.data?.risk_conversation_id);
   const { data: profiles } = useProfiles();
   const activity = useActivity("ticket", ticketId);
   const controls = useTicketControls(ticketId);
@@ -153,7 +153,7 @@ export default function ResolveTicket() {
   return (
     <div>
       {playbook.updated && <PlaybookUpdatedNotice onDismiss={playbook.dismiss} />}
-      <PageHeader
+      {!embedded && <PageHeader
         title={finding?.title ?? ticket.data.title}
         description={
           application ? `${application.name}${application.version ? ` · ${application.version}` : ""}` : undefined
@@ -170,31 +170,33 @@ export default function ResolveTicket() {
             {label && <ToneBadge tone={label.tone} label={label.label} />}
           </div>
         }
-      />
+      />}
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
-          <Section title="What was found">
-            <p className="text-sm text-foreground">
-              {finding?.description || "Security recorded no description for this finding."}
-            </p>
-            {finding?.impact && (
-              <>
-                <p className="mt-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Why it matters
-                </p>
-                <p className="text-sm text-foreground">{finding.impact}</p>
-              </>
-            )}
-            {finding && (
-              <p className="mt-3 text-xs text-muted-foreground">
-                Current status: <StatusBadge status={finding.status} />{" "}
-                <Link to={`/findings/${finding.id}`} className="ml-2 text-primary hover:underline">
-                  Open the full finding
-                </Link>
+      <div className={cn("grid grid-cols-1 gap-4", !embedded && "lg:grid-cols-3")}>
+        <div className={cn("space-y-4", !embedded && "lg:col-span-2")}>
+          {!embedded && (
+            <Section title="What was found">
+              <p className="text-sm text-foreground">
+                {finding?.description || "Security recorded no description for this finding."}
               </p>
-            )}
-          </Section>
+              {finding?.impact && (
+                <>
+                  <p className="mt-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Why it matters
+                  </p>
+                  <p className="text-sm text-foreground">{finding.impact}</p>
+                </>
+              )}
+              {finding && (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Current status: <StatusBadge status={finding.status} />{" "}
+                  <Link to={`/findings/${finding.id}`} className="ml-2 text-primary hover:underline">
+                    Open the full finding
+                  </Link>
+                </p>
+              )}
+            </Section>
+          )}
 
           <Section
             title="Remediation approach"
@@ -252,23 +254,14 @@ export default function ResolveTicket() {
             )}
           </Section>
 
-          <Section title="Talking to security">
-            <RiskConversationLink
-              to={
-                conversation
-                  ? riskConversationPath(conversation, ticket.data?.origin_assessment_id)
-                  : null
-              }
-              unavailableNote="This remediation was opened before risks had their own conversation, so it is not linked to one. Open the full finding above to reach the risk it was raised for."
-            />
-          </Section>
-
-          <Section title="Activity">
-            <Timeline entries={activity.data ?? []} />
-          </Section>
+          {!embedded && (
+            <Section title="Activity">
+              <Timeline entries={activity.data ?? []} />
+            </Section>
+          )}
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-4">
           <Section title="Your actions">
             <WithdrawalNotice
               ticket={ticket.data}
@@ -323,21 +316,26 @@ export default function ResolveTicket() {
             <EvidenceViewer items={ticketEvidence.data ?? []} />
           </Section>
 
-          <Section title="Security evidence">
-            {findingEvidence.isLoading ? (
-              <LoadingState label="Loading evidence…" />
-            ) : (findingEvidence.data ?? []).length === 0 ? (
-              <EmptyState title="Security recorded no evidence for this finding." />
-            ) : (
-              <EvidenceViewer items={findingEvidence.data ?? []} />
-            )}
-          </Section>
+          {/* The risk workspace owns security's evidence; only the standalone page repeats it. */}
+          {!embedded && (
+            <>
+              <Section title="Security evidence">
+                {findingEvidence.isLoading ? (
+                  <LoadingState label="Loading evidence…" />
+                ) : (findingEvidence.data ?? []).length === 0 ? (
+                  <EmptyState title="Security recorded no evidence for this finding." />
+                ) : (
+                  <EvidenceViewer items={findingEvidence.data ?? []} />
+                )}
+              </Section>
 
-          <Section title="Details">
-            <Detail label="Target version" value={ticket.data.target_version} />
-            <Detail label="Opened" value={formatDate(ticket.data.created_at)} />
-            <Detail label="Updated" value={formatDate(ticket.data.updated_at)} />
-          </Section>
+              <Section title="Details">
+                <Detail label="Target version" value={ticket.data.target_version} />
+                <Detail label="Opened" value={formatDate(ticket.data.created_at)} />
+                <Detail label="Updated" value={formatDate(ticket.data.updated_at)} />
+              </Section>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -414,7 +412,7 @@ function ApproachPicker({
                   <div className="mt-2 flex flex-wrap items-center gap-3">
                     {findingId && (
                       <Link
-                        to={`/findings/${findingId}/controls/${control.control_id}`}
+                        to={`/resolve/findings/${findingId}/controls/${control.control_id}`}
                         className="text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                       >
                         Preview

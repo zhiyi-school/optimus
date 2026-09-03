@@ -348,7 +348,7 @@ describe("switching approach", () => {
     expect(text()).toContain("Approach two");
     expect(buttonNamed("Use this approach")).not.toBeUndefined();
     const preview = [...container.querySelectorAll("a")].map((a) => a.getAttribute("href"));
-    expect(preview).toContain(`/findings/example-finding-id/controls/${SECOND}`);
+    expect(preview).toContain(`/resolve/findings/example-finding-id/controls/${SECOND}`);
   });
 
   it("switches straight away when nothing has been recorded yet", () => {

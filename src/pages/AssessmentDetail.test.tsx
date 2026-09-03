@@ -1,46 +1,19 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { roleCan, type Capability } from "@/auth/permissions";
-import type { AssessmentRunRequest, AssessmentStatus, UserRole } from "@/data/types";
+import type { AssessmentStatus } from "@/data/types";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const ASSESSMENT = "example-assessment-id";
 const APPLICATION = "example-app-id";
 
-let roles: UserRole[] = ["security"];
 let assessmentStatus: AssessmentStatus = "queued";
-let runRequest: AssessmentRunRequest | null = null;
-let requestCalls: number;
-let requestPending: boolean;
-let requestError: unknown;
-let pollArgs: { status: AssessmentStatus | undefined } | null = null;
-
-function request(overrides: Partial<AssessmentRunRequest> = {}): AssessmentRunRequest {
-  return {
-    id: "request-1",
-    assessment_id: ASSESSMENT,
-    application_id: APPLICATION,
-    platform: "ios",
-    status: "queued",
-    attempts: 1,
-    next_attempt_at: "2026-01-01T00:05:00Z",
-    claimed_at: null,
-    lease_expires_at: null,
-    worker_id: null,
-    blocker_code: null,
-    last_error: null,
-    requested_by: null,
-    created_at: "2026-01-01T00:00:00Z",
-    updated_at: "2026-01-01T00:00:00Z",
-    started_at: null,
-    completed_at: null,
-    ...overrides,
-  };
-}
+let catalogue: { risk_id: string; name: string }[] = [];
+let catalogueLoading = false;
+let findings: { id: string; test_id: string; status: string }[] = [];
 
 const application = {
   id: APPLICATION,
@@ -55,13 +28,6 @@ vi.mock("@/data/supabase", () => ({
   ATTACHMENTS_BUCKET: "ticket-attachments",
   EVIDENCE_BUCKET: "evidence",
   supabase: { from: () => ({}), auth: {}, storage: { from: () => ({}) } },
-}));
-
-vi.mock("@/auth/useAuth", () => ({
-  useAuth: () => ({
-    profile: { id: "user-1", display_name: "Example Person", roles },
-    can: (capability: Capability) => roleCan(roles, capability),
-  }),
 }));
 
 vi.mock("@/hooks/queries", () => {
@@ -79,30 +45,8 @@ vi.mock("@/hooks/queries", () => {
         completed_tests: 0,
       },
     }),
-    useAssessmentRunRequest: (
-      _id: string | undefined,
-      assessment: { status: AssessmentStatus } | undefined,
-    ) => {
-      pollArgs = { status: assessment?.status };
-      return { ...idle, data: runRequest };
-    },
-    useRequestAssessmentRun: () => ({
-      mutate: () => {
-        requestCalls += 1;
-      },
-      mutateAsync: () => {
-        requestCalls += 1;
-        return Promise.resolve();
-      },
-      isPending: requestPending,
-      isError: !!requestError,
-      error: requestError,
-    }),
-    useRiskCatalogue: () => ({ ...idle, data: [] }),
-    useFindings: () => ({ ...idle, data: [] }),
-    useTickets: () => ({ ...idle, data: [] }),
-    useAppProvisioning: () => ({ ...idle, data: undefined }),
-    useUpdateApplication: () => ({ mutate: () => {}, isPending: false }),
+    useRiskCatalogue: () => ({ ...idle, isLoading: catalogueLoading, data: catalogue }),
+    useFindings: () => ({ ...idle, data: findings }),
   };
 });
 
@@ -112,13 +56,10 @@ let container: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
-  roles = ["security"];
   assessmentStatus = "queued";
-  runRequest = null;
-  requestCalls = 0;
-  requestPending = false;
-  requestError = undefined;
-  pollArgs = null;
+  catalogue = [];
+  catalogueLoading = false;
+  findings = [];
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -129,178 +70,109 @@ afterEach(() => {
   container.remove();
 });
 
+function LocationProbe() {
+  const location = useLocation();
+  return <span data-location={location.pathname + location.search} />;
+}
+
 function render() {
   act(() =>
     root.render(
       <MemoryRouter initialEntries={[`/assessments/${ASSESSMENT}`]}>
         <Routes>
+          <Route path="/assessments" element={<span data-assessments-page />} />
           <Route path="/assessments/:assessmentId" element={<AssessmentDetail />} />
+          <Route
+            path="/assessments/:assessmentId/tests/:testId"
+            element={<span data-risk-page />}
+          />
         </Routes>
+        <LocationProbe />
       </MemoryRouter>,
     ),
   );
+}
+
+function path() {
+  return container.querySelector("[data-location]")?.getAttribute("data-location");
 }
 
 function text() {
   return container.textContent ?? "";
 }
 
-function retryButton() {
-  return [...container.querySelectorAll("button")].find((b) =>
-    (b.textContent ?? "").includes("Retry"),
-  );
-}
+describe("an incomplete assessment", () => {
+  it("redirects to the main Assessments page rather than narrating setup here", () => {
+    for (const status of ["queued", "waiting", "running", "failed"] as const) {
+      assessmentStatus = status;
+      render();
 
-describe("what the page says an assessment is doing", () => {
-  it("says a queued assessment is queued", () => {
-    runRequest = request({ status: "queued" });
-    render();
-
-    expect(text()).toContain("Queued for automated testing");
+      expect(path(), status).toBe(`/assessments?expanded=${ASSESSMENT}`);
+      expect(container.querySelector("[data-assessments-page]"), status).not.toBeNull();
+      act(() => root.unmount());
+      root = createRoot(container);
+    }
   });
+});
 
-  it("says why an assessment is waiting, and that it retries itself", () => {
-    assessmentStatus = "waiting";
-    runRequest = request({
-      status: "waiting",
-      blocker_code: "no_device",
-      last_error: "No compatible test device is connected.",
-    });
-    render();
-
-    expect(text()).toContain("Waiting for a compatible test device");
-    expect(text()).toContain("No compatible test device is connected.");
-    expect(text()).toContain("This retries automatically");
-  });
-
-  it("says tests are running", () => {
-    assessmentStatus = "running";
-    runRequest = request({ status: "running" });
-    render();
-
-    expect(text()).toContain("Automated tests are running");
-  });
-
-  it("shows nothing to chase once the assessment has completed", () => {
+describe("opening a completed assessment", () => {
+  beforeEach(() => {
     assessmentStatus = "completed";
-    runRequest = request({ status: "completed" });
-    render();
-
-    expect(retryButton()).toBeUndefined();
-    expect(text()).not.toContain("Queued for automated testing");
+    catalogue = [
+      { risk_id: "example-feature-01-risk-01", name: "Example Risk One" },
+      { risk_id: "example-feature-01-risk-02", name: "Example Risk Two" },
+    ];
   });
 
-  it("never puts a raw error in the heading", () => {
-    assessmentStatus = "failed";
-    runRequest = request({
-      status: "failed",
-      blocker_code: "no_device",
-      last_error: "RuntimeError: device.udid '00008030' is not connected",
-    });
+  it("opens the feature-risk that still needs a decision", () => {
+    findings = [
+      { id: "f1", test_id: "example-feature-01-risk-01", status: "reduced_risk" },
+      { id: "f2", test_id: "example-feature-01-risk-02", status: "at_risk" },
+    ];
     render();
 
-    const headings = [...container.querySelectorAll("h2")].map((h) => h.textContent);
-    expect(headings).toContain("Waiting for a compatible test device");
-    expect(headings.join(" ")).not.toContain("RuntimeError");
+    expect(path()).toBe(`/assessments/${ASSESSMENT}/tests/example-feature-01-risk-02`);
+    expect(container.querySelector("[data-risk-page]")).not.toBeNull();
   });
-});
 
-describe("retrying", () => {
-  it("offers a retry while an assessment waits for a device", () => {
-    assessmentStatus = "waiting";
-    runRequest = request({ status: "waiting", blocker_code: "no_device" });
+  it("opens the first catalogue risk when nothing has been tested", () => {
+    render();
+    expect(path()).toBe(`/assessments/${ASSESSMENT}/tests/example-feature-01-risk-01`);
+  });
+
+  it("escapes the risk id rather than trusting it in the path", () => {
+    catalogue = [{ risk_id: "example/risk", name: "Example" }];
+    render();
+    expect(path()).toContain("%2F");
+  });
+
+  it("waits for the catalogue instead of deciding there are no risks", () => {
+    catalogueLoading = true;
+    catalogue = [];
     render();
 
-    expect(retryButton()).toBeDefined();
+    expect(path()).toBe(`/assessments/${ASSESSMENT}`);
+    expect(text()).toContain("Opening the assessment…");
   });
 
-  it("offers a retry after a temporary failure", () => {
-    assessmentStatus = "failed";
-    runRequest = request({ status: "failed", blocker_code: "platform_busy" });
+  it("says so deliberately when the assessment genuinely has no risks", () => {
+    catalogue = [];
     render();
 
-    expect(retryButton()).toBeDefined();
+    expect(path()).toBe(`/assessments/${ASSESSMENT}`);
+    expect(text()).toContain("Assessment complete");
+    expect(text()).toContain("No security tests are available");
   });
 
-  it("sends one request per click", () => {
-    assessmentStatus = "waiting";
-    runRequest = request({ status: "waiting", blocker_code: "no_device" });
-    render();
+  it("never leaves the main pane blank, whatever the catalogue is doing", () => {
+    for (const loading of [true, false]) {
+      catalogueLoading = loading;
+      catalogue = loading ? [] : [];
+      render();
 
-    const button = retryButton()!;
-    act(() => button.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-
-    expect(requestCalls).toBe(1);
-  });
-
-  it("cannot be clicked twice while it is in flight", () => {
-    assessmentStatus = "waiting";
-    runRequest = request({ status: "waiting", blocker_code: "no_device" });
-    requestPending = true;
-    render();
-
-    const button = retryButton()!;
-    expect((button as HTMLButtonElement).disabled).toBe(true);
-    expect(button.textContent).toContain("Retrying…");
-    act(() => button.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-    expect(requestCalls).toBe(0);
-  });
-
-  it("is not offered while the tests are running", () => {
-    assessmentStatus = "running";
-    runRequest = request({ status: "running" });
-    render();
-
-    expect(retryButton()).toBeUndefined();
-  });
-
-  it("is not offered while a worker is preparing the environment", () => {
-    runRequest = request({ status: "claimed" });
-    render();
-
-    expect(retryButton()).toBeUndefined();
-  });
-
-  it("is not offered for a failure retrying cannot fix", () => {
-    assessmentStatus = "failed";
-    runRequest = request({ status: "failed", blocker_code: "configuration_incomplete" });
-    render();
-
-    expect(retryButton()).toBeUndefined();
-    expect(text()).toContain("Review the app configuration");
-  });
-
-  it("is not offered to someone who cannot run tests", () => {
-    roles = ["developer"];
-    assessmentStatus = "waiting";
-    runRequest = request({ status: "waiting", blocker_code: "no_device" });
-    render();
-
-    expect(retryButton()).toBeUndefined();
-  });
-
-  it("says so when the retry itself fails", () => {
-    assessmentStatus = "waiting";
-    runRequest = request({ status: "waiting", blocker_code: "no_device" });
-    requestError = { userFacing: true, message: "This assessment is outside your access." };
-    render();
-
-    expect(text()).toContain("This assessment is outside your access.");
-  });
-});
-
-describe("keeping the page current", () => {
-  it("tells the poller what the assessment is doing, so it can keep looking", () => {
-    assessmentStatus = "waiting";
-    runRequest = request({ status: "waiting", blocker_code: "no_device" });
-    render();
-
-    expect(pollArgs).toEqual({ status: "waiting" });
-  });
-
-  it("does not start a run merely because the page was opened", async () => {
-    const runs = await import("@/data/sync");
-    expect("runAllTests" in runs.syncService).toBe(false);
-    expect(Object.keys(runs.syncService)).not.toContain("runAllTests");
+      expect(text().trim().length > 0, String(loading)).toBe(true);
+      act(() => root.unmount());
+      root = createRoot(container);
+    }
   });
 });

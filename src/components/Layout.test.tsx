@@ -77,36 +77,47 @@ function active() {
 }
 
 describe("navigation items", () => {
-  it("shows Findings to a user who may view findings", () => {
+  it("gives a developer Resolve and Learn", () => {
     render();
-    expect(labels()).toContain("Findings");
-    expect(navLinks().find((l) => l.textContent?.trim() === "Findings")?.getAttribute("href")).toBe(
-      "/findings",
+    expect(labels()).toEqual(["Resolve", "Learn"]);
+    expect(navLinks().find((l) => l.textContent?.trim() === "Resolve")?.getAttribute("href")).toBe(
+      "/resolve",
     );
   });
 
-  it("hides Findings from a user who may not view findings", () => {
-    roles = ["admin"];
-    render();
-    expect(roleCan(roles, "view_findings")).toBe(false);
-    expect(labels()).not.toContain("Findings");
-  });
-
-  it("gives a developer their own areas and nothing security owns", () => {
-    render();
-    expect(labels()).toEqual(["Findings", "Resolve", "Tickets", "Learn"]);
-  });
-
-  it("gives a security account Assess and Findings but not Resolve", () => {
+  it("gives a security account Assess and Learn", () => {
     roles = ["security"];
     render();
-    expect(labels()).toEqual(["Assess", "Findings", "Tickets", "Learn"]);
+    expect(labels()).toEqual(["Assess", "Learn"]);
   });
 
-  it("gives a multi-role user every area their capabilities allow", () => {
+  it("gives a user holding both roles Assess, Resolve and Learn", () => {
     roles = ["developer", "security"];
     render();
-    expect(labels()).toEqual(["Assess", "Findings", "Resolve", "Tickets", "Learn"]);
+    expect(labels()).toEqual(["Assess", "Resolve", "Learn"]);
+  });
+
+  it("offers Findings and Tickets to nobody, whatever they may still view", () => {
+    for (const combination of [
+      ["developer"],
+      ["security"],
+      ["developer", "security"],
+      ["cio"],
+      ["admin"],
+    ] as UserRole[][]) {
+      roles = combination;
+      render();
+      expect(labels(), combination.join("+")).not.toContain("Findings");
+      expect(labels(), combination.join("+")).not.toContain("Tickets");
+      act(() => root.unmount());
+      root = createRoot(container);
+    }
+  });
+
+  it("keeps the capabilities the navigation no longer advertises", () => {
+    expect(roleCan(["security"], "view_findings")).toBe(true);
+    expect(roleCan(["security"], "view_tickets")).toBe(true);
+    expect(roleCan(["developer"], "view_tickets")).toBe(true);
   });
 
   it("adds Admin only for an account holding the admin role", () => {
@@ -132,30 +143,37 @@ describe("navigation items", () => {
   });
 });
 
-describe("Findings is active across the finding routes", () => {
-  it("is active on the findings list", () => {
-    render("/findings");
-    expect(active()).toEqual(["Findings"]);
+describe("the active tab follows the tree a route belongs to", () => {
+  beforeEach(() => {
+    roles = ["developer", "security"];
   });
 
-  it("is active on a finding's detail page", () => {
-    render("/findings/example-finding-id");
-    expect(active()).toEqual(["Findings"]);
+  it.each([
+    "/assessments",
+    "/assessments/example-assessment-id",
+    "/assessments/example-assessment-id/tests/example-feature-01-risk-01",
+    "/assessments/example-assessment-id/tests/example-feature-01-risk-01/manual",
+    "/runs/example-run-timestamp",
+  ])("keeps Assess active on %s", (route) => {
+    render(route);
+    expect(active()).toEqual(["Assess"]);
   });
 
-  it("is active on a pre-ticket control preview", () => {
-    render("/findings/example-finding-id/controls/example-feature-01-risk-01-control-01");
-    expect(active()).toEqual(["Findings"]);
-  });
-
-  it("leaves Resolve owning its own preview route", () => {
-    render("/resolve/findings/example-finding-id/controls/example-feature-01-risk-01-control-01");
+  it.each([
+    "/resolve",
+    "/resolve/applications/example-app-id",
+    "/resolve/applications/example-app-id/risks/example-feature-01-risk-01",
+    "/resolve/tickets/example-ticket-id",
+    "/resolve/tickets/example-ticket-id/controls/example-feature-01-risk-01-control-01",
+    "/resolve/findings/example-finding-id/controls/example-feature-01-risk-01-control-01",
+  ])("keeps Resolve active on %s", (route) => {
+    render(route);
     expect(active()).toEqual(["Resolve"]);
   });
 
-  it("does not claim the tickets tree", () => {
-    render("/tickets/example-ticket-id");
-    expect(active()).toEqual(["Tickets"]);
+  it("underlines nothing on a legacy route that is only passing through", () => {
+    render("/findings/example-finding-id");
+    expect(active()).toEqual([]);
   });
 });
 
@@ -171,6 +189,6 @@ describe("one navigation for every viewport", () => {
     render();
     const nav = container.querySelector("nav[aria-label='Main']");
     expect(nav?.className).toContain("overflow-x-auto");
-    expect(labels()).toHaveLength(6);
+    expect(labels()).toEqual(["Assess", "Resolve", "Learn", "Admin"]);
   });
 });

@@ -37,6 +37,24 @@ export function formatDuration(seconds: number | null | undefined): string {
   return `${minutes}m ${rest}s`;
 }
 
+/**
+ * Case-insensitive, numeric-aware name ordering shared by every alphabetical
+ * list. `aKey`/`bKey` break a tie deterministically when names compare equal
+ * or are both missing.
+ */
+export function compareByName(
+  aName: string | null | undefined,
+  bName: string | null | undefined,
+  aKey: string,
+  bKey: string,
+): number {
+  const cmp = (aName ?? "").localeCompare(bName ?? "", undefined, {
+    sensitivity: "base",
+    numeric: true,
+  });
+  return cmp !== 0 ? cmp : aKey.localeCompare(bKey);
+}
+
 /** An error whose message was written to be shown to users. */
 export class UserFacingError extends Error {
   readonly userFacing = true;

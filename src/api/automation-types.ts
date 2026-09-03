@@ -198,6 +198,15 @@ export interface AppProvisioning {
   status: "pending" | "ready" | "failed";
   stages: ProvisioningStage[];
   error?: string | null;
+  /** Execution readiness, reported apart from configuration readiness — see docs/api.md#is-an-app-ready-to-test. */
+  configuration_ready?: boolean;
+  device_required?: boolean;
+  device_ready?: boolean;
+  platform_available?: boolean;
+  runnable?: boolean;
+  blocker_code?: string | null;
+  retryable?: boolean;
+  detail?: string | null;
 }
 
 export interface EvidenceRef {

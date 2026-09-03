@@ -1,5 +1,5 @@
 import { Navigate } from "react-router-dom";
-import { AlertTriangle, ListChecks, Settings, Ticket } from "lucide-react";
+import { ListChecks, Settings } from "lucide-react";
 import { useAuth } from "@/auth/useAuth";
 import { primaryRole } from "@/auth/permissions";
 import { PageHeader, StatCard, LoadingState, ErrorState } from "@/components/common";
@@ -53,41 +53,21 @@ function DeveloperDashboard({ metrics }: { metrics: ReturnType<typeof useDashboa
           label={findingStatusConfig.at_risk.label}
           value={metrics.findingCounts.at_risk}
           tone="danger"
-          to="/findings?status=at_risk"
+          to="/resolve"
         />
         <StatCard
           label={findingStatusConfig.reduced_risk.label}
           value={metrics.findingCounts.reduced_risk}
           tone="success"
-          to="/findings?status=reduced_risk"
+          to="/resolve"
         />
         <StatCard
           label={findingStatusConfig.inconclusive.label}
           value={metrics.findingCounts.inconclusive}
           tone="warning"
-          to="/findings?status=inconclusive"
+          to="/resolve"
         />
-        <StatCard label="Open Tickets" value={metrics.openRemediation} to="/tickets?type=remediation" />
-        <StatCard
-          label="Retest Requested / In Progress"
-          value={metrics.retestPending}
-          tone="info"
-          to="/tickets?status=retest_requested"
-        />
-      </div>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <CtaCard
-          icon={AlertTriangle}
-          title="Findings requiring action"
-          description="At Risk and Inconclusive findings on your applications."
-          to="/findings?status=at_risk"
-        />
-        <CtaCard
-          icon={Ticket}
-          title="Your tickets"
-          description="Remediation, risk acceptance, and retest tickets."
-          to="/tickets"
-        />
+        <StatCard label="Open Tickets" value={metrics.openRemediation} to="/assessments" />
       </div>
     </div>
   );
@@ -103,30 +83,30 @@ function CioDashboard({ metrics }: { metrics: ReturnType<typeof useDashboardMetr
           label="Critical Findings"
           value={metrics.criticalFindings}
           tone="danger"
-          to="/findings?severity=critical"
+          to="/assessments"
         />
         <StatCard
           label="High Findings"
           value={metrics.highFindings}
           tone="danger"
-          to="/findings?severity=high"
+          to="/assessments"
         />
         <StatCard
           label="Open Remediation"
           value={metrics.openRemediation}
           tone="warning"
-          to="/tickets?type=remediation"
+          to="/assessments"
         />
         <StatCard
           label="Retest Pending"
           value={metrics.retestPending}
           tone="info"
-          to="/tickets?status=retest_requested"
+          to="/assessments"
         />
         <StatCard
           label="Accepted Risks"
           value={metrics.acceptedRisks}
-          to="/tickets?status=accepted&type=risk_acceptance"
+          to="/assessments"
         />
       </div>
 
@@ -137,19 +117,19 @@ function CioDashboard({ metrics }: { metrics: ReturnType<typeof useDashboardMetr
             label={findingStatusConfig.at_risk.label}
             value={metrics.findingCounts.at_risk}
             tone="danger"
-            to="/findings?status=at_risk"
+            to="/resolve"
           />
           <StatCard
             label={findingStatusConfig.reduced_risk.label}
             value={metrics.findingCounts.reduced_risk}
             tone="success"
-            to="/findings?status=reduced_risk"
+            to="/resolve"
           />
           <StatCard
             label={findingStatusConfig.inconclusive.label}
             value={metrics.findingCounts.inconclusive}
             tone="warning"
-            to="/findings?status=inconclusive"
+            to="/resolve"
           />
         </div>
       </div>
@@ -158,7 +138,7 @@ function CioDashboard({ metrics }: { metrics: ReturnType<typeof useDashboardMetr
         icon={ListChecks}
         title="Outstanding work"
         description="Open remediation, retests pending, and risk acceptance requests."
-        to="/tickets"
+        to="/assessments"
       />
     </div>
   );

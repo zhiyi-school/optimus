@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { focusManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RiskConversationEntry } from "@/data/types";
 
@@ -16,6 +16,9 @@ let unsubscribes = 0;
 let notify: (() => void) | undefined;
 let calls: string[] = [];
 let owners: Record<string, unknown>[] = [];
+let detailFetch: () => Promise<unknown> = () => Promise.resolve(null);
+let runRequestCalls = 0;
+let runRequest: unknown = null;
 
 function entry(id: string): RiskConversationEntry {
   return {
@@ -38,6 +41,15 @@ vi.mock("@/data/supabase", () => ({
 }));
 
 vi.mock("@/data/services", () => ({
+  assessmentData: {
+    getWithApplication: () => detailFetch(),
+  },
+  assessmentRunRequestData: {
+    findForAssessment: () => {
+      runRequestCalls += 1;
+      return Promise.resolve(runRequest);
+    },
+  },
   riskConversationData: {
     find: (applicationId: string, riskId: string) => {
       calls.push("find");
@@ -81,7 +93,8 @@ vi.mock("@/api/automation-services", () => ({
 
 vi.mock("@/api/playbook-services", () => ({ playbookApi: {} }));
 
-const { useRiskConversation, useRiskConversationEntries } = await import("@/hooks/queries");
+const { useAssessment, useAssessmentRunRequest, useRiskConversation, useRiskConversationEntries } =
+  await import("@/hooks/queries");
 
 let container: HTMLDivElement;
 let root: Root;
@@ -182,6 +195,124 @@ describe("useRiskConversationEntries", () => {
 
     expect(reads).toBeGreaterThan(before);
     expect(rendered()).toEqual(["first"]);
+  });
+});
+
+describe("useAssessmentRunRequest polling and focus", () => {
+  function RunRequestProbe({ status }: { status: string }) {
+    const { data } = useAssessmentRunRequest("example-assessment-id", { status } as never);
+    return <p>{data ? "loaded" : "none"}</p>;
+  }
+
+  async function mountRunRequest(status: string) {
+    // Mirrors the application's client defaults (see main.tsx), so this proves
+    // the hook no longer overrides them back to focus-refetching.
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
+    });
+    await act(async () =>
+      root.render(
+        <QueryClientProvider client={client}>
+          <RunRequestProbe status={status} />
+        </QueryClientProvider>,
+      ),
+    );
+    await settle();
+    return client;
+  }
+
+  /** The interval the hook would actually schedule for the mounted query. */
+  function pollInterval(client: QueryClient) {
+    const query = client
+      .getQueryCache()
+      .find({ queryKey: ["assessmentRunRequest", "example-assessment-id"] })!;
+    const { refetchInterval } = query.observers[0].options;
+    return typeof refetchInterval === "function" ? refetchInterval(query) : refetchInterval;
+  }
+
+  function focusRefetch(client: QueryClient) {
+    const query = client
+      .getQueryCache()
+      .find({ queryKey: ["assessmentRunRequest", "example-assessment-id"] })!;
+    return query.observers[0].options.refetchOnWindowFocus;
+  }
+
+  it("keeps polling while the assessment is still moving", async () => {
+    runRequest = { id: "example-request-id", status: "queued" };
+    const client = await mountRunRequest("queued");
+    expect(pollInterval(client)).toBe(10_000);
+  });
+
+  it("stops polling once the request has settled", async () => {
+    runRequest = { id: "example-request-id", status: "completed" };
+    const client = await mountRunRequest("completed");
+    expect(pollInterval(client)).toBe(false);
+  });
+
+  it("does not opt into refetching on window focus", async () => {
+    runRequest = { id: "example-request-id", status: "completed" };
+    const client = await mountRunRequest("completed");
+    expect(focusRefetch(client)).not.toBe(true);
+  });
+
+  it("does not fetch again when the window regains focus", async () => {
+    runRequest = { id: "example-request-id", status: "completed" };
+    await mountRunRequest("completed");
+    const initial = runRequestCalls;
+
+    await act(async () => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+    });
+    await settle();
+
+    expect(runRequestCalls).toBe(initial);
+  });
+});
+
+describe("useAssessment seeding from the cached list", () => {
+  function AssessmentProbe({ id }: { id: string }) {
+    const { data, isLoading } = useAssessment(id);
+    return <p>{isLoading ? "loading" : data ? `status:${(data as { status: string }).status}` : "none"}</p>;
+  }
+
+  async function mountDetail(client: QueryClient, id = "example-assessment-id") {
+    await act(async () =>
+      root.render(
+        <QueryClientProvider client={client}>
+          <AssessmentProbe id={id} />
+        </QueryClientProvider>,
+      ),
+    );
+  }
+
+  function clientWithList() {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(
+      ["assessments"],
+      [{ id: "example-assessment-id", status: "queued", application: null }],
+    );
+    return client;
+  }
+
+  it("renders the cached row immediately instead of a loading state", async () => {
+    let resolveDetail: (value: unknown) => void = () => {};
+    detailFetch = () => new Promise((resolve) => (resolveDetail = resolve));
+
+    await mountDetail(clientWithList());
+    expect(container.textContent).toBe("status:queued");
+
+    await act(async () => resolveDetail({ id: "example-assessment-id", status: "completed" }));
+    await settle();
+    expect(container.textContent).toBe("status:completed");
+  });
+
+  it("still loads normally when the list cache holds nothing for that id", async () => {
+    detailFetch = () => new Promise(() => {});
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    await mountDetail(client);
+    expect(container.textContent).toBe("loading");
   });
 });
 

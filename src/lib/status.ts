@@ -241,3 +241,126 @@ export function isTransitionalRunState(
   if (assessment && ["queued", "waiting", "running"].includes(assessment.status)) return true;
   return !!request && ["queued", "waiting", "claimed", "running"].includes(request.status);
 }
+
+/** A stage's own raw state, before it is placed in sequence. */
+export type RawStageState = "done" | "in_progress" | "pending" | "failed" | "unknown";
+
+export interface RawStageInput {
+  id: string;
+  label: string;
+  description?: string;
+  state: RawStageState;
+  /** Text tone for this stage if it becomes the current one; icon never depends on it. */
+  tone?: Tone;
+}
+
+export type AssessmentStageLifecycle =
+  | "complete"
+  | "current"
+  | "future"
+  | "failed"
+  | "unknown"
+  | "not_applicable";
+
+export interface AssessmentStagePresentation {
+  id: string;
+  label: string;
+  description?: string;
+  lifecycle: AssessmentStageLifecycle;
+  tone?: Tone;
+}
+
+/**
+ * Places an ordered set of stages into a sequential stepper: every stage
+ * before the first unresolved one is "complete", that one stage alone is
+ * "current" (or "failed"/"unknown"), and everything after it is "future" —
+ * regardless of what a later stage's own raw state happens to report. A
+ * stepper never shows step 3 done while step 1 is still spinning.
+ */
+export function sequenceAssessmentStages(raw: RawStageInput[]): AssessmentStagePresentation[] {
+  let resolved = true;
+  return raw.map((stage): AssessmentStagePresentation => {
+    const base = { id: stage.id, label: stage.label, description: stage.description };
+    if (!resolved) return { ...base, lifecycle: "future" };
+
+    switch (stage.state) {
+      case "done":
+        return { ...base, lifecycle: "complete" };
+      case "failed":
+        resolved = false;
+        return { ...base, lifecycle: "failed" };
+      case "unknown":
+        resolved = false;
+        return { ...base, lifecycle: "unknown" };
+      case "in_progress":
+      case "pending":
+        resolved = false;
+        return { ...base, lifecycle: "current", tone: stage.tone ?? "info" };
+    }
+  });
+}
+
+export interface AssessmentStageContext {
+  /** Only consulted while live per-stage data has not arrived yet. */
+  configurationReady: boolean;
+  provisioningStages?: RawStageInput[];
+  runState: AssessmentRunState;
+  assessment: Pick<Assessment, "status" | "completed_tests" | "total_tests"> | null | undefined;
+}
+
+/**
+ * The whole setup-and-run workflow as one sequence: three configuration
+ * stages, automated testing, then analysis. Configuration and testing are
+ * normalized from separate sources (provisioning readiness vs. the durable
+ * run request) and only combined here, so a device or platform blocker on
+ * testing can never make configuration look unfinished, or vice versa.
+ */
+export function normalizeAssessmentStages(ctx: AssessmentStageContext): AssessmentStagePresentation[] {
+  const setup: RawStageInput[] = ctx.provisioningStages?.length
+    ? ctx.provisioningStages
+    : [
+        {
+          id: "app_registered",
+          label: ctx.configurationReady
+            ? "Server environment prepared"
+            : "Server environment is being prepared",
+          state: ctx.configurationReady ? "done" : "in_progress",
+        },
+        {
+          id: "service_online",
+          label: "Assessment service is running",
+          state: ctx.configurationReady ? "done" : "pending",
+        },
+        {
+          id: "configuration_applied",
+          label: ctx.configurationReady ? "Configuration applied" : "Configuration is being applied",
+          state: ctx.configurationReady ? "done" : "pending",
+        },
+      ];
+
+  const completedTests = ctx.assessment?.completed_tests ?? 0;
+  const totalTests = ctx.assessment?.total_tests ?? 0;
+  const progress = totalTests > 0 ? `${completedTests} of ${totalTests} security tests run.` : undefined;
+  const testingDone = ctx.assessment?.status === "completed";
+  const nonRetryableFailure = ctx.runState.tone === "danger" && !ctx.runState.canRetry;
+
+  const testing: RawStageInput = {
+    id: "testing",
+    label: testingDone ? "Automated testing complete" : ctx.runState.label || "Automated testing",
+    description: testingDone
+      ? progress
+      : ctx.runState.tone === "info"
+        ? progress
+        : (ctx.runState.detail ?? undefined),
+    state: testingDone ? "done" : nonRetryableFailure ? "failed" : "in_progress",
+    tone: ctx.runState.tone,
+  };
+
+  const analysis: RawStageInput = {
+    id: "analysis",
+    label: "Analysis & reporting",
+    state: testingDone ? "done" : "pending",
+  };
+
+  return sequenceAssessmentStages([...setup, testing, analysis]);
+}

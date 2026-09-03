@@ -36,17 +36,21 @@ function application(overrides: Partial<Application> = {}): Application {
   } as Application;
 }
 
-function assessmentRow(app: Application | null): Assessment & { application: Application | null } {
+function assessmentRow(
+  app: Application | null,
+  overrides: Partial<Assessment> = {},
+): Assessment & { application: Application | null } {
   return {
     id: "example-assessment-id",
     external_id: "run::example_app",
     application_id: "example-app-id",
-    status: "running",
+    status: "completed",
     total_tests: 4,
     completed_tests: 2,
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
     application: app,
+    ...overrides,
   } as Assessment & { application: Application | null };
 }
 
@@ -102,7 +106,7 @@ function render() {
         <MemoryRouter initialEntries={["/assessments/new"]}>
           <Routes>
             <Route path="/assessments/new" element={<NewAssessment />} />
-            <Route path="/" element={<Landed />} />
+            <Route path="/assessments" element={<Landed />} />
             <Route path="/assessments/:assessmentId" element={<Landed />} />
           </Routes>
         </MemoryRouter>
@@ -160,17 +164,26 @@ describe("the New Assessment sidebar", () => {
     const listed = sidebar().textContent ?? "";
     expect(listed).toContain("2 of 4");
     expect(listed).toContain("iOS");
-    expect(listed).toContain("Assessing in progress");
+    expect(listed).toContain("Completed");
     expect(listed).toContain("Jan 01, 2026");
     expect(sidebar().querySelector("[style*='width: 50%']")).not.toBeNull();
   });
 
-  it("scrolls in place when there are many assessments", () => {
+  it("scrolls in place, bounded, on narrow screens", () => {
     const list = () => sidebar().querySelector("ul") as HTMLElement;
     render();
     expect(list().className).toContain("overflow-y-auto");
-    expect(list().className).toContain("max-h-[min(28rem,60vh)]");
-    expect(list().className).toContain("lg:max-h-[calc(100vh-18rem)]");
+    expect(list().className).toContain("max-h-[22rem]");
+  });
+
+  it("stretches to fill the form's height and scrolls only the list on desktop", () => {
+    const list = () => sidebar().querySelector("ul") as HTMLElement;
+    render();
+    expect(sidebar().className).toContain("lg:flex");
+    expect(sidebar().className).toContain("lg:flex-col");
+    expect(list().className).toContain("lg:min-h-0");
+    expect(list().className).toContain("lg:flex-1");
+    expect(list().className).toContain("lg:max-h-none");
   });
 
   it("keeps its heading out of the scrolling list", () => {
@@ -185,6 +198,7 @@ describe("the New Assessment sidebar", () => {
     const grid = sidebar().parentElement as HTMLElement;
     expect(grid.className).toContain("lg:grid-cols-[18rem_minmax(0,1fr)]");
     expect(grid.className).toContain("xl:grid-cols-[20rem_minmax(0,1fr)]");
+    expect(grid.className).toContain("lg:min-h-[30rem]");
   });
 
   it("stacks in one column before the desktop breakpoint", () => {
@@ -260,6 +274,23 @@ describe("the New Assessment sidebar", () => {
   });
 });
 
+describe("an incomplete assessment in the mini list", () => {
+  it("does not open assessment results", () => {
+    rows = [assessmentRow(application(), { status: "running" })];
+    render();
+    expect(sidebar().querySelector("a")).toBeNull();
+  });
+
+  it("still shows its name, status and progress", () => {
+    rows = [assessmentRow(application(), { status: "running" })];
+    render();
+    const listed = sidebar().textContent ?? "";
+    expect(listed).toContain("Example Application");
+    expect(listed).toContain("Assessing in progress");
+    expect(listed).toContain("2 of 4");
+  });
+});
+
 describe("connector availability", () => {
   it("describes a usable connector as available and keeps it selectable", () => {
     render();
@@ -330,10 +361,10 @@ describe("Review & Confirm", () => {
 });
 
 describe("where a created assessment leaves you", () => {
-  it("returns to the overview rather than the new assessment's own page", async () => {
+  it("returns to the main Assessments page rather than the new assessment's own page", async () => {
     await submit();
 
-    expect(text()).toContain("landed:/");
+    expect(text()).toContain("landed:/assessments");
     expect(text()).not.toContain("landed:/assessments/example-assessment-id");
   });
 

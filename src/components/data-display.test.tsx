@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DataTable, type DataTableColumn } from "@/components/data-display";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { DataTable, type DataTableColumn, type DataTableRowActivation } from "@/components/data-display";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -23,14 +23,19 @@ const COLUMNS: DataTableColumn<Row>[] = [
   { key: "status", header: "Status", render: (row) => row.status },
 ];
 
+const activationByStatus = (row: Row): DataTableRowActivation =>
+  row.status === "completed" ? "navigate" : "expand";
+
 let container: HTMLDivElement;
 let root: Root;
 let opened: string[];
 let toggled: string[];
+let deleted: string[];
 
 beforeEach(() => {
   opened = [];
   toggled = [];
+  deleted = [];
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -41,25 +46,6 @@ afterEach(() => {
   container.remove();
 });
 
-/** Every unfinished assessment is expandable, which is where navigation used to be lost. */
-function render(expandedRowId: string | null = null) {
-  act(() =>
-    root.render(
-      <DataTable
-        columns={COLUMNS}
-        rows={ROWS}
-        onRowClick={(row) => opened.push(row.id)}
-        rowLabel={(row) => `Open the assessment for ${row.name}`}
-        expandedRowId={expandedRowId}
-        onToggleExpand={(row) => toggled.push(row.id)}
-        renderExpanded={(row) =>
-          row.status === "completed" ? null : <p>Setup progress for {row.name}</p>
-        }
-      />,
-    ),
-  );
-}
-
 function rows() {
   return [...container.querySelectorAll("tbody tr")];
 }
@@ -69,121 +55,236 @@ function rowFor(id: string) {
   return rows()[index];
 }
 
-function expandButtons() {
-  return [...container.querySelectorAll("button[aria-expanded]")];
-}
-
 function click(element: Element) {
   act(() => element.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 }
 
-describe("opening a row", () => {
-  it("opens a queued assessment, which is also expandable", () => {
-    render();
+function press(element: Element, key: string) {
+  act(() => element.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true })));
+}
+
+function renderGated(expandedRowId: string | null = null) {
+  act(() =>
+    root.render(
+      <DataTable
+        columns={COLUMNS}
+        rows={ROWS}
+        onRowClick={(row) => opened.push(row.id)}
+        rowLabel={(row) => `Open the assessment for ${row.name}`}
+        rowActivation={activationByStatus}
+        expandLabel={(row) => `View setup and testing status for ${row.name}`}
+        expandedRowId={expandedRowId}
+        onToggleExpand={(row) => toggled.push(row.id)}
+        renderExpanded={(row) => (
+          <div>
+            <p>Setup progress for {row.name}</p>
+            <button type="button" onClick={(e) => { e.stopPropagation(); deleted.push(row.id); }}>
+              Retry
+            </button>
+          </div>
+        )}
+      />,
+    ),
+  );
+}
+
+describe("rowActivation: expand (an incomplete assessment row)", () => {
+  it("toggles on a click anywhere on the row", () => {
+    renderGated();
     click(rowFor("assessment-queued"));
-
-    expect(opened).toEqual(["assessment-queued"]);
-    expect(toggled).toEqual([]);
-  });
-
-  it("opens an assessment that is waiting for a device", () => {
-    render();
-    click(rowFor("assessment-waiting"));
-
-    expect(opened).toEqual(["assessment-waiting"]);
-  });
-
-  it("opens a row that has nothing to expand", () => {
-    render();
-    click(rowFor("assessment-done"));
-
-    expect(opened).toEqual(["assessment-done"]);
-  });
-
-  it("still opens the row while it is expanded", () => {
-    render("assessment-queued");
-    click(rowFor("assessment-queued"));
-
-    expect(opened).toEqual(["assessment-queued"]);
-  });
-});
-
-describe("the expand control", () => {
-  it("is a control of its own, not the whole row", () => {
-    render();
-
-    expect(expandButtons()).toHaveLength(2);
-    expect(expandButtons()[0].getAttribute("aria-label")).toBe("Show details");
-  });
-
-  it("expands without navigating", () => {
-    render();
-    click(expandButtons()[0]);
-
     expect(toggled).toEqual(["assessment-queued"]);
     expect(opened).toEqual([]);
   });
 
-  it("says whether it is open", () => {
-    render("assessment-queued");
-
-    expect(expandButtons()[0].getAttribute("aria-expanded")).toBe("true");
-    expect(expandButtons()[0].getAttribute("aria-label")).toBe("Hide details");
-    expect(container.textContent).toContain("Setup progress for Example Application A");
-  });
-
-  it("offers no expand control for a row with nothing to show", () => {
-    render();
-    const cells = rowFor("assessment-done").querySelectorAll("td");
-    expect(cells[cells.length - 1].querySelector("button")).toBeNull();
-  });
-});
-
-describe("keyboard access", () => {
-  function press(element: Element, key: string) {
-    act(() =>
-      element.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true })),
-    );
-  }
-
-  it("puts every openable row in the tab order and names it", () => {
-    render();
-
-    expect(rowFor("assessment-queued").getAttribute("tabindex")).toBe("0");
-    expect(rowFor("assessment-queued").getAttribute("aria-label")).toBe(
-      "Open the assessment for Example Application A",
-    );
-  });
-
-  it("opens a row with Enter and with Space", () => {
-    render();
-    press(rowFor("assessment-queued"), "Enter");
-    press(rowFor("assessment-waiting"), " ");
-
-    expect(opened).toEqual(["assessment-queued", "assessment-waiting"]);
-  });
-
-  it("ignores other keys", () => {
-    render();
-    press(rowFor("assessment-queued"), "a");
-
+  it("never opens assessment results", () => {
+    renderGated();
+    click(rowFor("assessment-queued"));
+    click(rowFor("assessment-waiting"));
     expect(opened).toEqual([]);
   });
 
-  it("leaves rows out of the tab order when nothing opens them", () => {
-    const onToggle = vi.fn();
+  it("collapses again on a second click", () => {
+    renderGated("assessment-queued");
+    click(rowFor("assessment-queued"));
+    expect(toggled).toEqual(["assessment-queued"]);
+  });
+
+  it("toggles with Enter and Space", () => {
+    renderGated();
+    press(rowFor("assessment-queued"), "Enter");
+    press(rowFor("assessment-waiting"), " ");
+    expect(toggled).toEqual(["assessment-queued", "assessment-waiting"]);
+  });
+
+  it("uses button semantics: role, tabindex, aria-expanded, a distinct label", () => {
+    renderGated();
+    const row = rowFor("assessment-queued");
+    expect(row.getAttribute("role")).toBe("button");
+    expect(row.getAttribute("tabindex")).toBe("0");
+    expect(row.getAttribute("aria-expanded")).toBe("false");
+    expect(row.getAttribute("aria-label")).toBe("View setup and testing status for Example Application A");
+  });
+
+  it("flips aria-expanded and shows the expanded content when open", () => {
+    renderGated("assessment-queued");
+    const row = rowFor("assessment-queued");
+    expect(row.getAttribute("aria-expanded")).toBe("true");
+    expect(container.textContent).toContain("Setup progress for Example Application A");
+  });
+
+  it("shows the down chevron, not the navigation chevron", () => {
+    renderGated();
+    const cells = rowFor("assessment-queued").querySelectorAll("td");
+    const trailing = cells[cells.length - 1];
+    expect(trailing.querySelector("svg.lucide-chevron-down")).not.toBeNull();
+    expect(trailing.querySelector("svg.lucide-chevron-right")).toBeNull();
+  });
+
+  it("rotates the chevron when expanded", () => {
+    renderGated("assessment-queued");
+    const cells = rowFor("assessment-queued").querySelectorAll("td");
+    expect(cells[cells.length - 1].querySelector("svg")?.getAttribute("class")).toContain("rotate-180");
+  });
+
+  it("gets the same pointer and hover affordance as a navigable row", () => {
+    renderGated();
+    expect(rowFor("assessment-queued").getAttribute("class")).toContain("cursor-pointer");
+  });
+
+  it("does not toggle when a nested action inside the expanded content is clicked", () => {
+    renderGated("assessment-queued");
+    const button = [...container.querySelectorAll("button")].find((b) => b.textContent === "Retry")!;
+    click(button);
+    expect(deleted).toEqual(["assessment-queued"]);
+    expect(toggled).toEqual([]);
+  });
+});
+
+describe("rowActivation: navigate (a completed assessment row)", () => {
+  it("opens on a click anywhere on the row", () => {
+    renderGated();
+    click(rowFor("assessment-done"));
+    expect(opened).toEqual(["assessment-done"]);
+  });
+
+  it("opens with Enter and Space", () => {
+    renderGated();
+    press(rowFor("assessment-done"), "Enter");
+    press(rowFor("assessment-done"), " ");
+    expect(opened).toEqual(["assessment-done", "assessment-done"]);
+  });
+
+  it("uses link semantics with the rowLabel", () => {
+    renderGated();
+    const row = rowFor("assessment-done");
+    expect(row.getAttribute("role")).toBe("link");
+    expect(row.getAttribute("tabindex")).toBe("0");
+    expect(row.getAttribute("aria-label")).toBe("Open the assessment for Example Application C");
+    expect(row.getAttribute("aria-expanded")).toBeNull();
+  });
+
+  it("shows the navigation chevron and no dropdown", () => {
+    renderGated();
+    const cells = rowFor("assessment-done").querySelectorAll("td");
+    const trailing = cells[cells.length - 1];
+    expect(trailing.querySelector("svg.lucide-chevron-right")).not.toBeNull();
+    expect(trailing.querySelector("svg.lucide-chevron-down")).toBeNull();
+  });
+
+  it("ignores other keys", () => {
+    renderGated();
+    press(rowFor("assessment-done"), "a");
+    expect(opened).toEqual([]);
+  });
+});
+
+describe("rowActivation: none, and the default with no rowActivation prop", () => {
+  it("is fully inert when a row resolves to none", () => {
     act(() =>
       root.render(
         <DataTable
           columns={COLUMNS}
           rows={ROWS}
-          expandedRowId={null}
-          onToggleExpand={onToggle}
-          renderExpanded={() => <p>Details</p>}
+          onRowClick={() => opened.push("x")}
+          rowActivation={() => "none"}
         />,
       ),
     );
+    click(rowFor("assessment-queued"));
+    expect(opened).toEqual([]);
+    expect(rowFor("assessment-queued").getAttribute("tabindex")).toBeNull();
+    expect(rowFor("assessment-queued").getAttribute("role")).toBeNull();
+  });
 
-    expect(rows()[0].getAttribute("tabindex")).toBeNull();
+  it("renders a plain read-only table when no row action is given at all", () => {
+    act(() => root.render(<DataTable columns={COLUMNS} rows={ROWS} />));
+    expect(container.querySelectorAll("thead th")).toHaveLength(COLUMNS.length);
+    expect(rowFor("assessment-queued").getAttribute("role")).toBeNull();
+  });
+
+  it("defaults every row to navigate when only onRowClick is given, unchanged for existing callers", () => {
+    act(() =>
+      root.render(
+        <DataTable
+          columns={COLUMNS}
+          rows={ROWS}
+          onRowClick={(row) => opened.push(row.id)}
+          rowLabel={(row) => `Open ${row.name}`}
+        />,
+      ),
+    );
+    click(rowFor("assessment-queued"));
+    expect(opened).toEqual(["assessment-queued"]);
+    expect(rowFor("assessment-queued").getAttribute("role")).toBe("link");
+  });
+});
+
+describe("the same activation model on the mobile card list", () => {
+  function renderGatedCards(expandedRowId: string | null = null) {
+    act(() =>
+      root.render(
+        <DataTable
+          columns={COLUMNS}
+          rows={ROWS}
+          onRowClick={(row) => opened.push(row.id)}
+          rowLabel={(row) => `Open the assessment for ${row.name}`}
+          rowActivation={activationByStatus}
+          expandLabel={(row) => `View setup and testing status for ${row.name}`}
+          expandedRowId={expandedRowId}
+          onToggleExpand={(row) => toggled.push(row.id)}
+          renderExpanded={(row) => <p>Setup progress for {row.name}</p>}
+          renderCard={(row) => <span>{row.name}</span>}
+        />,
+      ),
+    );
+  }
+
+  function mobileCards() {
+    return [...container.querySelectorAll("ul.md\\:hidden > li")];
+  }
+
+  it("opens a completed card on click", () => {
+    renderGatedCards();
+    click(mobileCards()[2].querySelector("button")!);
+    expect(opened).toEqual(["assessment-done"]);
+  });
+
+  it("expands an incomplete card instead of navigating", () => {
+    renderGatedCards();
+    click(mobileCards()[0].querySelector("button")!);
+    expect(toggled).toEqual(["assessment-queued"]);
+    expect(opened).toEqual([]);
+  });
+
+  it("shows the expanded content inline once toggled open", () => {
+    renderGatedCards("assessment-queued");
+    expect(mobileCards()[0].textContent).toContain("Setup progress for Example Application A");
+  });
+
+  it("matches the desktop aria-expanded and label on the card's own button", () => {
+    renderGatedCards();
+    const button = mobileCards()[0].querySelector("button")!;
+    expect(button.getAttribute("aria-expanded")).toBe("false");
+    expect(button.getAttribute("aria-label")).toBe("View setup and testing status for Example Application A");
   });
 });

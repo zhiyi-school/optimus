@@ -7,6 +7,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge, PlatformBadge, SeverityBadge } from "@/components/data-display";
 import { Badge } from "@/components/ui/badge";
+import { EvidenceList } from "@/components/evidence";
+import {
+  EvidenceRail,
+  FindingSummary,
+  RiskDetailGrid,
+  RiskHeader,
+  RiskWorkspace,
+} from "@/components/risk-workspace";
 import { AssessmentSidebar } from "@/components/assessment-sidebar";
 import { TestRunStages } from "@/components/assessment-progress";
 import { RunEventTimeline } from "@/components/run-events";
@@ -15,6 +23,7 @@ import { RiskConversationPanel } from "@/components/conversation-panel";
 import { RiskConversationActions } from "@/components/ticket-actions";
 import {
   useAssessment,
+  useFindingEvidenceItems,
   useFindingRetests,
   useFindingTickets,
   useFindings,
@@ -101,6 +110,7 @@ function TestPage() {
   const sendMessage = useSendRiskMessage(conversation.data?.id);
   const { data: findingTickets } = useFindingTickets(currentFinding?.id);
   const { data: retests } = useFindingRetests(currentFinding?.id);
+  const evidence = useFindingEvidenceItems(currentFinding?.id);
   const remediationTicket =
     activeRemediationTicket(currentFinding?.id ?? "", findingTickets) ??
     resumableRemediationTicket(currentFinding?.id ?? "", findingTickets);
@@ -210,8 +220,8 @@ function TestPage() {
   const automated = hasAutomation(risk);
 
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-      <div className="lg:col-span-1">
+    <RiskWorkspace
+      sidebar={
         <AssessmentSidebar
           application={assessment.application}
           assessment={assessment}
@@ -219,55 +229,47 @@ function TestPage() {
           findingByTestId={findingByTestId}
           activeTestId={testId}
         />
-      </div>
+      }
+    >
+      <RiskHeader
+        icon={RiskIcon}
+        name={risk.name}
+        description={risk.description}
+        badges={
+          <>
+            {currentFinding && <StatusBadge status={currentFinding.status} />}
+            {currentFinding && <SeverityBadge severity={currentFinding.severity} />}
+            {platform && <PlatformBadge platform={platform} />}
+          </>
+        }
+        meta={
+          remediationTicket && can("view_resolve") && assessment.application_id && testId ? (
+            <Link
+              to={`/resolve/applications/${assessment.application_id}/risks/${encodeURIComponent(testId)}`}
+              className="font-medium text-primary hover:underline"
+            >
+              Open the remediation workspace
+            </Link>
+          ) : undefined
+        }
+      />
 
-      <div className="space-y-6 lg:col-span-2">
-        <div className="flex items-start gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-muted">
-            <RiskIcon className="h-5 w-5 text-muted-foreground" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-lg font-bold text-foreground">{risk.name}</h1>
-              {currentFinding && <StatusBadge status={currentFinding.status} />}
-              {currentFinding && <SeverityBadge severity={currentFinding.severity} />}
-            </div>
-            <p className="mt-0.5 text-sm text-muted-foreground">{risk.description}</p>
-            {(currentFinding || remediationTicket) && (
-              <p className="mt-1 flex flex-wrap items-center gap-3 text-xs">
-                {currentFinding && (
-                  <Link
-                    to={`/findings/${currentFinding.id}`}
-                    className="font-medium text-primary hover:underline"
-                  >
-                    View the finding
-                  </Link>
-                )}
-                {remediationTicket && (
-                  <Link
-                    to={
-                      can("view_resolve")
-                        ? `/resolve/tickets/${remediationTicket.id}`
-                        : `/tickets/${remediationTicket.id}`
-                    }
-                    className="font-medium text-primary hover:underline"
-                  >
-                    View the remediation ticket
-                  </Link>
-                )}
-              </p>
-            )}
-          </div>
-          {platform && <PlatformBadge platform={platform} />}
-        </div>
-
-        <div className={cn("grid grid-cols-1 items-stretch gap-4", can("run_test") && "sm:grid-cols-2")}>
+      <RiskDetailGrid
+        rail={
+          currentFinding ? (
+            <EvidenceRail count={(evidence.data ?? []).length}>
+              <EvidenceList items={evidence.data ?? []} />
+            </EvidenceRail>
+          ) : undefined
+        }
+      >
+        <div className={cn("grid grid-cols-1 items-stretch gap-3", can("run_test") && "sm:grid-cols-2")}>
           {can("run_test") &&
             (automated ? (
-              <Card className={cn("h-full p-4", !busy && "border-primary/50 bg-primary/5")}>
-                <div className="flex items-start gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-                    <Zap className="h-4.5 w-4.5" />
+              <Card className={cn("h-full p-3.5", !busy && "border-primary/50 bg-primary/5")}>
+                <div className="flex items-start gap-2.5">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                    <Zap className="h-4 w-4" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-foreground">
@@ -282,7 +284,7 @@ function TestPage() {
                             ? "Re-runs only this security test and updates its result."
                             : "The environment is already set up — this starts running straight away."}
                     </p>
-                    <div className="mt-3 flex items-center gap-2">
+                    <div className="mt-2.5 flex items-center gap-2">
                       <Button size="sm" onClick={() => void runTest()} disabled={busy}>
                         {executing
                           ? "Running…"
@@ -304,10 +306,10 @@ function TestPage() {
                 </div>
               </Card>
             ) : (
-              <Card className="h-full p-4 opacity-60">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                    <Zap className="h-4.5 w-4.5" />
+              <Card className="h-full p-3.5 opacity-60">
+                <div className="flex items-start gap-2.5">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                    <Zap className="h-4 w-4" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -317,7 +319,7 @@ function TestPage() {
                     <p className="mt-0.5 text-xs text-muted-foreground">
                       This security test has no automation. Follow the manual steps instead.
                     </p>
-                    <div className="mt-3">
+                    <div className="mt-2.5">
                       <Button size="sm" disabled className="cursor-not-allowed">
                         Run Automated Test
                       </Button>
@@ -333,7 +335,9 @@ function TestPage() {
             to={`/assessments/${assessmentId}/tests/${testId}/manual`}
           />
         </div>
-        {runError && <p className="-mt-2 text-xs text-danger">{runError}</p>}
+        {runError && <p className="text-xs text-danger">{runError}</p>}
+
+        <FindingSummary finding={currentFinding} />
 
         {(executing || queued) && (
           <Card className="border-primary/40">
@@ -385,8 +389,9 @@ function TestPage() {
           retrying={resync.isPending}
           retryError={resync.isError ? errorMessage(resync.error, "Could not start the sync.") : null}
         />
+      </RiskDetailGrid>
 
-        {can("view_risk_conversation") && (
+      {can("view_risk_conversation") && (
           <RiskConversationPanel
             items={timeline}
             isLoading={conversation.isLoading || entries.isLoading || isLoading}
@@ -416,19 +421,18 @@ function TestPage() {
                 ? "Every automated run of this risk appears here, alongside the discussion, classification decisions and reassessments."
                 : "This risk has no automation. Discuss it with the other team, record a classification decision, or ask for a reassessment."
             }
-            actions={
-              <RiskConversationActions
-                conversation={conversation.data}
-                finding={currentFinding}
-                application={assessment.application}
-                ticket={remediationTicket}
-                retests={retests}
-                can={can}
-              />
-            }
-          />
-        )}
-      </div>
-    </div>
+          actions={
+            <RiskConversationActions
+              conversation={conversation.data}
+              finding={currentFinding}
+              application={assessment.application}
+              ticket={remediationTicket}
+              retests={retests}
+              can={can}
+            />
+          }
+        />
+      )}
+    </RiskWorkspace>
   );
 }

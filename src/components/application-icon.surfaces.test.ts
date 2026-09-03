@@ -5,11 +5,8 @@ import { describe, expect, it } from "vitest";
 const SURFACES = [
   "src/pages/Assessments.tsx",
   "src/pages/NewAssessment.tsx",
-  "src/pages/Findings.tsx",
-  "src/pages/Tickets.tsx",
-  "src/pages/TicketDetail.tsx",
   "src/pages/Admin.tsx",
-  "src/components/assessment-sidebar.tsx",
+  "src/components/risk-sidebar.tsx",
 ];
 
 describe("application icon surfaces", () => {

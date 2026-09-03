@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { assessmentRunState, isTransitionalRunState } from "@/lib/status";
+import {
+  assessmentRunState,
+  isTransitionalRunState,
+  normalizeAssessmentStages,
+  sequenceAssessmentStages,
+  type AssessmentRunState,
+  type RawStageInput,
+} from "@/lib/status";
 import type { AssessmentRunRequest, AssessmentRunRequestStatus } from "@/data/types";
 
 function request(
@@ -169,5 +176,136 @@ describe("when to keep polling", () => {
   it("stops for a settled assessment with no request in flight", () => {
     expect(isTransitionalRunState({ status: "completed" }, request("completed"))).toBe(false);
     expect(isTransitionalRunState({ status: "failed" }, request("failed"))).toBe(false);
+  });
+});
+
+function countCurrent(stages: ReturnType<typeof sequenceAssessmentStages>) {
+  return stages.filter((s) => s.lifecycle === "current").length;
+}
+
+function runState(overrides: Partial<AssessmentRunState> & { label: string; tone: AssessmentRunState["tone"] }): AssessmentRunState {
+  return { detail: null, autoRetry: false, nextAttemptAt: null, canRetry: false, needsConfiguration: false, ...overrides };
+}
+
+describe("sequencing a set of stages into one stepper", () => {
+  const done = (id: string): RawStageInput => ({ id, label: id, state: "done" });
+
+  it("marks nothing current once every stage is done", () => {
+    const stages = sequenceAssessmentStages([done("a"), done("b"), done("c")]);
+    expect(countCurrent(stages)).toBe(0);
+    expect(stages.map((s) => s.lifecycle)).toEqual(["complete", "complete", "complete"]);
+  });
+
+  it("marks exactly the first unresolved stage current, never a later one", () => {
+    const stages = sequenceAssessmentStages([
+      done("a"),
+      { id: "b", label: "b", state: "in_progress" },
+      { id: "c", label: "c", state: "in_progress" },
+    ]);
+    expect(countCurrent(stages)).toBe(1);
+    expect(stages.map((s) => s.lifecycle)).toEqual(["complete", "current", "future"]);
+  });
+
+  it("forces a later stage to future even if it independently reports done", () => {
+    const stages = sequenceAssessmentStages([
+      { id: "a", label: "a", state: "in_progress" },
+      done("b"),
+      { id: "c", label: "c", state: "pending" },
+    ]);
+    expect(countCurrent(stages)).toBe(1);
+    expect(stages.map((s) => s.lifecycle)).toEqual(["current", "future", "future"]);
+  });
+
+  it("marks a failed unresolved stage failed, not current, and stops the sequence there", () => {
+    const stages = sequenceAssessmentStages([
+      done("a"),
+      { id: "b", label: "b", state: "failed" },
+      { id: "c", label: "c", state: "pending" },
+    ]);
+    expect(countCurrent(stages)).toBe(0);
+    expect(stages.map((s) => s.lifecycle)).toEqual(["complete", "failed", "future"]);
+  });
+
+  it("marks an unknown unresolved stage unknown, not current", () => {
+    const stages = sequenceAssessmentStages([
+      done("a"),
+      { id: "b", label: "b", state: "unknown" },
+      { id: "c", label: "c", state: "pending" },
+    ]);
+    expect(countCurrent(stages)).toBe(0);
+    expect(stages.map((s) => s.lifecycle)).toEqual(["complete", "unknown", "future"]);
+  });
+
+  it("never produces more than one current stage, across every state combination", () => {
+    const states = ["done", "in_progress", "pending", "failed", "unknown"] as const;
+    for (const a of states) {
+      for (const b of states) {
+        for (const c of states) {
+          const stages = sequenceAssessmentStages([
+            { id: "a", label: "a", state: a },
+            { id: "b", label: "b", state: b },
+            { id: "c", label: "c", state: c },
+          ]);
+          expect(countCurrent(stages), `${a},${b},${c}`).toBeLessThanOrEqual(1);
+        }
+      }
+    }
+  });
+});
+
+describe("normalizing the full assessment workflow", () => {
+  const idle = { status: "queued" as const, completed_tests: 0, total_tests: 4 };
+
+  it("spins environment preparation alone when nothing is registered", () => {
+    const stages = normalizeAssessmentStages({
+      configurationReady: false,
+      runState: runState({ label: "Queued for automated testing", tone: "neutral" }),
+      assessment: idle,
+    });
+    expect(countCurrent(stages)).toBe(1);
+    expect(stages[0].lifecycle).toBe("current");
+    expect(stages.slice(1).every((s) => s.lifecycle === "future")).toBe(true);
+  });
+
+  it("spins automated testing once configuration is ready, independent of device state", () => {
+    const stages = normalizeAssessmentStages({
+      configurationReady: true,
+      runState: runState({ label: "Waiting for a compatible test device", tone: "warning", canRetry: true }),
+      assessment: idle,
+    });
+    expect(countCurrent(stages)).toBe(1);
+    expect(stages.map((s) => s.lifecycle)).toEqual(["complete", "complete", "complete", "current", "future"]);
+  });
+
+  it("keeps a retryable testing failure current rather than failed", () => {
+    const stages = normalizeAssessmentStages({
+      configurationReady: true,
+      runState: runState({ label: "Test execution could not start", tone: "danger", canRetry: true }),
+      assessment: idle,
+    });
+    const testing = stages.find((s) => s.id === "testing")!;
+    expect(testing.lifecycle).toBe("current");
+  });
+
+  it("fails testing, not current, for a non-retryable blocker", () => {
+    const stages = normalizeAssessmentStages({
+      configurationReady: true,
+      runState: runState({ label: "Configuration needs attention", tone: "danger", canRetry: false }),
+      assessment: idle,
+    });
+    const testing = stages.find((s) => s.id === "testing")!;
+    expect(testing.lifecycle).toBe("failed");
+    expect(stages.find((s) => s.id === "analysis")!.lifecycle).toBe("future");
+  });
+
+  it("completes both testing and analysis, with no current stage, once the assessment is done", () => {
+    const stages = normalizeAssessmentStages({
+      configurationReady: true,
+      runState: runState({ label: "Completed", tone: "success" }),
+      assessment: { status: "completed", completed_tests: 4, total_tests: 4 },
+    });
+    expect(countCurrent(stages)).toBe(0);
+    expect(stages.find((s) => s.id === "testing")!.lifecycle).toBe("complete");
+    expect(stages.find((s) => s.id === "analysis")!.lifecycle).toBe("complete");
   });
 });

@@ -13,7 +13,6 @@ import {
   activeRemediationTicket,
   canRequestReassessment,
   reassessmentBlockedReason,
-  riskConversationPath,
   canResumeTicket,
   canWithdrawTicket,
   resumableRemediationTicket,
@@ -33,6 +32,7 @@ import {
   developerTicketLabel,
   developerTicketLabels,
   findingProgress,
+  preferredDeveloperRisk,
   summarizeApplication,
 } from "./resolve";
 
@@ -941,38 +941,6 @@ describe("why a reassessment cannot be requested", () => {
   });
 });
 
-describe("the path to a risk conversation", () => {
-  it("uses the assessment the caller arrived from", () => {
-    expect(
-      riskConversationPath(
-        { risk_id: "example-feature-01-risk-01", origin_assessment_id: "first-assessment" },
-        "current-assessment",
-      ),
-    ).toBe("/assessments/current-assessment/tests/example-feature-01-risk-01");
-  });
-
-  it("falls back to the assessment the conversation was opened under", () => {
-    expect(
-      riskConversationPath({
-        risk_id: "example-feature-01-risk-01",
-        origin_assessment_id: "first-assessment",
-      }),
-    ).toBe("/assessments/first-assessment/tests/example-feature-01-risk-01");
-  });
-
-  it("offers no path rather than a broken one when no assessment is known", () => {
-    expect(
-      riskConversationPath({ risk_id: "example-feature-01-risk-01", origin_assessment_id: null }),
-    ).toBeNull();
-    expect(
-      riskConversationPath(
-        { risk_id: "example-feature-01-risk-01", origin_assessment_id: null },
-        null,
-      ),
-    ).toBeNull();
-  });
-});
-
 describe("withdrawal gates", () => {
   it("offers withdrawal while the developer still owns the ticket", () => {
     for (const status of ["open", "in_progress", "fix_submitted", "rejected"] as TicketStatus[]) {
@@ -1089,5 +1057,37 @@ describe("withdrawn tickets in the dashboard", () => {
     const summary = summarizeApplication(APP, [finding()], [withdrawnTicket], [], []);
     expect(summary.status).toBe("action_required");
     expect(summary.findingsRequiringAction).toBe(1);
+  });
+});
+
+describe("the risk a developer lands on when they open an application", () => {
+  const atRisk = finding({ id: "finding-1", test_id: "example-feature-01-risk-01" });
+  const second = finding({ id: "finding-2", test_id: "example-feature-01-risk-02" });
+
+  it("opens the first finding still needing action", () => {
+    const resolved = finding({ id: "finding-0", test_id: "example-risk-00", status: "reduced_risk" });
+    expect(preferredDeveloperRisk([resolved, atRisk], [])).toBe("example-feature-01-risk-01");
+  });
+
+  it("prefers an untouched finding over one already being remediated", () => {
+    const started = ticket({ id: "ticket-1", finding_id: "finding-1", status: "in_progress" });
+    expect(preferredDeveloperRisk([atRisk, second], [started])).toBe("example-feature-01-risk-02");
+  });
+
+  it("falls back to a remediation already under way when nothing else needs action", () => {
+    const started = ticket({ id: "ticket-1", finding_id: "finding-1", status: "in_progress" });
+    const resolved = finding({ id: "finding-2", test_id: "example-feature-01-risk-02", status: "reduced_risk" });
+    expect(preferredDeveloperRisk([atRisk, resolved], [started])).toBe("example-feature-01-risk-01");
+  });
+
+  it("falls back to the first finding of any kind", () => {
+    const resolved = finding({ id: "finding-1", test_id: "example-feature-01-risk-01", status: "reduced_risk" });
+    expect(preferredDeveloperRisk([resolved], [])).toBe("example-feature-01-risk-01");
+  });
+
+  it("has nothing to open when no finding is linked to a security test", () => {
+    expect(preferredDeveloperRisk([finding({ test_id: null })], [])).toBeNull();
+    expect(preferredDeveloperRisk([], [])).toBeNull();
+    expect(preferredDeveloperRisk(undefined, undefined)).toBeNull();
   });
 });

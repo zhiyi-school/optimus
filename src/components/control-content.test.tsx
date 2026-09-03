@@ -7,7 +7,8 @@ import {
   ControlIntro,
   ControlReferences,
   ControlSourceArchive,
-  ControlSteps,
+  ControlStepBody,
+  ControlStepsEmpty,
   type ControlStepProgress,
 } from "@/components/control-content";
 import type { ControlDetail, ControlSourceMetadata } from "@/api/playbook-types";
@@ -115,6 +116,26 @@ afterEach(() => {
 
 function render(node: ReactNode) {
   act(() => root.render(node));
+}
+
+/** The page shows one step at a time; these render the whole set to exercise each body. */
+function ControlSteps({
+  control,
+  progress,
+}: {
+  control: ControlDetail;
+  progress?: ControlStepProgress;
+}) {
+  if (control.steps.length === 0) return <ControlStepsEmpty />;
+  return (
+    <ol>
+      {control.steps.map((entry, index) => (
+        <li key={entry.step_key}>
+          <ControlStepBody step={entry} index={index} progress={progress} />
+        </li>
+      ))}
+    </ol>
+  );
 }
 
 function toggles() {
@@ -349,8 +370,8 @@ describe("screenshots inside a control step", () => {
   it("caps how large a screenshot can get", () => {
     render(<ControlSteps control={definition()} />);
 
-    expect(image().className).toContain("max-h-[32rem]");
-    expect(image().className).toContain("max-w-[min(100%,42rem)]");
+    expect(image().className).toContain("max-h-[15rem]");
+    expect(image().className).toContain("max-w-[min(100%,13rem)]");
   });
 
   it("never stretches a small screenshot to the width of the card", () => {
@@ -372,7 +393,7 @@ describe("screenshots inside a control step", () => {
   it("cannot push the page sideways on a narrow screen", () => {
     render(<ControlSteps control={definition()} />);
 
-    expect(image().className).toContain("max-w-[min(100%,42rem)]");
+    expect(image().className).toContain("max-w-[min(100%,13rem)]");
     expect(image().closest("figure")?.className).toContain("max-w-full");
   });
 
@@ -389,7 +410,7 @@ describe("screenshots inside a control step", () => {
     expect(figure.querySelector("figcaption")?.textContent).toContain("Example caption");
   });
 
-  it("spaces several screenshots apart", () => {
+  it("lays neighbouring screenshots out side by side", () => {
     const control = definition();
     control.steps[0].content = [
       ...control.steps[0].content,
@@ -406,7 +427,7 @@ describe("screenshots inside a control step", () => {
 
     const figures = container.querySelectorAll("figure");
     expect(figures).toHaveLength(2);
-    expect(figures[0].parentElement?.className).toContain("space-y-3");
+    expect(figures[0].parentElement?.className).toContain("flex-wrap");
   });
 
   it("says so plainly when a screenshot is missing, instead of a broken image", () => {

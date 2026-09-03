@@ -18,14 +18,15 @@ function sourceFiles(dir = "src"): string[] {
 const PAGES = sourceFiles("src/pages").concat(sourceFiles("src/components"));
 
 describe("the conversation has exactly one home", () => {
-  it("is rendered by the assessment risk page and nowhere else", () => {
-    const renderers = PAGES.filter((path) => /<RiskConversationPanel/.test(source(path)));
-    expect(renderers).toEqual(["src/pages/TestDetail.tsx"]);
+  it("is rendered only by each role's own feature-risk workspace", () => {
+    const renderers = PAGES.filter((path) => /<RiskConversationPanel/.test(source(path))).sort();
+    expect(renderers).toEqual(["src/pages/ResolveRisk.tsx", "src/pages/TestDetail.tsx"]);
   });
 
-  it("is rendered once on that page", () => {
-    const matches = source("src/pages/TestDetail.tsx").match(/<RiskConversationPanel/g);
-    expect(matches).toHaveLength(1);
+  it("is rendered once on each of them", () => {
+    for (const path of ["src/pages/TestDetail.tsx", "src/pages/ResolveRisk.tsx"]) {
+      expect(source(path).match(/<RiskConversationPanel/g), path).toHaveLength(1);
+    }
   });
 
   it("is not on the assessment overview", () => {
@@ -35,40 +36,40 @@ describe("the conversation has exactly one home", () => {
     expect(assessment).not.toContain("<textarea");
   });
 
-  it("is not composed on either ticket page", () => {
-    for (const path of ["src/pages/TicketDetail.tsx", "src/pages/ResolveTicket.tsx"]) {
-      const page = source(path);
-      expect(page, path).not.toContain("ConversationPanel");
-      expect(page, path).toContain("RiskConversationLink");
+  it("is not composed on the remediation section", () => {
+    const page = source("src/pages/ResolveTicket.tsx");
+    expect(page).not.toContain("<RiskConversationPanel");
+  });
+
+  it("is not pointed at from the remediation section, which is already on the same page", () => {
+    for (const path of ["src/pages/ResolveTicket.tsx", "src/pages/ResolveRisk.tsx"]) {
+      expect(source(path), path).not.toContain("RiskConversationLink");
+      expect(source(path), path).not.toContain("Talking to security");
+      expect(source(path), path).not.toContain("Open risk conversation");
     }
   });
 
-  it("is reached from a ticket by the conversation and assessment it was opened against", () => {
-    for (const path of ["src/pages/TicketDetail.tsx", "src/pages/ResolveTicket.tsx"]) {
-      expect(source(path), path).toContain("riskConversationPath(conversation,");
-      expect(source(path), path).toContain("origin_assessment_id");
-      expect(source(path), path).toContain("useRiskConversationById");
+  it("has no helper left that would route a developer through an Assess page to reach it", () => {
+    for (const path of sourceFiles()) {
+      expect(source(path), path).not.toContain("riskConversationPath");
     }
   });
 
-  it("is reached from a finding by its own assessment and risk", () => {
-    const finding = source("src/pages/FindingDetail.tsx");
-    expect(finding).toContain("RiskConversationLink");
-    expect(finding).toContain("`/assessments/${finding.assessment_id}/tests/${finding.test_id}`");
+  it("is reached from an old finding link by the redirect that maps it", () => {
+    const redirect = source("src/lib/legacy-routes.ts");
+    expect(redirect).toContain("/assessments/${location.assessmentId}/tests/");
+    expect(redirect).toContain("/resolve/applications/${location.applicationId}/risks/");
   });
 
   it("owns the classification control, which no longer sits on the finding page", () => {
-    expect(source("src/pages/FindingDetail.tsx")).not.toContain("useClassifyRisk");
-    expect(source("src/pages/FindingDetail.tsx")).not.toContain("SecurityStatusOverride");
     expect(source("src/components/ticket-actions.tsx")).toContain("useClassifyRisk");
   });
 
   it("owns the reassessment controls, which no longer sit on a ticket page", () => {
     expect(source("src/components/ticket-actions.tsx")).toContain("RiskConversationActions");
-    for (const path of ["src/pages/TicketDetail.tsx", "src/pages/ResolveTicket.tsx"]) {
-      expect(source(path), path).not.toContain("RequestReassessment");
-      expect(source(path), path).not.toContain("RunRetest");
-    }
+    const page = source("src/pages/ResolveTicket.tsx");
+    expect(page).not.toContain("RequestReassessment");
+    expect(page).not.toContain("RunRetest");
   });
 });
 

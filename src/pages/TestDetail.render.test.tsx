@@ -164,6 +164,7 @@ vi.mock("@/hooks/queries", () => {
       ...idle,
       data: retestStatus ? [{ id: "example-retest-id", status: retestStatus }] : [],
     }),
+    useFindingEvidenceItems: () => ({ ...idle, data: [] }),
     useTestRunHistory: () => ({ ...idle, isError: historyFailed, data: history }),
     useActiveRun: () => ({ run: undefined, platformRun: undefined }),
     useRunEvents: () => ({ events: [], streamState: "idle" }),
@@ -291,10 +292,17 @@ describe("the risk page is the one conversation location", () => {
     expect(text()).toContain("High");
   });
 
-  it("links to the finding and the remediation ticket", () => {
+  it("points at the developer's workspace for the same risk, not a tickets page", () => {
+    roles = ["security", "developer"];
     render();
-    expect(links()).toContain(`/findings/${FINDING}`);
-    expect(links()).toContain(`/tickets/${TICKET}`);
+    expect(links()).toContain(`/resolve/applications/example-app-id/risks/${RISK}`);
+    expect(links().some((href) => href?.startsWith("/findings"))).toBe(false);
+    expect(links().some((href) => href?.startsWith("/tickets"))).toBe(false);
+  });
+
+  it("offers a security-only user no cross-link into Resolve", () => {
+    render();
+    expect(links().some((href) => href?.startsWith("/resolve"))).toBe(false);
   });
 
   it("resolves the conversation by application, carrying the assessment as context", () => {

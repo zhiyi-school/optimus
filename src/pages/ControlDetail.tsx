@@ -1,15 +1,16 @@
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, FileText } from "lucide-react";
 import { useAuth } from "@/auth/useAuth";
-import { PageHeader, LoadingState, ErrorState } from "@/components/common";
-import { Card, CardContent } from "@/components/ui/card";
-import { PlaybookUpdatedNotice, ProgressBar, ToneBadge } from "@/components/resolve-display";
+import { LoadingState, ErrorState } from "@/components/common";
+import { PlaybookUpdatedNotice, ProgressBar } from "@/components/resolve-display";
+import { EstimatedTime, GuidedSteps, type GuidedStep } from "@/components/guided-steps";
 import {
   ControlIntro,
   ControlReferences,
   ControlSourceArchive,
-  ControlSteps,
+  ControlStepBody,
+  ControlStepsEmpty,
   type ControlStepProgress,
 } from "@/components/control-content";
 import {
@@ -21,12 +22,7 @@ import {
   useTicketControlSteps,
   useTicketControls,
 } from "@/hooks/queries";
-import {
-  changedSinceCompleted,
-  contentHashes,
-  controlStatusLabels,
-  liveControls,
-} from "@/lib/resolve";
+import { changedSinceCompleted, contentHashes, liveControls } from "@/lib/resolve";
 
 export default function ControlDetail() {
   const { ticketId, controlId } = useParams<{ ticketId: string; controlId: string }>();
@@ -74,6 +70,13 @@ export default function ControlDetail() {
     [live, can, setStatus],
   );
 
+  const definitionSteps = control.data?.steps ?? [];
+  const [chosenStepKey, setChosenStepKey] = useState<string | null>(null);
+  const activeStepKey =
+    chosenStepKey && definitionSteps.some((step) => step.step_key === chosenStepKey)
+      ? chosenStepKey
+      : (definitionSteps[0]?.step_key ?? null);
+
   if (ticket.isLoading || control.isLoading) return <LoadingState label="Loading control…" />;
   if (ticket.isError || !ticket.data) {
     return <ErrorState message="Unable to load this remediation." onRetry={() => ticket.refetch()} />;
@@ -90,46 +93,70 @@ export default function ControlDetail() {
     );
   }
 
-  const presentation = controlStatusLabels[live?.status ?? "not_started"];
   const progress = live?.progress ?? { completed: 0, total: 0, ratio: 0 };
+  const navSteps: GuidedStep[] = definitionSteps.map((step, index) => ({
+    id: step.step_key,
+    label: step.step_title || `Step ${step.number ?? index + 1}`,
+    complete: stepProgress.byStepKey.get(step.step_key)?.status === "completed",
+  }));
+  const activeIndex = definitionSteps.findIndex((step) => step.step_key === activeStepKey);
+  const activeStep = activeIndex >= 0 ? definitionSteps[activeIndex] : undefined;
 
   return (
     <div>
       {playbook.updated && <PlaybookUpdatedNotice onDismiss={playbook.dismiss} />}
-      <BackLink to={backTo} />
 
-      <PageHeader
-        title={control.data.title}
-        description={control.data.summary}
-        actions={<ToneBadge tone={presentation.tone} label={presentation.label} />}
-      />
-
-      <Card className="mb-6">
-        <CardContent className="space-y-3 py-4">
-          <ProgressBar label="Steps completed" progress={progress} />
-          <p className="text-xs text-muted-foreground">
-            These are the developer remediation steps for this control. They are not the steps
-            security uses to demonstrate the risk.
-          </p>
-          {!stepProgress.editable && (
-            <p className="text-xs text-muted-foreground">
-              You are reading this control. Only the developers assigned to this application can
-              record progress against its steps.
-            </p>
+      {definitionSteps.length === 0 ? (
+        <div>
+          <BackLink to={backTo} />
+          <ControlStepsEmpty />
+        </div>
+      ) : (
+        <GuidedSteps
+          icon={FileText}
+          title={`Remediation Steps — ${control.data.title}`}
+          description={control.data.summary ?? undefined}
+          tip={
+            control.data.status !== "active"
+              ? `This control is marked ${control.data.status} and is not counted as required remediation work.`
+              : stepProgress.editable
+                ? "Implement the recommended fix, then verify it. Mark each step complete as you go."
+                : "You are reading this control. Only the developers assigned to this application can record progress against its steps."
+          }
+          steps={navSteps}
+          activeId={activeStepKey}
+          onSelect={setChosenStepKey}
+          aside={
+            <div className="hidden space-y-3 lg:block">
+              <div className="rounded-md border border-border/70 bg-muted/40 p-3">
+                <ProgressBar label="Steps completed" progress={progress} />
+              </div>
+              <EstimatedTime>
+                {definitionSteps.length === 1 ? "1 step" : `${definitionSteps.length} steps`}
+              </EstimatedTime>
+            </div>
+          }
+          closeTo={backTo}
+          closeLabel="Back to remediation"
+          navLabel="Remediation steps"
+          finishLabel="Done"
+        >
+          {activeStep && (
+            <ControlStepBody
+              key={activeStep.step_key}
+              step={activeStep}
+              index={activeIndex}
+              progress={stepProgress}
+            />
           )}
-          {control.data.status !== "active" && (
-            <p className="text-xs text-muted-foreground">
-              This control is marked <strong>{control.data.status}</strong> and is not counted as
-              required remediation work.
-            </p>
-          )}
-        </CardContent>
-      </Card>
+        </GuidedSteps>
+      )}
 
-      <ControlIntro control={control.data} />
-      <ControlSteps control={control.data} progress={stepProgress} />
-      <ControlReferences control={control.data} />
-      <ControlSourceArchive platform={platform} controlId={controlId} source={source.data} />
+      <div className="mx-auto max-w-5xl">
+        <ControlIntro control={control.data} />
+        <ControlReferences control={control.data} />
+        <ControlSourceArchive platform={platform} controlId={controlId} source={source.data} />
+      </div>
     </div>
   );
 }

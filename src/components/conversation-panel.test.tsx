@@ -2,10 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter } from "react-router-dom";
 import { RiskConversationPanel } from "@/components/conversation-panel";
-import { RiskConversationLink } from "@/components/resolve-display";
-import { riskConversationPath } from "@/lib/resolve";
 import { conversationTimeline } from "@/lib/conversation-timeline";
 import type { AutomationResultRow } from "@/api/automation-types";
 import type {
@@ -671,70 +668,3 @@ describe("where the feed sits when things change", () => {
   });
 });
 
-describe("the pointer a ticket shows instead of its own thread", () => {
-  function renderLink(props: Parameters<typeof RiskConversationLink>[0]) {
-    act(() =>
-      root.render(
-        <MemoryRouter>
-          <RiskConversationLink {...props} />
-        </MemoryRouter>,
-      ),
-    );
-  }
-
-  it("points at the risk page of the assessment the conversation was opened under", () => {
-    renderLink({
-      to: riskConversationPath({
-        risk_id: "example-feature-01-risk-01",
-        origin_assessment_id: "example-assessment-id",
-      }),
-    });
-
-    const link = container.querySelector("a");
-    expect(link?.getAttribute("href")).toBe(
-      "/assessments/example-assessment-id/tests/example-feature-01-risk-01",
-    );
-    expect(text()).toContain("Open risk conversation");
-  });
-
-  it("prefers the assessment the ticket itself was raised against", () => {
-    renderLink({
-      to: riskConversationPath(
-        {
-          risk_id: "example-feature-01-risk-01",
-          origin_assessment_id: "example-first-assessment-id",
-        },
-        "example-ticket-assessment-id",
-      ),
-    });
-
-    expect(container.querySelector("a")?.getAttribute("href")).toBe(
-      "/assessments/example-ticket-assessment-id/tests/example-feature-01-risk-01",
-    );
-  });
-
-  it("offers no link when neither the ticket nor the conversation names an assessment", () => {
-    renderLink({
-      to: riskConversationPath({
-        risk_id: "example-feature-01-risk-01",
-        origin_assessment_id: null,
-      }),
-      unavailableNote: "There is no assessment to open this from.",
-    });
-
-    expect(container.querySelector("a")).toBeNull();
-  });
-
-  it("offers no link at all rather than guessing when there is no conversation", () => {
-    renderLink({ to: null, unavailableNote: "This ticket is not linked to one." });
-
-    expect(container.querySelector("a")).toBeNull();
-    expect(text()).toContain("This ticket is not linked to one.");
-  });
-
-  it("never composes a message of its own", () => {
-    renderLink({ to: "/assessments/a/tests/r" });
-    expect(container.querySelector("textarea")).toBeNull();
-    expect(container.querySelector("form")).toBeNull();
-  });
-});

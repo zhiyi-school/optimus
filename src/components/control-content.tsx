@@ -24,7 +24,7 @@ export interface ControlStepProgress {
 export function ControlIntro({ control }: { control: ControlDetail }) {
   if (control.intro.length === 0) return null;
   return (
-    <Card className="mb-6">
+    <Card className="mt-4">
       <CardContent className="py-4">
         <PlaybookContent blocks={control.intro} />
       </CardContent>
@@ -32,34 +32,19 @@ export function ControlIntro({ control }: { control: ControlDetail }) {
   );
 }
 
-export function ControlSteps({
-  control,
-  progress,
-}: {
-  control: ControlDetail;
-  progress?: ControlStepProgress;
-}) {
-  if (control.steps.length === 0) {
-    return (
-      <EmptyState
-        title="This control has no remediation steps yet"
-        description="The playbook document exists but does not list numbered steps. Ask security to complete it."
-      />
-    );
-  }
+export function ControlStepsEmpty() {
   return (
-    <ol className="space-y-3">
-      {control.steps.map((step, index) => (
-        <StepCard key={step.step_key} step={step} index={index} progress={progress} />
-      ))}
-    </ol>
+    <EmptyState
+      title="This control has no remediation steps yet"
+      description="The playbook document exists but does not list numbered steps. Ask security to complete it."
+    />
   );
 }
 
 export function ControlReferences({ control }: { control: ControlDetail }) {
   if (control.references.length === 0) return null;
   return (
-    <Card className="mt-6">
+    <Card className="mt-4">
       <CardContent className="py-4">
         <h2 className="mb-2 text-sm font-semibold text-foreground">References</h2>
         <ul className="space-y-1">
@@ -93,7 +78,7 @@ export function ControlSourceArchive({
 }) {
   if (!source?.exists || !platform || !controlId) return null;
   return (
-    <Card className="mt-6">
+    <Card className="mt-4">
       <CardContent className="py-4">
         <h2 className="mb-1 text-sm font-semibold text-foreground">Implementation example</h2>
         <p className="mb-3 text-xs text-muted-foreground">
@@ -119,7 +104,8 @@ export function ControlSourceArchive({
   );
 }
 
-function StepCard({
+/** One step of a control, rendered on its own inside the guided-step shell. */
+export function ControlStepBody({
   step,
   index,
   progress,
@@ -138,93 +124,83 @@ function StepCard({
   const editable = progress?.editable === true && row !== undefined;
 
   return (
-    <li>
-      <Card>
-        <CardContent className="py-4">
-          <div className="flex items-start gap-3">
+    <div className="space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Step {step.number ?? index + 1}
+          </p>
+          <h2 className="text-sm font-semibold text-foreground">{step.step_title}</h2>
+        </div>
+        <button
+          type="button"
+          disabled={!editable || progress?.pending}
+          aria-pressed={done}
+          aria-label={done ? `Mark step ${index + 1} not started` : `Mark step ${index + 1} complete`}
+          onClick={() => row && progress?.setStatus(row.id, done ? "not_started" : "completed")}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Icon className={done ? "h-4 w-4 text-success" : "h-4 w-4 text-muted-foreground"} />
+          {done ? "Completed" : "Mark complete"}
+        </button>
+      </div>
+
+      {changed && (
+        <p className="text-xs text-warning">
+          This step changed after you completed it. Re-read it before submitting your fix.
+        </p>
+      )}
+
+      {step.text && <p className="text-sm text-foreground">{step.text}</p>}
+      <PlaybookContent blocks={step.content} />
+
+      {progress?.error != null && (
+        <p className="text-xs text-danger">
+          {errorMessage(progress.error, "Could not save your progress.")}
+        </p>
+      )}
+
+      {editable && row && (
+        <div className="border-t border-border/70 pt-3">
+          {noteOpen ? (
+            <div className="space-y-2">
+              <Textarea
+                rows={2}
+                value={note}
+                placeholder="A note for security about this step…"
+                onChange={(event) => setNote(event.target.value)}
+              />
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  disabled={progress.pending}
+                  onClick={() => {
+                    progress.setStatus(row.id, row.status, note);
+                    setNoteOpen(false);
+                  }}
+                >
+                  Save note
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setNoteOpen(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          ) : (
             <button
               type="button"
-              disabled={!editable || progress?.pending}
-              aria-pressed={done}
-              aria-label={
-                done ? `Mark step ${index + 1} not started` : `Mark step ${index + 1} complete`
-              }
-              onClick={() =>
-                row && progress?.setStatus(row.id, done ? "not_started" : "completed")
-              }
-              className="mt-0.5 shrink-0 disabled:cursor-not-allowed disabled:opacity-50"
+              className="text-xs text-primary hover:underline"
+              onClick={() => setNoteOpen(true)}
             >
-              <Icon className={done ? "h-5 w-5 text-success" : "h-5 w-5 text-muted-foreground"} />
+              {row.developer_note ? "Edit note" : "Add a note"}
             </button>
-
-            <div className="min-w-0 flex-1 space-y-3">
-              <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Step {step.number ?? index + 1}
-                </p>
-                <p className="text-sm font-medium text-foreground">{step.step_title}</p>
-              </div>
-
-              {changed && (
-                <p className="text-xs text-warning">
-                  This step changed after you completed it. Re-read it before submitting your fix.
-                </p>
-              )}
-
-              {step.text && <p className="text-sm text-foreground">{step.text}</p>}
-              <PlaybookContent blocks={step.content} />
-
-              {progress?.error != null && (
-                <p className="text-xs text-danger">
-                  {errorMessage(progress.error, "Could not save your progress.")}
-                </p>
-              )}
-
-              {editable && row && (
-                <div>
-                  {noteOpen ? (
-                    <div className="space-y-2">
-                      <Textarea
-                        rows={2}
-                        value={note}
-                        placeholder="A note for security about this step…"
-                        onChange={(event) => setNote(event.target.value)}
-                      />
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          disabled={progress.pending}
-                          onClick={() => {
-                            progress.setStatus(row.id, row.status, note);
-                            setNoteOpen(false);
-                          }}
-                        >
-                          Save note
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => setNoteOpen(false)}>
-                          Cancel
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      className="text-xs text-primary hover:underline"
-                      onClick={() => setNoteOpen(true)}
-                    >
-                      {row.developer_note ? "Edit note" : "Add a note"}
-                    </button>
-                  )}
-                  {!noteOpen && row.developer_note && (
-                    <p className="mt-1 text-xs text-muted-foreground">{row.developer_note}</p>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </li>
+          )}
+          {!noteOpen && row.developer_note && (
+            <p className="mt-1 text-xs text-muted-foreground">{row.developer_note}</p>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

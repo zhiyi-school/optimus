@@ -53,7 +53,9 @@ let container: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
-  images = [{ path: "example/portrait.png", url: "/assets/example/portrait.png", caption: "Example caption." }];
+  images = [
+    { path: "example/portrait.png", url: "/assets/example/portrait.png", caption: "Example caption." },
+  ];
   blocks = null;
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -82,10 +84,10 @@ function image() {
 }
 
 describe("manual-test screenshots", () => {
-  it("caps how much of the page a screenshot can take", () => {
+  it("keeps a screenshot small enough to sit beside its siblings", () => {
     render();
-    expect(image().className).toContain("max-h-[32rem]");
-    expect(image().className).toContain("max-w-[min(100%,42rem)]");
+    expect(image().className).toContain("max-h-[15rem]");
+    expect(image().className).toContain("max-w-[min(100%,13rem)]");
   });
 
   it("stays inside a narrow screen", () => {
@@ -106,8 +108,8 @@ describe("manual-test screenshots", () => {
     for (const path of ["example/portrait.png", "example/landscape.png"]) {
       images = [{ path, url: `/assets/${path}`, caption: "Example caption." }];
       render();
-      expect(image().className, path).toContain("max-h-[32rem]");
-      expect(image().className, path).toContain("max-w-[min(100%,42rem)]");
+      expect(image().className, path).toContain("max-h-[15rem]");
+      expect(image().className, path).toContain("max-w-[min(100%,13rem)]");
       act(() => root.unmount());
       root = createRoot(container);
     }
@@ -118,6 +120,12 @@ describe("manual-test screenshots", () => {
     const figure = container.querySelector("figure") as HTMLElement;
     expect(figure.className).toContain("w-fit");
     expect(figure.querySelector("figcaption")?.textContent).toContain("Example caption.");
+  });
+
+  it("can be opened at full size", () => {
+    render();
+    const trigger = image().closest("button") as HTMLButtonElement;
+    expect(trigger.getAttribute("aria-label")).toContain("full size");
   });
 
   it("still falls back when the screenshot is missing", () => {
@@ -135,9 +143,20 @@ describe("manual-test screenshots", () => {
   });
 });
 
-function navLinks() {
+function navButtons() {
   const nav = container.querySelector("nav[aria-label='Manual testing steps']");
-  return [...(nav?.querySelectorAll("a") ?? [])];
+  return [...(nav?.querySelectorAll("button") ?? [])];
+}
+
+function buttonLabelled(label: string) {
+  return [...container.querySelectorAll("button")].find((b) =>
+    (b.textContent ?? "").includes(label),
+  ) as HTMLButtonElement | undefined;
+}
+
+function click(element: Element | null | undefined) {
+  if (!element) throw new Error("nothing to click");
+  act(() => element.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })));
 }
 
 describe("manual-test step navigation", () => {
@@ -152,96 +171,96 @@ describe("manual-test step navigation", () => {
     ];
   });
 
-  it("creates one sidebar entry per step", () => {
+  it("creates one sidebar entry per step, however many blocks they came from", () => {
     render();
-    expect(navLinks()).toHaveLength(3);
+    expect(navButtons()).toHaveLength(3);
   });
 
   it("numbers steps in one global order across every block", () => {
     render();
-    expect(navLinks().map((link) => link.textContent)).toEqual(["Step 1", "Step 2", "Step 3"]);
+    expect(navButtons().map((b) => b.textContent)).toEqual(["1Step 1", "2Step 2", "3Step 3"]);
   });
 
-  it("gives each step a unique anchor its link points at", () => {
+  it("shows one step at a time", () => {
     render();
-    const targets = navLinks().map((link) => link.getAttribute("href"));
-    expect(targets).toEqual(["#manual-step-1", "#manual-step-2", "#manual-step-3"]);
-    expect(new Set(targets).size).toBe(3);
-    for (const target of targets) {
-      expect(container.querySelector(target!.replace("#", "#"))).not.toBeNull();
-    }
-  });
-
-  it("renders the numbered step bodies in the same global order", () => {
-    render();
-    const anchors = [...container.querySelectorAll("[id^='manual-step-']")];
-    expect(anchors.map((node) => node.id)).toEqual([
-      "manual-step-1",
-      "manual-step-2",
-      "manual-step-3",
-    ]);
-    expect(anchors[2].textContent).toContain("Third step.");
+    expect(container.textContent).toContain("First step.");
+    expect(container.textContent).not.toContain("Second step.");
+    expect(container.textContent).not.toContain("Third step.");
   });
 
   it("marks the current step and only the current step", () => {
     render();
-    const current = navLinks().filter((link) => link.getAttribute("aria-current") === "step");
+    const current = navButtons().filter((b) => b.getAttribute("aria-current") === "step");
     expect(current).toHaveLength(1);
-    expect(current[0].textContent).toBe("Step 1");
+    expect(current[0].textContent).toContain("Step 1");
   });
 
-  it("moves the current marker when another step is chosen, without leaving the route", () => {
+  it("changes the active step when another is chosen, without leaving the route", () => {
     render();
-    act(() => navLinks()[2].dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })));
+    click(navButtons()[2]);
 
-    const current = navLinks().filter((link) => link.getAttribute("aria-current") === "step");
+    const current = navButtons().filter((b) => b.getAttribute("aria-current") === "step");
     expect(current).toHaveLength(1);
-    expect(current[0].textContent).toBe("Step 3");
+    expect(current[0].textContent).toContain("Step 3");
     expect(container.textContent).toContain("Third step.");
+    expect(container.textContent).not.toContain("First step.");
+  });
+
+  it("moves forward with Next and back with Previous", () => {
+    render();
+    click(buttonLabelled("Next Step"));
+    expect(container.textContent).toContain("Second step.");
+
+    click(buttonLabelled("Previous"));
+    expect(container.textContent).toContain("First step.");
+  });
+
+  it("cannot go back from the first step", () => {
+    render();
+    expect(buttonLabelled("Previous")?.disabled).toBe(true);
+  });
+
+  it("offers a way out rather than Next on the last step", () => {
+    render();
+    click(navButtons()[2]);
+    expect(buttonLabelled("Next Step")).toBeUndefined();
+    expect(container.textContent).toContain("Done");
   });
 
   it("keeps every navigation item reachable and focusable", () => {
     render();
-    for (const link of navLinks()) {
-      expect(link.className).toContain("focus-visible:ring");
-      expect(link.className).toContain("min-h-[2.25rem]");
+    for (const button of navButtons()) {
+      expect(button.className).toContain("focus-visible:ring");
+      expect(button.className).toContain("min-h-[2.25rem]");
     }
   });
 
-  it("reserves scrollbar space so the gutter never sits over a step name", () => {
+  it("scrolls the step list horizontally on small screens instead of overflowing", () => {
     render();
-    const list = container.querySelector("nav[aria-label='Manual testing steps'] ul") as HTMLElement;
-    expect(list.className).toContain("[scrollbar-gutter:stable]");
-    expect(list.className).toContain("lg:pr-3");
-    expect(list.className).toContain("lg:overflow-y-auto");
-  });
-
-  it("scrolls horizontally on small screens instead of overflowing the page", () => {
-    render();
-    const list = container.querySelector("nav[aria-label='Manual testing steps'] ul") as HTMLElement;
+    const list = container.querySelector("nav[aria-label='Manual testing steps'] ol") as HTMLElement;
     expect(list.className).toContain("overflow-x-auto");
     expect(list.className).toContain("lg:flex-col");
+    expect(list.className).toContain("[scrollbar-gutter:stable]");
   });
 
-  it("keeps the setup table alongside the steps", () => {
+  it("keeps the setup table with the first step", () => {
     render();
     expect(container.querySelector("table")).not.toBeNull();
     expect(container.textContent).toContain("Placeholder");
   });
 
-  it("falls back to positional anchors when a step declares no id", () => {
+  it("still numbers steps that declare no id of their own", () => {
     blocks = [stepsBlock("example-block-one", [{ text: "Unnamed step." }, { text: "Another." }])];
     render();
 
-    expect(navLinks().map((link) => link.getAttribute("href"))).toEqual([
-      "#manual-step-1",
-      "#manual-step-2",
-    ]);
+    expect(navButtons()).toHaveLength(2);
+    expect(container.textContent).toContain("Unnamed step.");
   });
 
   it("shows no navigation when the risk has no manual steps", () => {
     blocks = [];
     render();
     expect(container.querySelector("nav[aria-label='Manual testing steps']")).toBeNull();
+    expect(container.textContent).toContain("haven't been written yet");
   });
 });

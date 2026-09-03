@@ -1,13 +1,16 @@
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
-import { PageHeader, LoadingState, ErrorState } from "@/components/common";
+import { ArrowLeft, FileText } from "lucide-react";
+import { LoadingState, ErrorState } from "@/components/common";
 import { Card, CardContent } from "@/components/ui/card";
 import { ToneBadge } from "@/components/resolve-display";
+import { EstimatedTime, GuidedSteps, type GuidedStep } from "@/components/guided-steps";
 import {
   ControlIntro,
   ControlReferences,
   ControlSourceArchive,
-  ControlSteps,
+  ControlStepBody,
+  ControlStepsEmpty,
 } from "@/components/control-content";
 import { WorkOnRiskButton } from "@/components/ticket-actions";
 import { useControlDetail, useControlSource, useFinding } from "@/hooks/queries";
@@ -22,12 +25,16 @@ export default function ControlPreview() {
   const source = useControlSource(platform, controlId);
 
   const backTo = `/findings/${findingId}`;
+  const definitionSteps = control.data?.steps ?? [];
+  const [chosenStepKey, setChosenStepKey] = useState<string | null>(null);
+  const activeStepKey =
+    chosenStepKey && definitionSteps.some((step) => step.step_key === chosenStepKey)
+      ? chosenStepKey
+      : (definitionSteps[0]?.step_key ?? null);
 
   if (finding.isLoading || control.isLoading) return <LoadingState label="Loading control…" />;
   if (finding.isError || !finding.data) {
-    return (
-      <ErrorState message="Unable to load this finding." onRetry={() => finding.refetch()} />
-    );
+    return <ErrorState message="Unable to load this finding." onRetry={() => finding.refetch()} />;
   }
   if (control.isError || !control.data) {
     return (
@@ -43,62 +50,76 @@ export default function ControlPreview() {
 
   const status = playbookControlStatusLabels[control.data.status];
   const selectable = isRemediationControl(control.data);
+  const navSteps: GuidedStep[] = definitionSteps.map((step, index) => ({
+    id: step.step_key,
+    label: step.step_title || `Step ${step.number ?? index + 1}`,
+  }));
+  const activeIndex = definitionSteps.findIndex((step) => step.step_key === activeStepKey);
+  const activeStep = activeIndex >= 0 ? definitionSteps[activeIndex] : undefined;
 
   return (
     <div>
-      <BackLink to={backTo} />
-
-      <PageHeader
-        title={control.data.title}
-        description={control.data.summary}
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <ToneBadge tone={status.tone} label={status.label} />
-            <ToneBadge
-              tone={selectable ? "info" : "neutral"}
-              label={selectable ? "Remediation approach" : "Not a remediation approach"}
-            />
-          </div>
-        }
-      />
-
-      <Card className="mb-6">
-        <CardContent className="space-y-3 py-4">
-          <p className="text-sm text-foreground">
-            You are previewing this control against{" "}
-            <Link to={backTo} className="text-primary hover:underline">
-              {finding.data.title}
-            </Link>
-            . Nothing is recorded while you read.
-          </p>
-          <p className="text-xs text-muted-foreground">
-            These are the developer remediation steps for this control. They are not the steps
-            security uses to demonstrate the risk. Start remediation when you want to track your
-            progress through them.
-          </p>
-          {selectable ? (
-            <p className="text-xs text-muted-foreground">
-              A risk may offer several approaches. Starting remediation from here selects this one;
-              you can change it later on the remediation.
-            </p>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              This control is marked <strong>{control.data.status}</strong>, so it is not offered as
-              a remediation approach.
-            </p>
+      {definitionSteps.length === 0 ? (
+        <div>
+          <BackLink to={backTo} />
+          <ControlStepsEmpty />
+        </div>
+      ) : (
+        <GuidedSteps
+          icon={FileText}
+          title={`Remediation Steps — ${control.data.title}`}
+          description={control.data.summary ?? undefined}
+          tip={
+            selectable
+              ? "You are previewing these steps against the finding. Nothing is recorded while you read — start remediation to track your progress."
+              : `This control is marked ${control.data.status}, so it is not offered as a remediation approach.`
+          }
+          steps={navSteps}
+          activeId={activeStepKey}
+          onSelect={setChosenStepKey}
+          aside={
+            <EstimatedTime>
+              {definitionSteps.length === 1 ? "1 step" : `${definitionSteps.length} steps`}
+            </EstimatedTime>
+          }
+          closeTo={backTo}
+          closeLabel="Back to the finding"
+          navLabel="Remediation steps"
+          finishLabel="Done"
+        >
+          {activeStep && (
+            <ControlStepBody key={activeStep.step_key} step={activeStep} index={activeIndex} />
           )}
-          <WorkOnRiskButton
-            finding={finding.data}
-            application={finding.data.application}
-            preferredControlId={selectable ? control.data.control_id : undefined}
-          />
-        </CardContent>
-      </Card>
+        </GuidedSteps>
+      )}
 
-      <ControlIntro control={control.data} />
-      <ControlSteps control={control.data} />
-      <ControlReferences control={control.data} />
-      <ControlSourceArchive platform={platform} controlId={controlId} source={source.data} />
+      <div className="mx-auto max-w-5xl">
+        <Card className="mt-4">
+          <CardContent className="space-y-3 py-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <ToneBadge tone={status.tone} label={status.label} />
+              <ToneBadge
+                tone={selectable ? "info" : "neutral"}
+                label={selectable ? "Remediation approach" : "Not a remediation approach"}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              These are the developer remediation steps for this control, not the steps security
+              uses to demonstrate the risk. A risk may offer several approaches; starting
+              remediation from here selects this one, and you can change it later.
+            </p>
+            <WorkOnRiskButton
+              finding={finding.data}
+              application={finding.data.application}
+              preferredControlId={selectable ? control.data.control_id : undefined}
+            />
+          </CardContent>
+        </Card>
+
+        <ControlIntro control={control.data} />
+        <ControlReferences control={control.data} />
+        <ControlSourceArchive platform={platform} controlId={controlId} source={source.data} />
+      </div>
     </div>
   );
 }

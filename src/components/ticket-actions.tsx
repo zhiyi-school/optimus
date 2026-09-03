@@ -80,7 +80,11 @@ export function WorkOnRiskButton({
   const withdrawn = resumableRemediationTicket(finding.id, tickets);
   const resume = useResumeTicket(withdrawn?.id ?? "", finding.id);
   const ticketPath = (id: string) =>
-    can("view_resolve") ? `/resolve/tickets/${id}` : `/tickets/${id}`;
+    can("view_resolve") && finding.test_id
+      ? `/resolve/applications/${finding.application_id}/risks/${encodeURIComponent(finding.test_id)}`
+      : can("view_resolve")
+        ? `/resolve/tickets/${id}`
+        : `/findings/${finding.id}`;
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -215,7 +219,7 @@ export function AcceptRiskButton({ finding }: { finding: Finding }) {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    const ticket = await create.mutateAsync({
+    await create.mutateAsync({
       finding_id: finding.id,
       application_id: finding.application_id,
       title: `Risk acceptance: ${finding.title}`,
@@ -225,7 +229,7 @@ export function AcceptRiskButton({ finding }: { finding: Finding }) {
       expires_at: expiresAt || undefined,
     });
     setOpen(false);
-    navigate(`/tickets/${ticket.id}`);
+    navigate(`/findings/${finding.id}`);
   }
 
   return (

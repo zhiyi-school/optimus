@@ -1,20 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { FileText, Info, X } from "lucide-react";
+import { useMemo, useState } from "react";
+import { useParams } from "react-router-dom";
+import { FileText } from "lucide-react";
 import type {
   DemonstrationBlock,
   DemonstrationImage,
   DemonstrationStep,
-  DemonstrationStepsBlock,
   DemonstrationTableBlock,
 } from "@/api/automation-types";
 import { EmptyState, LoadingState } from "@/components/common";
-import { PlaybookFigure } from "@/components/playbook-content";
+import { PlaybookFigure, PlaybookGallery } from "@/components/playbook-content";
+import { GuidedSteps, type GuidedStep } from "@/components/guided-steps";
 import { RiskGoal } from "@/components/risk-goal";
 import { renderInline } from "@/lib/inline-markdown";
-import { cn } from "@/lib/utils";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { useRiskCatalogue, useAssessment } from "@/hooks/queries";
 
 function SetupTable({ block }: { block: DemonstrationTableBlock }) {
@@ -35,7 +32,7 @@ function SetupTable({ block }: { block: DemonstrationTableBlock }) {
           {block.label}
         </p>
       )}
-      <div className="overflow-hidden rounded-lg border border-border">
+      <div className="overflow-x-auto rounded-md border border-border">
         <table className="w-full text-sm">
           <tbody>
             {block.rows.map((row, index) => (
@@ -45,7 +42,7 @@ function SetupTable({ block }: { block: DemonstrationTableBlock }) {
                     key={column}
                     className={
                       columnIndex === 0
-                        ? "w-44 bg-muted/40 px-3 py-2 align-top font-medium text-foreground"
+                        ? "w-40 bg-muted/40 px-3 py-2 align-top font-medium text-foreground"
                         : "break-words px-3 py-2 align-top text-muted-foreground"
                     }
                   >
@@ -73,137 +70,49 @@ function StepImage({ image }: { image: DemonstrationImage }) {
   );
 }
 
-function Step({
-  step,
-  number,
-  anchorId,
-}: {
-  step: DemonstrationStep;
-  number: number;
-  anchorId: string;
-}) {
+function StepBody({ step, number }: { step: DemonstrationStep; number: number }) {
   return (
-    <div id={anchorId} className="flex scroll-mt-6 gap-3">
-      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-        {number}
-      </div>
-      <div className="min-w-0 flex-1 space-y-3 pb-6">
-        <p className="text-sm text-foreground">{renderInline(step.text)}</p>
-        {step.commands?.map((command, commandIndex) => (
-          <pre
-            key={commandIndex}
-            className="overflow-x-auto rounded-lg bg-muted px-3 py-2 text-xs text-foreground"
-          >
-            <code>{command}</code>
-          </pre>
-        ))}
-        {step.images?.map((image, imageIndex) => (
-          <StepImage key={image.path || imageIndex} image={image} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function Steps({ block, numbering }: { block: DemonstrationStepsBlock; numbering: StepAnchors }) {
-  if (!block.items?.length) return null;
-  return (
-    <div>
-      {block.label && (
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          {block.label}
-        </p>
+    <div className="space-y-3">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        Step {number}
+      </p>
+      <p className="text-sm text-foreground">{renderInline(step.text)}</p>
+      {step.commands?.map((command, commandIndex) => (
+        <pre
+          key={commandIndex}
+          className="overflow-x-auto rounded-md bg-muted px-3 py-2 text-xs text-foreground"
+        >
+          <code>{command}</code>
+        </pre>
+      ))}
+      {step.images && step.images.length > 0 && (
+        <PlaybookGallery>
+          {step.images.map((image, imageIndex) => (
+            <StepImage key={image.path || imageIndex} image={image} />
+          ))}
+        </PlaybookGallery>
       )}
-      <div>
-        {block.items.map((step, index) => {
-          const entry = numbering.get(`${block.id}:${index}`);
-          return (
-            <Step
-              key={entry?.anchorId ?? index}
-              step={step}
-              number={entry?.number ?? index + 1}
-              anchorId={entry?.anchorId ?? `manual-step-${index + 1}`}
-            />
-          );
-        })}
-      </div>
     </div>
   );
 }
 
-function Block({ block, numbering }: { block: DemonstrationBlock; numbering: StepAnchors }) {
-  if (block.type === "table") return <SetupTable block={block} />;
-  if (block.type === "steps") return <Steps block={block} numbering={numbering} />;
-  return null;
-}
-
-interface StepAnchor {
+interface FlatStep {
+  id: string;
   number: number;
-  anchorId: string;
-  label: string;
+  step: DemonstrationStep;
 }
 
-type StepAnchors = Map<string, StepAnchor>;
-
-/** One running number across every steps block, anchored on the backend step id where there is one. */
-function stepAnchors(blocks: DemonstrationBlock[]): { order: StepAnchor[]; byPosition: StepAnchors } {
-  const order: StepAnchor[] = [];
-  const byPosition: StepAnchors = new Map();
-  let number = 0;
+/** One running number across every steps block, keyed on the backend step id where there is one. */
+function flattenSteps(blocks: DemonstrationBlock[]): FlatStep[] {
+  const flat: FlatStep[] = [];
   blocks.forEach((block) => {
     if (block.type !== "steps") return;
-    (block.items ?? []).forEach((_step, index) => {
-      number += 1;
-      const entry = { number, anchorId: `manual-step-${number}`, label: `Step ${number}` };
-      order.push(entry);
-      byPosition.set(`${block.id}:${index}`, entry);
+    (block.items ?? []).forEach((step) => {
+      const number = flat.length + 1;
+      flat.push({ id: step.id ? `${block.id}:${step.id}` : `manual-step-${number}`, number, step });
     });
   });
-  return { order, byPosition };
-}
-
-function StepNavigation({
-  steps,
-  activeAnchorId,
-  onSelect,
-}: {
-  steps: StepAnchor[];
-  activeAnchorId: string | null;
-  onSelect: (anchorId: string) => void;
-}) {
-  if (steps.length === 0) return null;
-  return (
-    <nav aria-label="Manual testing steps" className="lg:sticky lg:top-6">
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        Steps
-      </p>
-      <ul className="flex max-h-[60vh] gap-2 overflow-x-auto overflow-y-hidden pb-2 [scrollbar-gutter:stable] lg:max-h-[calc(100vh-12rem)] lg:flex-col lg:gap-1 lg:overflow-x-hidden lg:overflow-y-auto lg:pb-0 lg:pr-3">
-        {steps.map((step) => {
-          const active = step.anchorId === activeAnchorId;
-          return (
-            <li key={step.anchorId} className="shrink-0 lg:shrink">
-              <a
-                href={`#${step.anchorId}`}
-                aria-current={active ? "step" : undefined}
-                onClick={(event) => {
-                  event.preventDefault();
-                  onSelect(step.anchorId);
-                }}
-                className={cn(
-                  "block min-h-[2.25rem] rounded-md px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
-                  active
-                    ? "bg-primary/10 font-medium text-primary"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                )}
-              >
-                {step.label}
-              </a>
-            </li>
-          );
-        })}
-      </ul>
-    </nav>
-  );
+  return flat;
 }
 
 export default function ManualTestSteps() {
@@ -216,94 +125,51 @@ export default function ManualTestSteps() {
     () => (risk?.demonstration ?? []).filter((block) => block && typeof block === "object"),
     [risk],
   );
-  const { order, byPosition } = useMemo(() => stepAnchors(blocks), [blocks]);
-  const [chosenAnchorId, setChosenAnchorId] = useState<string | null>(null);
-  const activeAnchorId =
-    chosenAnchorId && order.some((step) => step.anchorId === chosenAnchorId)
-      ? chosenAnchorId
-      : (order[0]?.anchorId ?? null);
+  const steps = useMemo(() => flattenSteps(blocks), [blocks]);
+  const tables = useMemo(
+    () => blocks.filter((block): block is DemonstrationTableBlock => block.type === "table"),
+    [blocks],
+  );
 
-  useEffect(() => {
-    if (order.length === 0 || typeof IntersectionObserver === "undefined") return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((entry) => entry.isIntersecting)
-          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
-        if (visible) setChosenAnchorId(visible.target.id);
-      },
-      { rootMargin: "-10% 0px -70% 0px" },
-    );
-    for (const step of order) {
-      const element = document.getElementById(step.anchorId);
-      if (element) observer.observe(element);
-    }
-    return () => observer.disconnect();
-  }, [order]);
+  const [chosenId, setChosenId] = useState<string | null>(null);
+  const activeId =
+    chosenId && steps.some((step) => step.id === chosenId)
+      ? chosenId
+      : (steps[0]?.id ?? null);
+  const activeIndex = steps.findIndex((step) => step.id === activeId);
+  const active = activeIndex >= 0 ? steps[activeIndex] : undefined;
 
-  function goToStep(anchorId: string) {
-    setChosenAnchorId(anchorId);
-    const element = document.getElementById(anchorId);
-    element?.scrollIntoView?.({ behavior: "smooth", block: "start" });
-  }
+  const backTo = `/assessments/${assessmentId}/tests/${testId}`;
+  const navSteps: GuidedStep[] = steps.map((step) => ({
+    id: step.id,
+    label: `Step ${step.number}`,
+  }));
 
   if (isLoading) return <LoadingState label="Loading…" />;
 
+  if (steps.length === 0) {
+    return <EmptyState title="Manual steps for this test haven't been written yet." />;
+  }
+
   return (
-    <Card>
-      <CardContent className="py-6">
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <div className="flex items-start gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <FileText className="h-4.5 w-4.5" />
-            </div>
-            <div>
-              <h1 className="text-lg font-bold text-foreground">
-                Manual Testing Steps{risk ? `: ${risk.name}` : ""}
-              </h1>
-              <p className="mt-0.5 text-sm text-muted-foreground">
-                Follow these steps to manually verify this risk.
-              </p>
-            </div>
-          </div>
-          <Link
-            to={`/assessments/${assessmentId}/tests/${testId}`}
-            className="text-muted-foreground hover:text-foreground"
-          >
-            <X className="h-5 w-5" />
-          </Link>
-        </div>
-
-        {risk?.goal && (
-          <div className="mb-6 flex items-start gap-2 rounded-lg bg-primary/5 p-3">
-            <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-            <RiskGoal risk={risk} />
-          </div>
-        )}
-
-        {blocks.length === 0 ? (
-          <EmptyState title="Manual steps for this test haven't been written yet." />
-        ) : (
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[13rem_minmax(0,1fr)]">
-            <StepNavigation
-              steps={order}
-              activeAnchorId={activeAnchorId}
-              onSelect={goToStep}
-            />
-            <div className="min-w-0 space-y-6">
-              {blocks.map((block, index) => (
-                <Block key={block.id || index} block={block} numbering={byPosition} />
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="mt-6 flex justify-end border-t border-border/70 pt-4">
-          <Link to={`/assessments/${assessmentId}/tests/${testId}`}>
-            <Button variant="outline">Back to test</Button>
-          </Link>
-        </div>
-      </CardContent>
-    </Card>
+    <GuidedSteps
+      icon={FileText}
+      title={`Manual Testing Steps${risk ? ` — ${risk.name}` : ""}`}
+      description="Follow these steps to manually verify this risk."
+      tip={risk?.goal ? <RiskGoal risk={risk} /> : undefined}
+      steps={navSteps}
+      activeId={activeId}
+      onSelect={setChosenId}
+      closeTo={backTo}
+      closeLabel="Back to test"
+      navLabel="Manual testing steps"
+      finishLabel="Done"
+    >
+      <div className="space-y-4">
+        {active && <StepBody step={active.step} number={active.number} />}
+        {activeIndex === 0 &&
+          tables.map((table, index) => <SetupTable key={table.id || index} block={table} />)}
+      </div>
+    </GuidedSteps>
   );
 }

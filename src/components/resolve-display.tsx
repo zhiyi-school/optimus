@@ -1,5 +1,4 @@
-import { ArrowRight, MessageCircle, RefreshCw, X } from "lucide-react";
-import { Link } from "react-router-dom";
+import { RefreshCw, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toneClasses, type Tone } from "@/lib/status";
 import type { Progress } from "@/lib/resolve";
@@ -19,40 +18,6 @@ export function PlaybookUpdatedNotice({ onDismiss }: { onDismiss: () => void }) 
       >
         <X className="h-4 w-4" />
       </button>
-    </div>
-  );
-}
-
-/** A pointer, not a second conversation: `to` is null when there is no risk to point at. */
-export function RiskConversationLink({
-  to,
-  unavailableNote,
-}: {
-  to: string | null;
-  unavailableNote?: string;
-}) {
-  return (
-    <div className="flex items-start gap-3">
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-        <MessageCircle className="h-4 w-4" />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-foreground">Risk conversation</p>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          {to
-            ? "Discuss this risk, view classification decisions, request reassessment, and follow security verification."
-            : unavailableNote}
-        </p>
-        {to && (
-          <Link
-            to={to}
-            className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-          >
-            Open risk conversation
-            <ArrowRight className="h-3 w-3" />
-          </Link>
-        )}
-      </div>
     </div>
   );
 }

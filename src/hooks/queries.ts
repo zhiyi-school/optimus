@@ -27,6 +27,7 @@ import {
 } from "@/data/services";
 import { isTransitionalRunState } from "@/lib/status";
 import type {
+  Application,
   Assessment,
   ControlProgressStatus,
   FindingStatus,
@@ -42,16 +43,31 @@ import type { ControlReconciliation, FindingFilters, TicketFilters } from "@/dat
 import type { ControlDetail } from "@/api/playbook-types";
 import { selectableControls } from "@/lib/resolve";
 
+/** Reference data that changes rarely; mutations still invalidate it explicitly. */
+const REFERENCE_DATA_STALE_TIME_MS = 5 * 60_000;
+
 export function useProfiles() {
-  return useQuery({ queryKey: ["profiles"], queryFn: userData.listProfiles });
+  return useQuery({
+    queryKey: ["profiles"],
+    queryFn: userData.listProfiles,
+    staleTime: REFERENCE_DATA_STALE_TIME_MS,
+  });
 }
 
 export function useTeams() {
-  return useQuery({ queryKey: ["teams"], queryFn: teamData.list });
+  return useQuery({
+    queryKey: ["teams"],
+    queryFn: teamData.list,
+    staleTime: REFERENCE_DATA_STALE_TIME_MS,
+  });
 }
 
 export function useApplications() {
-  return useQuery({ queryKey: ["applications"], queryFn: applicationData.list });
+  return useQuery({
+    queryKey: ["applications"],
+    queryFn: applicationData.list,
+    staleTime: REFERENCE_DATA_STALE_TIME_MS,
+  });
 }
 
 export function useAssessments() {
@@ -61,21 +77,34 @@ export function useAssessments() {
   });
 }
 
+/**
+ * The list already holds this row, so the detail page renders from it while
+ * the authoritative record loads. Placeholder rather than initial data: the
+ * detail fetch always still runs, and its answer replaces this.
+ */
 export function useAssessment(id: string | undefined) {
+  const queryClient = useQueryClient();
   return useQuery({
     queryKey: ["assessment", id],
     queryFn: () => assessmentData.getWithApplication(id as string),
     enabled: !!id,
+    placeholderData: () => {
+      if (!id) return undefined;
+      const cached = queryClient.getQueryData<
+        (Assessment & { application: Application | null })[]
+      >(["assessments"]);
+      return cached?.find((row) => row.id === id);
+    },
   });
 }
 
 const RUN_REQUEST_POLL_INTERVAL_MS = 10_000;
-const RUN_REQUEST_SETTLED_POLL_INTERVAL_MS = 60_000;
 
 /**
- * Polls while the assessment is still moving. Configuration reporting `ready`
- * is not a reason to stop: device readiness is decided separately and may still
- * be unresolved.
+ * Polls while the assessment is still moving, and stops once it settles —
+ * a completed or permanently failed request only changes through a mutation,
+ * which invalidates this key. Configuration reporting `ready` is not a reason
+ * to stop: device readiness is decided separately and may still be unresolved.
  */
 export function useAssessmentRunRequest(
   assessmentId: string | undefined,
@@ -85,11 +114,10 @@ export function useAssessmentRunRequest(
     queryKey: ["assessmentRunRequest", assessmentId],
     queryFn: () => assessmentRunRequestData.findForAssessment(assessmentId as string),
     enabled: !!assessmentId,
-    refetchOnWindowFocus: true,
     refetchInterval: (query) =>
       isTransitionalRunState(assessment, query.state.data ?? null)
         ? RUN_REQUEST_POLL_INTERVAL_MS
-        : RUN_REQUEST_SETTLED_POLL_INTERVAL_MS,
+        : false,
   });
 }
 

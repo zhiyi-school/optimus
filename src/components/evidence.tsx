@@ -17,6 +17,58 @@ function iconFor(kind: string) {
   return FileIcon;
 }
 
+/** The rail lists evidence in one narrow column; the full-width view keeps the two-up grid. */
+export function EvidenceList({ items }: { items: EvidenceItem[] }) {
+  if (items.length === 0) {
+    return <p className="text-xs text-muted-foreground">No evidence recorded yet.</p>;
+  }
+  return (
+    <ul className="divide-y divide-border/70">
+      {items.map((item) => {
+        const Icon = iconFor(item.kind);
+        const body = (
+          <>
+            {item.kind === "image" && item.url ? (
+              <img
+                src={item.url}
+                alt={item.name}
+                className="h-9 w-9 shrink-0 rounded border border-border object-cover"
+              />
+            ) : (
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded border border-border bg-muted/40">
+                <Icon className="h-4 w-4 text-muted-foreground" />
+              </span>
+            )}
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-xs font-medium text-foreground">{item.name}</span>
+              {item.source && (
+                <span className="block truncate text-xs text-muted-foreground">{item.source}</span>
+              )}
+            </span>
+          </>
+        );
+        return (
+          <li key={item.id}>
+            {item.url ? (
+              <a
+                href={item.url}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-2.5 py-2 hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              >
+                {body}
+                <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              </a>
+            ) : (
+              <div className="flex items-center gap-2.5 py-2">{body}</div>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 export function EvidenceViewer({ items }: { items: EvidenceItem[] }) {
   if (items.length === 0) {
     return <EmptyState title="No evidence recorded yet." />;
@@ -30,7 +82,7 @@ export function EvidenceViewer({ items }: { items: EvidenceItem[] }) {
           return (
             <Card key={item.id} className="overflow-hidden">
               <a href={item.url} target="_blank" rel="noreferrer">
-                <img src={item.url} alt={item.name} className="h-40 w-full object-cover" />
+                <img src={item.url} alt={item.name} className="h-28 w-full object-cover" />
               </a>
               <div className="flex items-center justify-between px-3 py-2 text-xs text-muted-foreground">
                 <span className="truncate">{item.name}</span>
