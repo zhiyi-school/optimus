@@ -236,6 +236,7 @@ export function RiskConversationPanel({
                   rows={2}
                   value={draft}
                   onChange={(event) => setDraft(event.target.value)}
+                  placeholder="Write a message..."
                   aria-label="Write a message"
                   className="flex-1 resize-none border-0 p-1 shadow-none focus:ring-0"
                 />

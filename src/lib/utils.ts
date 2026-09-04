@@ -83,3 +83,7 @@ export function errorMessage(err: unknown, fallback: string): string {
   console.error(fallback, err);
   return fallback;
 }
+
+export function stepCountLabel(count: number): string {
+  return count === 1 ? "1 step" : `${count} steps`;
+}

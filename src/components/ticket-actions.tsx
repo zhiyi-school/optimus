@@ -27,6 +27,7 @@ import {
   useStartRemediation,
   useSubmitFix,
   useUpdateTicketStatus,
+  useWithdrawReassessment,
   useWithdrawTicket,
 } from "@/hooks/queries";
 import { RunEventTimeline } from "@/components/run-events";
@@ -34,9 +35,11 @@ import { syncService, riskProgressInRun, type RunCancelToken } from "@/data/sync
 import { retestData } from "@/data/services";
 import { defaultConfigPath } from "@/api/automation-services";
 import {
+  activeReassessment,
   activeRemediationTicket,
   canResumeTicket,
   canSubmitFix,
+  canWithdrawReassessment,
   canWithdrawTicket,
   reassessmentBlockedReason,
   effectiveSelectedControlId,
@@ -610,6 +613,9 @@ function RunRetestButton({
     cancelRef.current = { cancelled: false };
     let errored = false;
     try {
+      // Claiming first is what makes withdrawal safe: if the developer got there
+      // first this raises, and no automation has been started.
+      await retestData.startRun(retestId);
       if (ticket) await updateStatus.mutateAsync("retest_in_progress");
 
       const { run: runRecord, outcome } = await syncService.runAndWait(
@@ -653,6 +659,7 @@ function RunRetestButton({
     } catch (err) {
       setRunError(errorMessage(err, "Unable to run retest."));
       errored = true;
+      await queryClient.invalidateQueries({ queryKey: ["findingRetests", finding.id] });
     } finally {
       setWatching(false);
       if (!errored) setOpen(false);
@@ -749,6 +756,80 @@ export function RequestReassessmentButton({
         </p>
       )}
     </div>
+  );
+}
+
+/** Withdraws the reassessment request only — the remediation and its work stay. */
+export function WithdrawReassessmentDialog({
+  retest,
+  conversationId,
+  findingId,
+  ticketId,
+}: {
+  retest: RetestRun;
+  conversationId: string;
+  findingId: string;
+  ticketId: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const withdraw = useWithdrawReassessment(conversationId);
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    await withdraw.mutateAsync({ retestId: retest.id, reason, findingId, ticketId });
+    setOpen(false);
+    setReason("");
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="outline">
+          Withdraw reassessment
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Withdraw this reassessment request?</DialogTitle>
+          <DialogDescription>
+            Security will no longer be asked to retest this fix. Your remediation, control
+            progress, evidence, and conversation will be preserved.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={onSubmit} className="space-y-3">
+          <div>
+            <label
+              htmlFor="withdraw-reassessment-reason"
+              className="mb-1 block text-xs font-medium text-muted-foreground"
+            >
+              Reason for withdrawing the reassessment *
+            </label>
+            <Textarea
+              id="withdraw-reassessment-reason"
+              rows={3}
+              required
+              placeholder="Why are you taking this request back?"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+            />
+          </div>
+          {withdraw.isError && (
+            <p className="text-xs text-danger">
+              {errorMessage(withdraw.error, "Could not withdraw this reassessment.")}
+            </p>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={withdraw.isPending || !reason.trim()}>
+              {withdraw.isPending ? "Withdrawing…" : "Withdraw reassessment"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -867,6 +948,7 @@ export function RiskConversationActions({
   ticket,
   retests,
   can,
+  profileId,
 }: {
   conversation: RiskConversation | null | undefined;
   finding: Finding | null | undefined;
@@ -874,16 +956,18 @@ export function RiskConversationActions({
   ticket: Ticket | null | undefined;
   retests: RetestRun[] | undefined;
   can: (capability: Capability) => boolean;
+  /** Withdrawal is the requester's own action, so the viewer's identity decides it. */
+  profileId: string | undefined;
 }) {
-  const pending = (retests ?? []).find(
-    (retest) => retest.status === "queued" || retest.status === "running",
-  );
+  const pending = activeReassessment(retests);
   const mayClassify = can("update_finding");
   const mayRequest = can("request_retest");
   const mayRun = can("run_test");
   if (!mayClassify && !mayRequest && !mayRun) return null;
 
   const blocked = reassessmentBlockedReason(ticket);
+  const mayWithdraw =
+    mayRequest && conversation && finding && canWithdrawReassessment(pending, ticket, profileId);
 
   return (
     <div className="flex flex-wrap items-start gap-3">
@@ -902,11 +986,25 @@ export function RiskConversationActions({
           <ClassifyRiskDialog finding={finding} conversationId={conversation.id} />
         ))}
 
+      {mayWithdraw && pending && conversation && finding && (
+        <WithdrawReassessmentDialog
+          retest={pending}
+          conversationId={conversation.id}
+          findingId={finding.id}
+          ticketId={pending.ticket_id as string}
+        />
+      )}
+
       {mayRequest &&
+        !mayWithdraw &&
         (pending ? (
           <UnavailableAction
             label="Request reassessment"
-            note="A reassessment has been requested. Security runs it from this conversation."
+            note={
+              pending.status === "running"
+                ? "Security has already started verifying this fix, so the request can no longer be taken back."
+                : "A reassessment has been requested. Security runs it from this conversation."
+            }
           />
         ) : !conversation || !finding ? (
           <UnavailableAction

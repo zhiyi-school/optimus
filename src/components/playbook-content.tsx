@@ -78,7 +78,7 @@ function PlaybookTable({ block }: { block: PlaybookTableBlock }) {
   );
   if (!block.rows?.length) return null;
   return (
-    <div className="overflow-x-auto rounded-lg border border-border">
+    <div className="overflow-x-auto rounded-md border border-border">
       <table className="w-full text-sm">
         <thead className="border-b border-border bg-muted/40">
           <tr>
@@ -115,7 +115,7 @@ export function PlaybookBlockView({ block }: { block: PlaybookBlock }) {
       return <p className="text-xs italic text-muted-foreground">{renderInline(block.text)}</p>;
     case "code":
       return (
-        <pre className="overflow-x-auto rounded-lg bg-muted px-3 py-2 text-xs text-foreground">
+        <pre className="overflow-x-auto rounded-md bg-muted px-3 py-2 text-xs text-foreground">
           <code>{block.text}</code>
         </pre>
       );

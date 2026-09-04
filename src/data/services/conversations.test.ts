@@ -19,6 +19,7 @@ let rows: Record<string, Record<string, unknown>[]> = {};
 let uploads: string[] = [];
 let rpcCalls: { name: string; params: Record<string, unknown> }[] = [];
 let rpcError: unknown = null;
+let rpcResult: Record<string, unknown> | null = null;
 let raceOn: string | null = null;
 
 // An update returns the whole row, not just the columns it changed, so a
@@ -91,11 +92,12 @@ vi.mock("@/data/supabase", () => ({
     from: (name: string) => table(name),
     rpc: (name: string, params: Record<string, unknown>) => {
       rpcCalls.push({ name, params });
-      return Promise.resolve(
-        rpcError
-          ? { data: null, error: rpcError }
-          : { data: { id: params.p_finding_id, status: params.p_status }, error: null },
-      );
+      if (rpcError) return Promise.resolve({ data: null, error: rpcError });
+      if (rpcResult) return Promise.resolve({ data: rpcResult, error: null });
+      return Promise.resolve({
+        data: { id: params.p_finding_id, status: params.p_status },
+        error: null,
+      });
     },
     auth: { getUser: () => Promise.resolve({ data: { user: { id: SECURITY } }, error: null }) },
     storage: {
@@ -122,6 +124,7 @@ beforeEach(() => {
   uploads = [];
   rpcCalls = [];
   rpcError = null;
+  rpcResult = null;
   raceOn = null;
   rows = {
     risk_conversations: [],
@@ -446,22 +449,103 @@ describe("the retest lifecycle", () => {
     expect(written("tickets")).toHaveLength(0);
   });
 
+  it("records the previous ticket status through the request, not from the client", async () => {
+    await retestData.requestRetest({
+      conversationId: CONVERSATION,
+      findingId: FINDING,
+      ticketId: TICKET,
+    });
+
+    expect(written("retest_runs")[0].payload).not.toHaveProperty("previous_ticket_status");
+    expect(written("retest_runs")[0].payload).toMatchObject({ status: "queued" });
+  });
+
+  it("claims the queued request before any automation is asked to start", async () => {
+    rpcResult = { id: "retest-1", status: "running" };
+    await retestData.startRun("retest-1");
+
+    expect(rpcCalls).toEqual([
+      { name: "start_reassessment", params: { p_retest_id: "retest-1" } },
+    ]);
+  });
+
+  it("refuses to start a request the developer has already withdrawn", async () => {
+    rpcError = { message: "this reassessment request was withdrawn by the developer" };
+    await expect(retestData.startRun("retest-1")).rejects.toMatchObject({
+      message: expect.stringContaining("withdrawn"),
+    });
+  });
+
   it("posts the start of a retest with the run it belongs to", async () => {
     rows.retest_runs = [
-      { id: "retest-1", conversation_id: CONVERSATION, ticket_id: TICKET, status: "queued" },
+      { id: "retest-1", conversation_id: CONVERSATION, ticket_id: TICKET, status: "running" },
     ];
 
     await retestData.markRunning("retest-1", "2026-01-01_00-00-00");
 
     expect(written("retest_runs")[0].payload).toMatchObject({
-      status: "running",
-      executed_by: SECURITY,
       external_test_run_id: "2026-01-01_00-00-00",
     });
     expect(written("risk_conversation_entries")[0].payload).toMatchObject({
       kind: "retest_started",
       metadata: { run_timestamp: "2026-01-01_00-00-00" },
       source_ticket_id: TICKET,
+    });
+  });
+});
+
+describe("withdrawing a reassessment", () => {
+  const cancelled = {
+    id: "retest-1",
+    ticket_id: TICKET,
+    status: "cancelled",
+    previous_ticket_status: "fix_submitted",
+  };
+
+  it("cancels the request and restores the ticket in one server-side call", async () => {
+    rpcResult = cancelled;
+    const run = await retestData.withdraw("retest-1", "Found another defect first.");
+
+    expect(rpcCalls[0]).toEqual({
+      name: "withdraw_reassessment",
+      params: { p_retest_id: "retest-1", p_reason: "Found another defect first." },
+    });
+    expect(run.status).toBe("cancelled");
+    // The ticket is restored inside the function, never by a second client write.
+    expect(written("tickets")).toHaveLength(0);
+    expect(written("retest_runs")).toHaveLength(0);
+  });
+
+  it("trims the reason before sending it", async () => {
+    rpcResult = cancelled;
+    await retestData.withdraw("retest-1", "   Superseded by a new build.  \n");
+
+    expect(rpcCalls[0].params.p_reason).toBe("Superseded by a new build.");
+  });
+
+  it("refuses a reason that is only whitespace, without reaching the server", async () => {
+    await expect(retestData.withdraw("retest-1", "   ")).rejects.toThrow(
+      "Withdrawing a reassessment needs a reason.",
+    );
+    expect(rpcCalls).toHaveLength(0);
+  });
+
+  it("surfaces the server's refusal rather than reporting success", async () => {
+    rpcError = { message: "this reassessment is already running, so it can no longer be withdrawn" };
+    await expect(retestData.withdraw("retest-1", "Changed my mind.")).rejects.toMatchObject({
+      message: expect.stringContaining("already running"),
+    });
+  });
+
+  it("logs the withdrawal against the request, naming the state it restored", async () => {
+    rpcResult = { ...cancelled, previous_ticket_status: "rejected" };
+    await retestData.withdraw("retest-1", "Reworking the fix.");
+
+    expect(written("activity_log")[0].payload).toMatchObject({
+      entity_type: "retest_run",
+      entity_id: "retest-1",
+      action: "reassessment_withdrawn",
+      metadata: { ticket_id: TICKET, restored_status: "rejected" },
     });
   });
 });

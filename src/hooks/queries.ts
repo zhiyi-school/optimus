@@ -645,6 +645,25 @@ export function useRequestReassessment(conversationId: string | undefined) {
   });
 }
 
+export function useWithdrawReassessment(conversationId: string | undefined) {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (input: { retestId: string; reason: string; findingId: string; ticketId: string }) =>
+      retestData.withdraw(input.retestId, input.reason),
+    onSuccess: (_data, variables) =>
+      invalidate([
+        ...CONVERSATION_KEYS(conversationId as string),
+        ["findingRetests", variables.findingId],
+        ["ticketsWithRelations"],
+        ["tickets"],
+        ["dashboardMetrics"],
+        ["ticket", variables.ticketId],
+        ["ticketRetests", variables.ticketId],
+        ["activity", "ticket", variables.ticketId],
+      ]),
+  });
+}
+
 export function useRiskAcceptance(ticketId: string | undefined) {
   return useQuery({
     queryKey: ["riskAcceptance", ticketId],

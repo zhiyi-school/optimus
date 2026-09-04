@@ -8,6 +8,7 @@ import type { ControlReconciliation } from "@/data/services/controls";
 import type {
   ControlProgressStatus,
   Finding,
+  RetestRun,
   Ticket,
   TicketControl,
   TicketControlStep,
@@ -389,6 +390,29 @@ export function reassessmentBlockedReason(ticket: Ticket | null | undefined): st
   return "Submit your fix on the remediation ticket first, then ask for a reassessment here.";
 }
 
+/** The reassessment a risk is waiting on: cancelled requests are history, not work. */
+export function activeReassessment(retests: RetestRun[] | undefined): RetestRun | undefined {
+  return (retests ?? []).find(
+    (retest) => retest.status === "queued" || retest.status === "running",
+  );
+}
+
+/**
+ * Withdrawal is the requester's own action on a queued request, and only while
+ * its remediation is still the one waiting for it.
+ */
+export function canWithdrawReassessment(
+  retest: RetestRun | null | undefined,
+  ticket: Ticket | null | undefined,
+  profileId: string | null | undefined,
+): boolean {
+  if (!retest || retest.status !== "queued") return false;
+  if (!profileId || retest.requested_by !== profileId) return false;
+  if (!ticket || ticket.type !== "remediation") return false;
+  if (retest.ticket_id !== ticket.id) return false;
+  return ticket.status === "retest_requested";
+}
+
 export function canWithdrawTicket(ticket: Ticket | null | undefined): boolean {
   if (!ticket || ticket.type !== "remediation") return false;
   return WITHDRAWABLE_FROM.includes(ticket.status);
@@ -462,4 +486,17 @@ export function changedSinceCompleted(
 
 export function contentHashes(steps: ControlStep[]): Map<string, string> {
   return new Map(steps.map((step) => [step.step_key, step.content_hash]));
+}
+
+/** The Description supplies both the title and the summary; show the summary only when it adds something. */
+export function controlSummary(control: ControlDetail): string | undefined {
+  const summary = (control.summary ?? "").trim();
+  return summary && summary !== control.title.trim() ? summary : undefined;
+}
+
+export function introRepeatsSummary(control: ControlDetail): boolean {
+  if (control.intro.length === 0) return true;
+  if (control.intro.length > 1) return false;
+  const [block] = control.intro;
+  return block.type === "paragraph" && (block.text ?? "").trim() === (control.summary ?? "").trim();
 }

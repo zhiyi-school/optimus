@@ -57,7 +57,10 @@ export type TicketStatus =
 
 export type RiskAcceptanceDecision = "pending" | "accepted" | "rejected";
 
-export type RetestStatus = "queued" | "running" | "completed" | "failed";
+export type RetestStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
+
+/** The ticket state a reassessment request interrupted, restored when it is withdrawn. */
+export type RetestPreviousTicketStatus = Extract<TicketStatus, "fix_submitted" | "rejected">;
 
 export type ControlProgressStatus = "not_started" | "in_progress" | "completed" | "needs_changes";
 
@@ -172,6 +175,7 @@ export type RiskConversationEntryKind =
   | "retest_started"
   | "retest_completed"
   | "retest_failed"
+  | "retest_withdrawn"
   | "remediation_started"
   | "remediation_withdrawn"
   | "fix_submitted";
@@ -235,6 +239,10 @@ export interface RetestRun {
   result: string | null;
   created_at: string;
   completed_at: string | null;
+  cancelled_at: string | null;
+  cancelled_by: string | null;
+  cancellation_reason: string | null;
+  previous_ticket_status: RetestPreviousTicketStatus | null;
 }
 
 export interface RiskAcceptance {

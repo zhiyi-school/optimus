@@ -9,9 +9,10 @@ import type {
 } from "@/api/automation-types";
 import { EmptyState, LoadingState } from "@/components/common";
 import { PlaybookFigure, PlaybookGallery } from "@/components/playbook-content";
-import { GuidedSteps, type GuidedStep } from "@/components/guided-steps";
+import { EstimatedTime, GuidedSteps, type GuidedStep } from "@/components/guided-steps";
 import { RiskGoal } from "@/components/risk-goal";
 import { renderInline } from "@/lib/inline-markdown";
+import { stepCountLabel } from "@/lib/utils";
 import { useRiskCatalogue, useAssessment } from "@/hooks/queries";
 
 function SetupTable({ block }: { block: DemonstrationTableBlock }) {
@@ -72,11 +73,11 @@ function StepImage({ image }: { image: DemonstrationImage }) {
 
 function StepBody({ step, number }: { step: DemonstrationStep; number: number }) {
   return (
-    <div className="space-y-3">
-      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        Step {number}
-      </p>
-      <p className="text-sm text-foreground">{renderInline(step.text)}</p>
+    <div className="space-y-4">
+      <h2 className="text-base font-semibold text-foreground">
+        {step.title?.trim() ? `${number}. ${step.title.trim()}` : `Step ${number}`}
+      </h2>
+      <p className="text-sm leading-relaxed text-foreground">{renderInline(step.text)}</p>
       {step.commands?.map((command, commandIndex) => (
         <pre
           key={commandIndex}
@@ -142,34 +143,35 @@ export default function ManualTestSteps() {
   const backTo = `/assessments/${assessmentId}/tests/${testId}`;
   const navSteps: GuidedStep[] = steps.map((step) => ({
     id: step.id,
-    label: `Step ${step.number}`,
+    label: step.step.title?.trim() || `Step ${step.number}`,
   }));
-
-  if (isLoading) return <LoadingState label="Loading…" />;
-
-  if (steps.length === 0) {
-    return <EmptyState title="Manual steps for this test haven't been written yet." />;
-  }
 
   return (
     <GuidedSteps
       icon={FileText}
       title={`Manual Testing Steps${risk ? ` — ${risk.name}` : ""}`}
-      description="Follow these steps to manually verify this risk."
-      tip={risk?.goal ? <RiskGoal risk={risk} /> : undefined}
+      description={steps.length > 0 ? "Follow these steps to manually verify this risk." : undefined}
+      tip={steps.length > 0 && risk?.goal ? <RiskGoal risk={risk} /> : undefined}
       steps={navSteps}
       activeId={activeId}
       onSelect={setChosenId}
+      aside={<EstimatedTime value={stepCountLabel(steps.length)} />}
       closeTo={backTo}
       closeLabel="Back to test"
       navLabel="Manual testing steps"
       finishLabel="Done"
     >
-      <div className="space-y-4">
-        {active && <StepBody step={active.step} number={active.number} />}
-        {activeIndex === 0 &&
-          tables.map((table, index) => <SetupTable key={table.id || index} block={table} />)}
-      </div>
+      {isLoading ? (
+        <LoadingState label="Loading…" />
+      ) : steps.length === 0 ? (
+        <EmptyState title="Manual steps for this test haven't been written yet." />
+      ) : (
+        <div className="space-y-4">
+          {active && <StepBody step={active.step} number={active.number} />}
+          {activeIndex === 0 &&
+            tables.map((table, index) => <SetupTable key={table.id || index} block={table} />)}
+        </div>
+      )}
     </GuidedSteps>
   );
 }

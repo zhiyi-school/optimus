@@ -1,16 +1,15 @@
-import { useMemo, useRef, useState } from "react";
-import { Link, useLocation, useParams } from "react-router-dom";
-import { ArrowLeft, FileText } from "lucide-react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useLocation, useParams } from "react-router-dom";
+import { FileText } from "lucide-react";
 import { useAuth } from "@/auth/useAuth";
 import { LoadingState, ErrorState } from "@/components/common";
-import { PlaybookUpdatedNotice, ProgressBar } from "@/components/resolve-display";
+import { PlaybookUpdatedNotice } from "@/components/resolve-display";
 import { EstimatedTime, GuidedSteps, type GuidedStep } from "@/components/guided-steps";
 import {
-  ControlIntro,
-  ControlReferences,
-  ControlSourceArchive,
+  ControlGuidance,
   ControlStepBody,
   ControlStepsEmpty,
+  ControlSupportingInfo,
   type ControlStepProgress,
 } from "@/components/control-content";
 import {
@@ -22,7 +21,8 @@ import {
   useTicketControlSteps,
   useTicketControls,
 } from "@/hooks/queries";
-import { changedSinceCompleted, contentHashes, liveControls } from "@/lib/resolve";
+import { changedSinceCompleted, contentHashes, controlSummary, liveControls } from "@/lib/resolve";
+import { stepCountLabel } from "@/lib/utils";
 
 export default function ControlDetail() {
   const { ticketId, controlId } = useParams<{ ticketId: string; controlId: string }>();
@@ -77,23 +77,36 @@ export default function ControlDetail() {
       ? chosenStepKey
       : (definitionSteps[0]?.step_key ?? null);
 
-  if (ticket.isLoading || control.isLoading) return <LoadingState label="Loading control…" />;
+  const shell = (children: ReactNode) => (
+    <GuidedSteps
+      icon={FileText}
+      title="Remediation Steps"
+      steps={[]}
+      activeId={null}
+      onSelect={() => {}}
+      closeTo={backTo}
+      closeLabel="Back to remediation"
+      navLabel="Remediation steps"
+    >
+      {children}
+    </GuidedSteps>
+  );
+
+  if (ticket.isLoading || control.isLoading) return shell(<LoadingState label="Loading control…" />);
   if (ticket.isError || !ticket.data) {
-    return <ErrorState message="Unable to load this remediation." onRetry={() => ticket.refetch()} />;
+    return shell(
+      <ErrorState message="Unable to load this remediation." onRetry={() => ticket.refetch()} />,
+    );
   }
   if (control.isError || !control.data) {
-    return (
-      <div>
-        <BackLink to={backTo} />
-        <ErrorState
-          message="The automation backend could not provide the remediation instructions for this control. Check that its playbook directory is configured and reachable."
-          onRetry={() => control.refetch()}
-        />
-      </div>
+    return shell(
+      <ErrorState
+        message="The automation backend could not provide the remediation instructions for this control. Check that its playbook directory is configured and reachable."
+        onRetry={() => control.refetch()}
+      />,
     );
   }
 
-  const progress = live?.progress ?? { completed: 0, total: 0, ratio: 0 };
   const navSteps: GuidedStep[] = definitionSteps.map((step, index) => ({
     id: step.step_key,
     label: step.step_title || `Step ${step.number ?? index + 1}`,
@@ -102,73 +115,53 @@ export default function ControlDetail() {
   const activeIndex = definitionSteps.findIndex((step) => step.step_key === activeStepKey);
   const activeStep = activeIndex >= 0 ? definitionSteps[activeIndex] : undefined;
 
-  return (
-    <div>
-      {playbook.updated && <PlaybookUpdatedNotice onDismiss={playbook.dismiss} />}
-
-      {definitionSteps.length === 0 ? (
-        <div>
-          <BackLink to={backTo} />
-          <ControlStepsEmpty />
-        </div>
-      ) : (
-        <GuidedSteps
-          icon={FileText}
-          title={`Remediation Steps — ${control.data.title}`}
-          description={control.data.summary ?? undefined}
-          tip={
-            control.data.status !== "active"
-              ? `This control is marked ${control.data.status} and is not counted as required remediation work.`
-              : stepProgress.editable
-                ? "Implement the recommended fix, then verify it. Mark each step complete as you go."
-                : "You are reading this control. Only the developers assigned to this application can record progress against its steps."
-          }
-          steps={navSteps}
-          activeId={activeStepKey}
-          onSelect={setChosenStepKey}
-          aside={
-            <div className="hidden space-y-3 lg:block">
-              <div className="rounded-md border border-border/70 bg-muted/40 p-3">
-                <ProgressBar label="Steps completed" progress={progress} />
-              </div>
-              <EstimatedTime>
-                {definitionSteps.length === 1 ? "1 step" : `${definitionSteps.length} steps`}
-              </EstimatedTime>
-            </div>
-          }
-          closeTo={backTo}
-          closeLabel="Back to remediation"
-          navLabel="Remediation steps"
-          finishLabel="Done"
-        >
-          {activeStep && (
-            <ControlStepBody
-              key={activeStep.step_key}
-              step={activeStep}
-              index={activeIndex}
-              progress={stepProgress}
-            />
-          )}
-        </GuidedSteps>
-      )}
-
-      <div className="mx-auto max-w-5xl">
-        <ControlIntro control={control.data} />
-        <ControlReferences control={control.data} />
-        <ControlSourceArchive platform={platform} controlId={controlId} source={source.data} />
-      </div>
-    </div>
+  const supporting = (
+    <ControlSupportingInfo
+      control={control.data}
+      platform={platform}
+      controlId={controlId}
+      source={source.data}
+    />
   );
-}
 
-function BackLink({ to }: { to: string }) {
   return (
-    <Link
-      to={to}
-      className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+    <GuidedSteps
+      icon={FileText}
+      title={`Remediation Steps — ${control.data.title}`}
+      description={controlSummary(control.data)}
+      notice={playbook.updated ? <PlaybookUpdatedNotice onDismiss={playbook.dismiss} /> : undefined}
+      tipLabel="Tip"
+      tip={
+        <ControlGuidance
+          notes={[
+            control.data.status !== "active" &&
+              `This control is marked ${control.data.status} and is not counted as required remediation work.`,
+            stepProgress.editable
+              ? "Implement the recommended fix, then verify it. Mark each step complete as you go."
+              : "You are reading this control. Only the developers assigned to this application can record progress against its steps.",
+          ]}
+        />
+      }
+      steps={navSteps}
+      activeId={activeStepKey}
+      onSelect={setChosenStepKey}
+      aside={<EstimatedTime value={stepCountLabel(definitionSteps.length)} />}
+      supporting={supporting}
+      closeTo={backTo}
+      closeLabel="Back to remediation"
+      navLabel="Remediation steps"
+      finishLabel="Done"
     >
-      <ArrowLeft className="h-3.5 w-3.5" />
-      Back to remediation
-    </Link>
+      {activeStep ? (
+        <ControlStepBody
+          key={activeStep.step_key}
+          step={activeStep}
+          index={activeIndex}
+          progress={stepProgress}
+        />
+      ) : (
+        <ControlStepsEmpty />
+      )}
+    </GuidedSteps>
   );
 }

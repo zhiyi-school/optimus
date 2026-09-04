@@ -429,6 +429,7 @@ function TestPage() {
               ticket={remediationTicket}
               retests={retests}
               can={can}
+              profileId={profile?.id}
             />
           }
         />

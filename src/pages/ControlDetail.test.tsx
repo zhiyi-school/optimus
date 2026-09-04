@@ -15,6 +15,8 @@ const CONTROL = "example-feature-01-risk-01-control-01";
 let roles: UserRole[] = ["developer"];
 let definition: ControlDefinition | undefined;
 let stepRows: TicketControlStep[] = [];
+let source: unknown = undefined;
+let playbookUpdated = false;
 const saved: { stepId: string; status: string; note?: string }[] = [];
 
 function step(key: string, number: number, title: string, withImage = false) {
@@ -120,10 +122,10 @@ vi.mock("@/hooks/queries", () => {
       },
     }),
     useControlDetail: () => ({ ...idle, data: definition }),
-    useControlSource: () => idle,
+    useControlSource: () => ({ ...idle, data: source }),
     useTicketControls: () => ({ ...idle, data: [controlRow] }),
     useTicketControlSteps: () => ({ ...idle, data: stepRows }),
-    usePlaybookRevisionWatch: () => ({ updated: false, dismiss: () => {} }),
+    usePlaybookRevisionWatch: () => ({ updated: playbookUpdated, dismiss: () => {} }),
     useSetControlStepStatus: () => ({
       mutate: (input: { stepId: string; status: string; note?: string }) => saved.push(input),
       isPending: false,
@@ -151,6 +153,8 @@ beforeEach(() => {
     progressRow("verify-example-key"),
   ];
   saved.length = 0;
+  source = undefined;
+  playbookUpdated = false;
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -238,9 +242,12 @@ describe("the guided remediation steps", () => {
     expect(text()).toContain("Body of Understand the fix.");
   });
 
-  it("cannot go back from the first step", () => {
+  it("offers no way back from the first step", () => {
     render();
-    expect(buttonLabelled("Previous")?.disabled).toBe(true);
+    expect(buttonLabelled("Previous")).toBeUndefined();
+
+    click(navButtons()[1]);
+    expect(buttonLabelled("Previous")).toBeDefined();
   });
 
   it("finishes rather than offering Next on the last step", () => {
@@ -269,14 +276,17 @@ describe("the guided remediation steps", () => {
     expect(saved).toEqual([{ stepId: "row-rotate-example-key", status: "not_started" }]);
   });
 
-  it("marks completed steps in the navigation", () => {
+  it("marks completed steps in the navigation with a check, not colour alone", () => {
     stepRows = [
       progressRow("rotate-example-key", "completed"),
       progressRow("revoke-example-key"),
       progressRow("verify-example-key"),
     ];
     render();
-    expect(text()).toContain("1 of 3");
+
+    const markers = navButtons().map((b) => b.querySelector("[data-guided-marker]")!);
+    expect(markers[0].querySelector("svg.lucide-check")).not.toBeNull();
+    expect(markers[1].textContent).toBe("2");
   });
 
   it("still supports a note against the active step", () => {
@@ -324,5 +334,121 @@ describe("the guided remediation steps", () => {
 
     expect(text()).toContain("no remediation steps yet");
     expect(container.querySelector("nav[aria-label='Remediation steps']")).toBeNull();
+  });
+});
+
+describe("remediation metadata inside the guided card", () => {
+  const archive = {
+    control_id: CONTROL,
+    exists: true,
+    download_enabled: true,
+    file_name: "example-implementation.zip",
+    size_bytes: 2048,
+    sha256: "a".repeat(64),
+    declared: [],
+  };
+
+  function card() {
+    return container.querySelector("nav[aria-label='Remediation steps']")?.closest(".rounded-xl");
+  }
+
+  function disclosure(title: string) {
+    return [...container.querySelectorAll("details")].find((entry) =>
+      (entry.querySelector("summary")?.textContent ?? "").includes(title),
+    );
+  }
+
+  it("folds the introduction into the card instead of a disconnected panel below it", () => {
+    definition = {
+      ...control([step("rotate-example-key", 1, "Understand the fix")]),
+      intro: [{ type: "paragraph", text: "Read this before you start." }],
+    } as ControlDefinition;
+    stepRows = [progressRow("rotate-example-key")];
+    render();
+
+    const about = disclosure("About this control");
+    expect(about).toBeDefined();
+    expect(card()?.contains(about!)).toBe(true);
+    expect(text()).toContain("Read this before you start.");
+  });
+
+  it("shows the introduction once, not repeated on every step", () => {
+    definition = {
+      ...control([
+        step("rotate-example-key", 1, "Understand the fix"),
+        step("revoke-example-key", 2, "Implement protection"),
+      ]),
+      intro: [{ type: "paragraph", text: "Read this before you start." }],
+    } as ControlDefinition;
+    stepRows = [progressRow("rotate-example-key"), progressRow("revoke-example-key")];
+    render();
+    click(navButtons()[1]);
+
+    expect([...container.querySelectorAll("details")].filter((entry) =>
+      (entry.querySelector("summary")?.textContent ?? "").includes("About this control"),
+    )).toHaveLength(1);
+  });
+
+  it("keeps references reachable inside the guided experience", () => {
+    definition = {
+      ...control([step("rotate-example-key", 1, "Understand the fix")]),
+      references: [{ label: "Example reference", url: "https://example.test/reference" }],
+    } as ControlDefinition;
+    stepRows = [progressRow("rotate-example-key")];
+    render();
+
+    const references = disclosure("References");
+    expect(card()?.contains(references!)).toBe(true);
+    const link = references?.querySelector("a");
+    expect(link?.getAttribute("href")).toBe("https://example.test/reference");
+    expect(link?.getAttribute("rel")).toContain("noopener");
+  });
+
+  it("keeps the implementation example downloadable inside the guided experience", () => {
+    source = archive;
+    render();
+
+    const example = disclosure("Implementation example");
+    expect(card()?.contains(example!)).toBe(true);
+    expect(example?.querySelector("a")?.getAttribute("href")).toContain("/source/download");
+  });
+
+  it("leaves no metadata card stacked underneath the guided card", () => {
+    definition = {
+      ...control([step("rotate-example-key", 1, "Understand the fix")]),
+      intro: [{ type: "paragraph", text: "Read this before you start." }],
+      references: [{ label: "Example reference", url: "https://example.test/reference" }],
+    } as ControlDefinition;
+    stepRows = [progressRow("rotate-example-key")];
+    source = archive;
+    render();
+
+    for (const entry of container.querySelectorAll("details")) {
+      expect(card()?.contains(entry)).toBe(true);
+    }
+  });
+
+  it("shows a playbook update inside the card rather than as a competing banner above it", () => {
+    playbookUpdated = true;
+    render();
+
+    const notice = [...container.querySelectorAll("p")].find((p) =>
+      (p.textContent ?? "").includes("Remediation instructions were updated"),
+    );
+    expect(notice).toBeDefined();
+    expect(card()?.contains(notice!)).toBe(true);
+  });
+
+  it("keeps the read-only notice and the control's status together in the tip", () => {
+    roles = ["security"];
+    definition = {
+      ...control([step("rotate-example-key", 1, "Understand the fix")]),
+      status: "deprecated",
+    } as ControlDefinition;
+    stepRows = [progressRow("rotate-example-key")];
+    render();
+
+    expect(text()).toContain("marked deprecated");
+    expect(text()).toContain("Only the developers assigned to this application can record progress");
   });
 });

@@ -13,13 +13,14 @@ import {
   RiskHeader,
   RiskWorkspace,
 } from "@/components/risk-workspace";
-import { WorkOnRiskButton } from "@/components/ticket-actions";
+import { RiskConversationActions, WorkOnRiskButton } from "@/components/ticket-actions";
 import { EvidenceList } from "@/components/evidence";
 import { RiskConversationPanel } from "@/components/conversation-panel";
 import ResolveTicket from "@/pages/ResolveTicket";
 import {
   useApplications,
   useFindingEvidenceItems,
+  useFindingRetests,
   useFindings,
   useProfiles,
   useRiskCatalogue,
@@ -91,6 +92,7 @@ function RiskPage() {
     [entries.data, history.data],
   );
   const securityEvidence = useFindingEvidenceItems(finding?.id);
+  const retests = useFindingRetests(finding?.id);
 
   // The sidebar lists the risks this application actually has findings for, so a
   // developer never navigates into a risk security has not raised.
@@ -226,6 +228,17 @@ function RiskPage() {
                 sending={sendMessage.isPending}
                 sendError={sendMessage.error}
                 emptyStateDescription="Ask security about this risk, or record what you have changed. Automated runs, classification decisions and reassessments appear here too."
+                actions={
+                  <RiskConversationActions
+                    conversation={conversation.data}
+                    finding={finding}
+                    application={application}
+                    ticket={ticket}
+                    retests={retests.data}
+                    can={can}
+                    profileId={profile?.id}
+                  />
+                }
               />
           )}
         </>

@@ -215,9 +215,12 @@ describe("manual-test step navigation", () => {
     expect(container.textContent).toContain("First step.");
   });
 
-  it("cannot go back from the first step", () => {
+  it("offers no way back from the first step", () => {
     render();
-    expect(buttonLabelled("Previous")?.disabled).toBe(true);
+    expect(buttonLabelled("Previous")).toBeUndefined();
+
+    click(navButtons()[1]);
+    expect(buttonLabelled("Previous")).toBeDefined();
   });
 
   it("offers a way out rather than Next on the last step", () => {
@@ -231,7 +234,7 @@ describe("manual-test step navigation", () => {
     render();
     for (const button of navButtons()) {
       expect(button.className).toContain("focus-visible:ring");
-      expect(button.className).toContain("min-h-[2.25rem]");
+      expect(button.querySelector("[data-guided-marker]")).not.toBeNull();
     }
   });
 

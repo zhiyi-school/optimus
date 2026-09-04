@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { roleCan, type Capability } from "@/auth/permissions";
-import type { Finding, Ticket, UserRole } from "@/data/types";
+import type { Finding, RetestRun, Ticket, UserRole } from "@/data/types";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -16,6 +16,7 @@ const DEVELOPER = "00000000-0000-0000-0000-000000000001";
 let roles: UserRole[] = ["developer"];
 let findings: Finding[] = [];
 let tickets: Ticket[] = [];
+let retests: RetestRun[] = [];
 let conversationFound = true;
 
 const application = {
@@ -48,6 +49,27 @@ function finding(overrides: Partial<Finding> = {}): Finding {
     updated_at: "2026-01-01T00:00:00Z",
     ...overrides,
   } as Finding;
+}
+
+function retest(overrides: Partial<RetestRun> = {}): RetestRun {
+  return {
+    id: "example-retest-id",
+    conversation_id: "example-conversation-id",
+    ticket_id: "example-ticket-id",
+    finding_id: "example-finding-id",
+    external_test_run_id: null,
+    requested_by: DEVELOPER,
+    executed_by: null,
+    status: "queued",
+    result: null,
+    created_at: "2026-01-01T00:00:00Z",
+    completed_at: null,
+    cancelled_at: null,
+    cancelled_by: null,
+    cancellation_reason: null,
+    previous_ticket_status: "fix_submitted",
+    ...overrides,
+  } as RetestRun;
 }
 
 function ticket(overrides: Partial<Ticket> = {}): Ticket {
@@ -110,6 +132,9 @@ vi.mock("@/hooks/queries", () => {
       ],
     }),
     useFindingEvidenceItems: () => ({ ...idle, data: [] }),
+    useFindingRetests: () => ({ ...idle, data: retests }),
+    useRequestReassessment: () => mutation,
+    useWithdrawReassessment: () => mutation,
     useProfiles: () => ({ ...idle, data: [] }),
     useTestRunHistory: () => ({ ...idle, data: [] }),
     useRiskConversation: () => ({
@@ -135,6 +160,7 @@ beforeEach(() => {
   roles = ["developer"];
   findings = [finding()];
   tickets = [ticket()];
+  retests = [];
   conversationFound = true;
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -250,11 +276,11 @@ describe("the conversation card inside the workspace", () => {
     expect(card.className).toContain("lg:h-[65vh]");
   });
 
-  it("starts its composer empty, with no template and no placeholder", () => {
+  it("starts its composer empty behind the placeholder, with no template", () => {
     render();
     const composer = container.querySelector("textarea") as HTMLTextAreaElement;
     expect(composer.value).toBe("");
-    expect(composer.getAttribute("placeholder")).toBeNull();
+    expect(composer.getAttribute("placeholder")).toBe("Write a message...");
     expect(composer.getAttribute("aria-label")).toBe("Write a message");
     expect(text()).not.toContain("Status: [At Risk");
   });
@@ -277,5 +303,76 @@ describe("sidebar entries", () => {
   it("does not offer navigation that leaves the workspace", () => {
     render();
     expect(sidebarLinks().every((button) => button.tagName === "BUTTON")).toBe(true);
+  });
+});
+
+describe("the reassessment actions in the developer's conversation", () => {
+  function buttonLabelled(label: string) {
+    return [...container.querySelectorAll("button")].find((b) =>
+      (b.textContent ?? "").includes(label),
+    );
+  }
+
+  it("offers withdrawal to the developer who requested a queued reassessment", () => {
+    tickets = [ticket({ status: "retest_requested" })];
+    retests = [retest()];
+    render();
+
+    expect(buttonLabelled("Withdraw reassessment")).toBeDefined();
+    expect(text()).toContain("Awaiting reassessment");
+  });
+
+  it("does not offer withdrawal to a developer who did not request it", () => {
+    tickets = [ticket({ status: "retest_requested" })];
+    retests = [retest({ requested_by: "00000000-0000-0000-0000-0000000000ff" })];
+    render();
+
+    expect(buttonLabelled("Withdraw reassessment")).toBeUndefined();
+    expect(buttonLabelled("Request reassessment")?.disabled).toBe(true);
+  });
+
+  it("says security has started rather than offering withdrawal on a running request", () => {
+    tickets = [ticket({ status: "retest_in_progress" })];
+    retests = [retest({ status: "running" })];
+    render();
+
+    expect(buttonLabelled("Withdraw reassessment")).toBeUndefined();
+    expect(text()).toContain("already started verifying this fix");
+  });
+
+  it("treats a cancelled request as history, offering the reassessment again", () => {
+    tickets = [ticket({ status: "fix_submitted" })];
+    retests = [
+      retest({
+        status: "cancelled",
+        cancelled_at: "2026-01-02T00:00:00Z",
+        cancelled_by: DEVELOPER,
+        cancellation_reason: "Reworking the fix.",
+      }),
+    ];
+    render();
+
+    expect(buttonLabelled("Withdraw reassessment")).toBeUndefined();
+    const request = buttonLabelled("Request reassessment");
+    expect(request).toBeDefined();
+    expect(request?.disabled).toBe(false);
+  });
+
+  it("does not offer withdrawal on a remediation that is no longer awaiting one", () => {
+    tickets = [ticket({ status: "fix_submitted" })];
+    retests = [retest()];
+    render();
+
+    expect(buttonLabelled("Withdraw reassessment")).toBeUndefined();
+  });
+
+  it("shows a read-only viewer no reassessment actions at all", () => {
+    roles = ["cio"];
+    tickets = [ticket({ status: "retest_requested" })];
+    retests = [retest()];
+    render();
+
+    expect(buttonLabelled("Withdraw reassessment")).toBeUndefined();
+    expect(buttonLabelled("Request reassessment")).toBeUndefined();
   });
 });

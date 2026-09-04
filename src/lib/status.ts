@@ -96,6 +96,7 @@ export const conversationEventConfig: Record<
   retest_started: { label: "Reassessment started", tone: "warning" },
   retest_completed: { label: "Reassessment completed", tone: "success" },
   retest_failed: { label: "Reassessment did not complete", tone: "danger" },
+  retest_withdrawn: { label: "Reassessment withdrawn", tone: "neutral" },
   remediation_started: { label: "Remediation started", tone: "info" },
   remediation_withdrawn: { label: "Remediation withdrawn", tone: "neutral" },
   fix_submitted: { label: "Fix submitted for review", tone: "info" },

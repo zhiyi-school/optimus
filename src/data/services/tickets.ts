@@ -428,15 +428,38 @@ export const retestData = {
     return run;
   },
 
+  /**
+   * Claims the queued request before any automation starts, so a run can never
+   * begin against a request the developer withdrew a moment earlier.
+   */
+  async startRun(id: string): Promise<RetestRun> {
+    const { data, error } = await supabase.rpc("start_reassessment", { p_retest_id: id });
+    if (error) throw error;
+    return data as RetestRun;
+  },
+
+  async withdraw(retestId: string, reason: string): Promise<RetestRun> {
+    const trimmed = reason.trim();
+    if (!trimmed) throw new Error("Withdrawing a reassessment needs a reason.");
+    const { data, error } = await supabase.rpc("withdraw_reassessment", {
+      p_retest_id: retestId,
+      p_reason: trimmed,
+    });
+    if (error) throw error;
+    const run = data as RetestRun;
+    await activityData.log({
+      entity_type: "retest_run",
+      entity_id: run.id,
+      action: "reassessment_withdrawn",
+      metadata: { ticket_id: run.ticket_id, restored_status: run.previous_ticket_status },
+    });
+    return run;
+  },
+
   async markRunning(id: string, externalTestRunId: string): Promise<RetestRun> {
-    const userId = await requireUserId();
     const { data, error } = await supabase
       .from("retest_runs")
-      .update({
-        status: "running",
-        executed_by: userId,
-        external_test_run_id: externalTestRunId,
-      })
+      .update({ external_test_run_id: externalTestRunId })
       .eq("id", id)
       .select()
       .single();

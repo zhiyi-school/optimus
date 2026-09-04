@@ -213,6 +213,21 @@ describe("one chronological feed", () => {
     expect(items[3].textContent).toContain("Classification changed from At Risk to Reduced Risk");
   });
 
+  it("records a withdrawn reassessment with its actor, time and reason", () => {
+    render({
+      entries: [
+        entry("retest_requested"),
+        entry("retest_withdrawn", { message: "Found another defect in the same flow." }),
+      ],
+    });
+
+    const withdrawn = feedItems()[1];
+    expect(withdrawn.textContent).toContain("Reassessment withdrawn");
+    expect(withdrawn.textContent).toContain("Found another defect in the same flow.");
+    expect(withdrawn.textContent).toContain("Example Developer");
+    expect(withdrawn.textContent).toContain("2026");
+  });
+
   it("has exactly one composer, however many entries there are", () => {
     render({ entries: [entry("message", { message: "One." }), entry("message", { message: "Two." })] });
 
@@ -463,13 +478,21 @@ describe("composing", () => {
     expect(composer()?.value).toBe("");
   });
 
-  it("starts empty and offers no template or placeholder to fill in", () => {
+  it("starts empty behind a placeholder, with none of the old template prefilled", () => {
     render();
     const field = composer()!;
     expect(field.value).toBe("");
-    expect(field.getAttribute("placeholder")).toBeNull();
+    expect(field.getAttribute("placeholder")).toBe("Write a message...");
     expect(text()).not.toContain("Status: [At Risk");
     expect(text()).not.toContain("Add your observations here");
+    expect(text()).not.toContain("Attach screenshots or screen recordings");
+  });
+
+  it("refuses to send a draft that is only whitespace", async () => {
+    render();
+    await act(async () => type(composer()!, "   \n  "));
+    const submit = container.querySelector<HTMLButtonElement>("button[type='submit']");
+    expect(submit?.disabled).toBe(true);
   });
 
   it("keeps what was typed when the send fails", async () => {

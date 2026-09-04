@@ -1,11 +1,11 @@
-import { useState } from "react";
-import { CheckCircle2, Circle, Download, ExternalLink } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { CheckCircle2, ChevronDown, Circle, Download, ExternalLink } from "lucide-react";
 import { EmptyState } from "@/components/common";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
 import { PlaybookContent } from "@/components/playbook-content";
 import { playbookApi } from "@/api/playbook-services";
+import { introRepeatsSummary } from "@/lib/resolve";
 import { errorMessage } from "@/lib/utils";
 import type { AutomationPlatform } from "@/api/automation-types";
 import type { ControlDetail, ControlSourceMetadata, ControlStep } from "@/api/playbook-types";
@@ -22,15 +22,10 @@ export interface ControlStepProgress {
 }
 
 export function ControlIntro({ control }: { control: ControlDetail }) {
-  if (control.intro.length === 0) return null;
-  return (
-    <Card className="mt-4">
-      <CardContent className="py-4">
-        <PlaybookContent blocks={control.intro} />
-      </CardContent>
-    </Card>
-  );
+  if (introRepeatsSummary(control)) return null;
+  return <PlaybookContent blocks={control.intro} />;
 }
+
 
 export function ControlStepsEmpty() {
   return (
@@ -44,26 +39,21 @@ export function ControlStepsEmpty() {
 export function ControlReferences({ control }: { control: ControlDetail }) {
   if (control.references.length === 0) return null;
   return (
-    <Card className="mt-4">
-      <CardContent className="py-4">
-        <h2 className="mb-2 text-sm font-semibold text-foreground">References</h2>
-        <ul className="space-y-1">
-          {control.references.map((reference) => (
-            <li key={reference.url}>
-              <a
-                href={reference.url}
-                target="_blank"
-                rel="noreferrer noopener"
-                className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
-              >
-                <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-                <span className="break-all">{reference.label}</span>
-              </a>
-            </li>
-          ))}
-        </ul>
-      </CardContent>
-    </Card>
+    <ul className="space-y-1">
+      {control.references.map((reference) => (
+        <li key={reference.url}>
+          <a
+            href={reference.url}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="inline-flex items-center gap-1.5 rounded text-sm text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+          >
+            <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+            <span className="break-all">{reference.label}</span>
+          </a>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -78,33 +68,97 @@ export function ControlSourceArchive({
 }) {
   if (!source?.exists || !platform || !controlId) return null;
   return (
-    <Card className="mt-4">
-      <CardContent className="py-4">
-        <h2 className="mb-1 text-sm font-semibold text-foreground">Implementation example</h2>
-        <p className="mb-3 text-xs text-muted-foreground">
-          A reference project with this control already implemented. It is an example to read, not
-          evidence of your own fix.
+    <div>
+      <p className="mb-3 text-xs text-muted-foreground">
+        A reference project with this control already implemented. It is an example to read, not
+        evidence of your own fix.
+      </p>
+      {source.download_enabled ? (
+        <a
+          href={playbookApi.sourceDownloadUrl(platform, controlId)}
+          className="inline-flex items-center gap-1.5 rounded text-sm text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+        >
+          <Download className="h-3.5 w-3.5" />
+          {source.file_name}
+          {source.size_bytes ? ` (${formatBytes(source.size_bytes)})` : ""}
+        </a>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          {source.file_name} — downloads are disabled on this automation host.
         </p>
-        {source.download_enabled ? (
-          <a
-            href={playbookApi.sourceDownloadUrl(platform, controlId)}
-            className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
-          >
-            <Download className="h-3.5 w-3.5" />
-            {source.file_name}
-            {source.size_bytes ? ` (${formatBytes(source.size_bytes)})` : ""}
-          </a>
-        ) : (
-          <p className="text-xs text-muted-foreground">
-            {source.file_name} — downloads are disabled on this automation host.
-          </p>
-        )}
-      </CardContent>
-    </Card>
+      )}
+    </div>
   );
 }
 
-/** One step of a control, rendered on its own inside the guided-step shell. */
+export function ControlGuidance({ notes }: { notes: (string | false | null | undefined)[] }) {
+  const visible = notes.filter((note): note is string => !!note);
+  if (visible.length === 0) return null;
+  return (
+    <div className="space-y-1">
+      {visible.map((note) => (
+        <p key={note}>{note}</p>
+      ))}
+    </div>
+  );
+}
+
+function SupportingSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <details className="group rounded-md border border-border/70 bg-muted/40 [&_summary::-webkit-details-marker]:hidden">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-md px-3 py-2 text-xs font-medium text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+        {title}
+        <ChevronDown
+          aria-hidden
+          className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
+        />
+      </summary>
+      <div className="border-t border-border/70 p-3">{children}</div>
+    </details>
+  );
+}
+
+/** Whole-control reference material, folded under the active step rather than stacked beside it. */
+export function ControlSupportingInfo({
+  control,
+  platform,
+  controlId,
+  source,
+  children,
+}: {
+  control: ControlDetail;
+  platform: AutomationPlatform | undefined;
+  controlId: string | undefined;
+  source: ControlSourceMetadata | null | undefined;
+  children?: ReactNode;
+}) {
+  const hasIntro = !introRepeatsSummary(control);
+  const hasReferences = control.references.length > 0;
+  const hasSource = !!source?.exists && !!platform && !!controlId;
+  if (!hasIntro && !hasReferences && !hasSource && !children) return null;
+
+  return (
+    <div data-guided-supporting className="space-y-2 border-t border-border pt-4">
+      {children}
+      {hasIntro && (
+        <SupportingSection title="About this control">
+          <ControlIntro control={control} />
+        </SupportingSection>
+      )}
+      {hasReferences && (
+        <SupportingSection title="References">
+          <ControlReferences control={control} />
+        </SupportingSection>
+      )}
+      {hasSource && (
+        <SupportingSection title="Implementation example">
+          <ControlSourceArchive platform={platform} controlId={controlId} source={source} />
+        </SupportingSection>
+      )}
+    </div>
+  );
+}
+
 export function ControlStepBody({
   step,
   index,
@@ -118,32 +172,17 @@ export function ControlStepBody({
   const [note, setNote] = useState(row?.developer_note ?? "");
   const [noteOpen, setNoteOpen] = useState(false);
 
+  const number = step.number ?? index + 1;
   const done = row?.status === "completed";
   const changed = progress?.needsReview?.has(step.step_key) === true;
   const Icon = done ? CheckCircle2 : Circle;
   const editable = progress?.editable === true && row !== undefined;
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Step {step.number ?? index + 1}
-          </p>
-          <h2 className="text-sm font-semibold text-foreground">{step.step_title}</h2>
-        </div>
-        <button
-          type="button"
-          disabled={!editable || progress?.pending}
-          aria-pressed={done}
-          aria-label={done ? `Mark step ${index + 1} not started` : `Mark step ${index + 1} complete`}
-          onClick={() => row && progress?.setStatus(row.id, done ? "not_started" : "completed")}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <Icon className={done ? "h-4 w-4 text-success" : "h-4 w-4 text-muted-foreground"} />
-          {done ? "Completed" : "Mark complete"}
-        </button>
-      </div>
+    <div className="space-y-4">
+      <h2 className="text-base font-semibold text-foreground">
+        {step.step_title ? `${number}. ${step.step_title}` : `Step ${number}`}
+      </h2>
 
       {changed && (
         <p className="text-xs text-warning">
@@ -151,55 +190,71 @@ export function ControlStepBody({
         </p>
       )}
 
-      {step.text && <p className="text-sm text-foreground">{step.text}</p>}
+      {step.text && <p className="text-sm leading-relaxed text-foreground">{step.text}</p>}
       <PlaybookContent blocks={step.content} />
 
-      {progress?.error != null && (
-        <p className="text-xs text-danger">
-          {errorMessage(progress.error, "Could not save your progress.")}
-        </p>
-      )}
-
-      {editable && row && (
-        <div className="border-t border-border/70 pt-3">
-          {noteOpen ? (
-            <div className="space-y-2">
-              <Textarea
-                rows={2}
-                value={note}
-                placeholder="A note for security about this step…"
-                onChange={(event) => setNote(event.target.value)}
-              />
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  disabled={progress.pending}
-                  onClick={() => {
-                    progress.setStatus(row.id, row.status, note);
-                    setNoteOpen(false);
-                  }}
-                >
-                  Save note
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => setNoteOpen(false)}>
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          ) : (
+      <div className="space-y-2 border-t border-border pt-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={!editable || progress?.pending}
+            aria-pressed={done}
+            aria-label={done ? `Mark step ${number} not started` : `Mark step ${number} complete`}
+            onClick={() => row && progress?.setStatus(row.id, done ? "not_started" : "completed")}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Icon className={done ? "h-4 w-4 text-success" : "h-4 w-4 text-muted-foreground"} />
+            {done ? "Completed" : "Mark complete"}
+          </button>
+          {progress?.pending && <span className="text-xs text-muted-foreground">Saving…</span>}
+          {editable && row && !noteOpen && (
             <button
               type="button"
-              className="text-xs text-primary hover:underline"
+              className="rounded text-xs text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
               onClick={() => setNoteOpen(true)}
             >
               {row.developer_note ? "Edit note" : "Add a note"}
             </button>
           )}
-          {!noteOpen && row.developer_note && (
-            <p className="mt-1 text-xs text-muted-foreground">{row.developer_note}</p>
-          )}
         </div>
-      )}
+
+        {progress?.error != null && (
+          <p className="text-xs text-danger">
+            {errorMessage(progress.error, "Could not save your progress.")}
+          </p>
+        )}
+
+        {editable && row && progress && noteOpen && (
+          <div className="space-y-2">
+            <Textarea
+              rows={2}
+              value={note}
+              aria-label={`Note for step ${number}`}
+              placeholder="A note for security about this step…"
+              onChange={(event) => setNote(event.target.value)}
+            />
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                disabled={progress.pending}
+                onClick={() => {
+                  progress.setStatus(row.id, row.status, note);
+                  setNoteOpen(false);
+                }}
+              >
+                Save note
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setNoteOpen(false)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {editable && row && !noteOpen && row.developer_note && (
+          <p className="text-xs text-muted-foreground">{row.developer_note}</p>
+        )}
+      </div>
     </div>
   );
 }

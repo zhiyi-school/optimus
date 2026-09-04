@@ -118,6 +118,8 @@ export interface DemonstrationImage {
 
 export interface DemonstrationStep {
   id: string;
+  /** Present when the playbook names the step with a numbered heading. */
+  title?: string;
   text: string;
   images?: DemonstrationImage[];
   commands?: string[];

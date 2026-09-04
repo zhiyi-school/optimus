@@ -3,6 +3,7 @@ import type { ControlDetail } from "@/api/playbook-types";
 import type {
   ControlProgressStatus,
   Finding,
+  RetestRun,
   Ticket,
   TicketControl,
   TicketControlStep,
@@ -10,7 +11,11 @@ import type {
 } from "@/data/types";
 import {
   SECURITY_FINALISED,
+  activeReassessment,
   activeRemediationTicket,
+  canWithdrawReassessment,
+  controlSummary,
+  introRepeatsSummary,
   canRequestReassessment,
   reassessmentBlockedReason,
   canResumeTicket,
@@ -1089,5 +1094,157 @@ describe("the risk a developer lands on when they open an application", () => {
     expect(preferredDeveloperRisk([finding({ test_id: null })], [])).toBeNull();
     expect(preferredDeveloperRisk([], [])).toBeNull();
     expect(preferredDeveloperRisk(undefined, undefined)).toBeNull();
+  });
+});
+
+const DEVELOPER = "00000000-0000-0000-0000-000000000001";
+const OTHER_DEVELOPER = "00000000-0000-0000-0000-000000000002";
+
+function retest(overrides: Partial<RetestRun> = {}): RetestRun {
+  return {
+    id: "retest-1",
+    conversation_id: "conversation-1",
+    ticket_id: "ticket-1",
+    finding_id: "finding-1",
+    external_test_run_id: null,
+    requested_by: DEVELOPER,
+    executed_by: null,
+    status: "queued",
+    result: null,
+    created_at: "2026-01-01T00:00:00Z",
+    completed_at: null,
+    cancelled_at: null,
+    cancelled_by: null,
+    cancellation_reason: null,
+    previous_ticket_status: "fix_submitted",
+    ...overrides,
+  } as RetestRun;
+}
+
+describe("activeReassessment", () => {
+  it("finds a queued request", () => {
+    expect(activeReassessment([retest()])?.id).toBe("retest-1");
+  });
+
+  it("finds a running request", () => {
+    expect(activeReassessment([retest({ status: "running" })])?.id).toBe("retest-1");
+  });
+
+  it("treats a cancelled request as history, not as work in flight", () => {
+    expect(activeReassessment([retest({ status: "cancelled" })])).toBeUndefined();
+  });
+
+  it("ignores completed and failed requests the same way", () => {
+    expect(activeReassessment([retest({ status: "completed" })])).toBeUndefined();
+    expect(activeReassessment([retest({ status: "failed" })])).toBeUndefined();
+  });
+
+  it("finds the new request made after one was withdrawn", () => {
+    const runs = [retest({ id: "retest-2" }), retest({ status: "cancelled" })];
+    expect(activeReassessment(runs)?.id).toBe("retest-2");
+  });
+});
+
+describe("canWithdrawReassessment", () => {
+  const awaiting = ticket({ id: "ticket-1", status: "retest_requested" });
+
+  it("lets the requester take back a queued request on their own remediation", () => {
+    expect(canWithdrawReassessment(retest(), awaiting, DEVELOPER)).toBe(true);
+  });
+
+  it("allows it just as well when the request came from a rejected fix", () => {
+    expect(
+      canWithdrawReassessment(retest({ previous_ticket_status: "rejected" }), awaiting, DEVELOPER),
+    ).toBe(true);
+  });
+
+  it("refuses a request that security has already started", () => {
+    expect(canWithdrawReassessment(retest({ status: "running" }), awaiting, DEVELOPER)).toBe(false);
+  });
+
+  it("refuses a completed or failed request", () => {
+    for (const status of ["completed", "failed"] as const) {
+      expect(canWithdrawReassessment(retest({ status }), awaiting, DEVELOPER), status).toBe(false);
+    }
+  });
+
+  it("refuses one that is already cancelled", () => {
+    expect(canWithdrawReassessment(retest({ status: "cancelled" }), awaiting, DEVELOPER)).toBe(
+      false,
+    );
+  });
+
+  it("refuses anyone but the developer who asked for it", () => {
+    expect(canWithdrawReassessment(retest(), awaiting, OTHER_DEVELOPER)).toBe(false);
+    expect(canWithdrawReassessment(retest(), awaiting, undefined)).toBe(false);
+  });
+
+  it("refuses a security-created request that has no remediation to restore", () => {
+    expect(canWithdrawReassessment(retest({ ticket_id: null }), null, DEVELOPER)).toBe(false);
+  });
+
+  it("refuses when the request belongs to a different remediation", () => {
+    expect(
+      canWithdrawReassessment(retest({ ticket_id: "ticket-9" }), awaiting, DEVELOPER),
+    ).toBe(false);
+  });
+
+  it("refuses once the remediation has moved past waiting for the reassessment", () => {
+    for (const status of ["retest_in_progress", "closed", "withdrawn"] as TicketStatus[]) {
+      expect(
+        canWithdrawReassessment(retest(), ticket({ id: "ticket-1", status }), DEVELOPER),
+        status,
+      ).toBe(false);
+    }
+  });
+
+  it("refuses on a ticket that is not a remediation", () => {
+    expect(
+      canWithdrawReassessment(
+        retest(),
+        ticket({ id: "ticket-1", status: "retest_requested", type: "risk_acceptance" }),
+        DEVELOPER,
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("control summary presentation", () => {
+  function definition(overrides: Partial<ControlDetail> = {}): ControlDetail {
+    return {
+      control_id: "example-feature-01-risk-01-control-01",
+      title: "Detect an example repackaging attempt",
+      summary: "Detect an example repackaging attempt",
+      intro: [{ type: "paragraph", text: "Detect an example repackaging attempt" }],
+      ...overrides,
+    } as ControlDetail;
+  }
+
+  it("hides the summary when the Description already supplied the title", () => {
+    expect(controlSummary(definition())).toBeUndefined();
+  });
+
+  it("shows a summary that says more than the title", () => {
+    expect(
+      controlSummary(definition({ title: "Control 1", summary: "A longer placeholder summary." })),
+    ).toBe("A longer placeholder summary.");
+  });
+
+  it("hides an intro that only repeats the summary", () => {
+    expect(introRepeatsSummary(definition())).toBe(true);
+  });
+
+  it("keeps an intro that carries more than the summary", () => {
+    const control = definition({
+      intro: [
+        { type: "paragraph", text: "Detect an example repackaging attempt" },
+        { type: "paragraph", text: "Extra background the header does not show." },
+      ],
+    });
+    expect(introRepeatsSummary(control)).toBe(false);
+  });
+
+  it("hides an empty intro", () => {
+    expect(introRepeatsSummary(definition({ intro: [] }))).toBe(true);
   });
 });
