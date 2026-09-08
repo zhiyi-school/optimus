@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/input";
 import { PlaybookContent } from "@/components/playbook-content";
 import { playbookApi } from "@/api/playbook-services";
 import { introRepeatsSummary } from "@/lib/resolve";
-import { errorMessage } from "@/lib/utils";
+import { errorMessage, formatBytes } from "@/lib/utils";
 import type { AutomationPlatform } from "@/api/automation-types";
 import type { ControlDetail, ControlSourceMetadata, ControlStep } from "@/api/playbook-types";
 import type { ControlProgressStatus, TicketControlStep } from "@/data/types";
@@ -186,7 +186,7 @@ export function ControlStepBody({
 
       {changed && (
         <p className="text-xs text-warning">
-          This step changed after you completed it. Re-read it before submitting your fix.
+          This step changed after you completed it. Re-read it before asking for a reassessment.
         </p>
       )}
 
@@ -259,8 +259,3 @@ export function ControlStepBody({
   );
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}

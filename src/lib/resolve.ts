@@ -19,7 +19,7 @@ import type { Tone } from "@/lib/status";
 export const developerTicketLabels: Record<TicketStatus, { label: string; tone: Tone }> = {
   open: { label: "Action required", tone: "danger" },
   in_progress: { label: "In progress", tone: "info" },
-  fix_submitted: { label: "Fix submitted", tone: "info" },
+  fix_submitted: { label: "Fix submitted", tone: "neutral" },
   retest_requested: { label: "Awaiting reassessment", tone: "warning" },
   retest_in_progress: { label: "Security verification in progress", tone: "warning" },
   under_review: { label: "Under security review", tone: "warning" },
@@ -52,7 +52,7 @@ export const AWAITING_SECURITY: TicketStatus[] = [
   "under_review",
 ];
 const TERMINAL: TicketStatus[] = ["closed", "accepted", "withdrawn"];
-const DEVELOPER_ACTIVE: TicketStatus[] = ["in_progress", "fix_submitted"];
+const DEVELOPER_ACTIVE: TicketStatus[] = ["in_progress"];
 
 export const SECURITY_FINALISED: TicketStatus[] = ["closed", "accepted"];
 
@@ -61,6 +61,28 @@ export const WITHDRAWABLE_FROM: TicketStatus[] = [
   "in_progress",
   "fix_submitted",
   "rejected",
+];
+
+/** Mirrors `selectable_from` in enforce_ticket_update_permissions: the database is the contract. */
+export const APPROACH_SELECTABLE_FROM: TicketStatus[] = [
+  "open",
+  "in_progress",
+  "fix_submitted",
+  "rejected",
+];
+
+export const REMEDIATION_EDITABLE_FROM: TicketStatus[] = ["open", "in_progress", "rejected"];
+
+/**
+ * Mirrors `requestable_from` in enforce_retest_request_permissions. `fix_submitted`
+ * is there only so a remediation recorded before the submission step was retired
+ * is not stranded; nothing puts a ticket into it any more.
+ */
+export const REASSESSMENT_REQUESTABLE_FROM: TicketStatus[] = [
+  "open",
+  "in_progress",
+  "rejected",
+  "fix_submitted",
 ];
 
 export interface Progress {
@@ -217,7 +239,6 @@ export interface ApplicationRemediation {
   affectedFindings: number;
   findingsRequiringAction: number;
   resolvedFindings: number;
-  fixesSubmitted: number;
   awaitingReassessment: number;
   withdrawnTickets: number;
   findings: Progress;
@@ -280,7 +301,6 @@ export function summarizeApplication(
     ).length,
     findingsRequiringAction: own.filter((finding) => finding.status === "at_risk").length,
     resolvedFindings: own.filter((finding) => finding.status === "reduced_risk").length,
-    fixesSubmitted: ownTickets.filter((ticket) => ticket.status === "fix_submitted").length,
     awaitingReassessment: ownTickets.filter((ticket) => AWAITING_SECURITY.includes(ticket.status))
       .length,
     withdrawnTickets: ownTickets.filter((ticket) => ticket.status === "withdrawn").length,
@@ -336,58 +356,112 @@ export function isReconciled(
   });
 }
 
-/** The ticket lifecycle alone: the selected approach is checked by `submitFixBlockedReason`. */
-export function canSubmitFix(ticket: Ticket | null | undefined): boolean {
+/** Whether the developer may still record progress against this remediation. */
+export function canEditRemediation(ticket: Ticket | null | undefined): boolean {
   if (!ticket || ticket.type !== "remediation") return false;
-  return ["open", "in_progress", "rejected"].includes(ticket.status);
+  return REMEDIATION_EDITABLE_FROM.includes(ticket.status);
 }
 
-/** Why the fix cannot be submitted yet, or null when every current selected step is done. */
-export function submitFixBlockedReason(
+/** True once every step the playbook currently lists for the approach is done. */
+export function selectedApproachComplete(control: LiveControl | undefined): boolean {
+  if (!control) return false;
+  const { completed, total } = control.progress;
+  return total > 0 && completed >= total;
+}
+
+/**
+ * Whether the approach may still be changed. Wider than `canEditRemediation`:
+ * the database also allows a switch on a legacy `fix_submitted` remediation.
+ */
+export function canSelectApproach(ticket: Ticket | null | undefined): boolean {
+  if (!ticket || ticket.type !== "remediation") return false;
+  return APPROACH_SELECTABLE_FROM.includes(ticket.status);
+}
+
+/** Why the approach cannot be changed, or null when it can. */
+export function approachChangeBlockedReason(
   ticket: Ticket | null | undefined,
-  selection: {
-    loading: boolean;
-    failed?: boolean;
-    replaced: boolean;
-    control: LiveControl | undefined;
-  },
+  mayEdit: boolean,
 ): string | null {
-  if (!canSubmitFix(ticket)) return "This remediation is not yours to submit right now.";
-  if (selection.loading) return "Loading the remediation approach…";
-  if (selection.failed) {
-    return "The remediation approach could not be loaded, so completion cannot be checked.";
+  if (!mayEdit) {
+    return "Only the developers assigned to this application can change the remediation approach.";
   }
-  if (selection.replaced) {
-    return "The approach this ticket was following is no longer in the playbook. Review the replacement before submitting.";
+  if (!ticket || ticket.type !== "remediation") return "This is not a remediation ticket.";
+  if (canSelectApproach(ticket)) return null;
+  if (ticket.status === "withdrawn") {
+    return "This remediation was withdrawn. Resume it to change the approach.";
   }
-  if (!selection.control) return "Select a remediation approach before submitting a fix.";
-  const { completed, total } = selection.control.progress;
-  if (total === 0) return "This approach has no steps to complete yet.";
-  if (completed < total) return `Complete all ${total} steps of the selected approach first.`;
-  return null;
+  if (SECURITY_FINALISED.includes(ticket.status)) {
+    return "Security has finished with this remediation, so the approach is fixed.";
+  }
+  return "Security is verifying this remediation, so the approach cannot be changed until that finishes.";
 }
 
+/** The ticket lifecycle alone; completion is checked by `reassessmentBlockedReason`. */
 export function canRequestReassessment(ticket: Ticket | null | undefined): boolean {
   if (!ticket || ticket.type !== "remediation") return false;
-  return ["fix_submitted", "rejected"].includes(ticket.status);
+  return REASSESSMENT_REQUESTABLE_FROM.includes(ticket.status);
 }
 
-/** Why the reassessment action is unavailable, or null when it can be used. */
-export function reassessmentBlockedReason(ticket: Ticket | null | undefined): string | null {
-  if (!ticket || ticket.type !== "remediation") {
-    return "Start a remediation for this risk and submit your fix, then ask for a reassessment here.";
+export interface ReassessmentReadiness {
+  ticket: Ticket | null | undefined;
+  /** The playbook's approaches for this risk are still being fetched. */
+  loading: boolean;
+  failed?: boolean;
+  /** The stored approach is no longer one the playbook offers. */
+  replaced: boolean;
+  /** The ticket holds a row for every step of the selected approach. */
+  reconciled: boolean;
+  control: LiveControl | undefined;
+  activeRetest: RetestRun | undefined;
+  mayRequest: boolean;
+}
+
+/**
+ * Why a reassessment cannot be asked for, or null when every condition holds.
+ * The database enforces the same completion rule; this only says so first.
+ */
+export function reassessmentBlockedReason(readiness: ReassessmentReadiness): string | null {
+  const { ticket, control, activeRetest } = readiness;
+
+  if (!readiness.mayRequest) {
+    return "Only the developers assigned to this application can ask for a reassessment.";
   }
-  if (canRequestReassessment(ticket)) return null;
+  if (activeRetest) {
+    return activeRetest.status === "running"
+      ? "Security has already started verifying this remediation."
+      : "A reassessment has been requested. Security runs it from this conversation.";
+  }
+  if (!ticket || ticket.type !== "remediation") {
+    return "Start a remediation for this risk and complete its steps, then ask for a reassessment here.";
+  }
   if (ticket.status === "withdrawn") {
     return "This remediation was withdrawn. Resume it to work on the risk again.";
-  }
-  if (AWAITING_SECURITY.includes(ticket.status)) {
-    return "Security is already verifying this remediation.";
   }
   if (SECURITY_FINALISED.includes(ticket.status)) {
     return "Security has finished with this remediation.";
   }
-  return "Submit your fix on the remediation ticket first, then ask for a reassessment here.";
+  if (AWAITING_SECURITY.includes(ticket.status)) {
+    return "Security is already verifying this remediation.";
+  }
+  if (!canRequestReassessment(ticket)) {
+    return "This remediation is not in a state a reassessment can be asked for.";
+  }
+  if (readiness.loading) return "Loading the remediation approach…";
+  if (readiness.failed) {
+    return "The remediation approach could not be loaded, so completion cannot be checked.";
+  }
+  if (readiness.replaced) {
+    return "The approach this remediation was following is no longer in the playbook. Review the replacement first.";
+  }
+  if (!control) return "Choose a remediation approach and complete its steps first.";
+  if (!readiness.reconciled) return "Preparing this approach's steps…";
+  const { completed, total } = control.progress;
+  if (total === 0) return "This approach has no steps to complete yet.";
+  if (completed < total) {
+    return `Complete all ${total} steps of the selected approach first — ${completed} done.`;
+  }
+  return null;
 }
 
 /** The reassessment a risk is waiting on: cancelled requests are history, not work. */
@@ -448,6 +522,25 @@ export function resumableRemediationTicket(
     )
     .sort((a, b) => a.updated_at.localeCompare(b.updated_at))
     .at(-1);
+}
+
+/**
+ * The application's raised risks in the playbook catalogue's own order, so
+ * Resolve lists them exactly as Assess does. A finding whose risk the catalogue
+ * does not list — an older run, or an unreachable backend — keeps its place at
+ * the end rather than disappearing.
+ */
+export function developerRiskOrder(
+  risks: { risk_id: string }[] | undefined,
+  findings: Finding[] | undefined,
+): Finding[] {
+  const linked = (findings ?? []).filter((finding) => finding.test_id);
+  const rank = new Map((risks ?? []).map((risk, index) => [risk.risk_id, index]));
+  return [...linked].sort((a, b) => {
+    const left = rank.get(a.test_id as string) ?? Number.MAX_SAFE_INTEGER;
+    const right = rank.get(b.test_id as string) ?? Number.MAX_SAFE_INTEGER;
+    return left !== right ? left - right : linked.indexOf(a) - linked.indexOf(b);
+  });
 }
 
 /**

@@ -1,4 +1,5 @@
 import { supabase, ATTACHMENTS_BUCKET } from "@/data/supabase";
+import { attachmentStorageKey } from "@/lib/attachments";
 import type {
   Application,
   Assessment,
@@ -321,23 +322,34 @@ export const riskConversationData = {
     file: File,
   ): Promise<RiskConversationAttachment> {
     const userId = await requireUserId();
-    const storagePath = `conversation-${conversationId}/${Date.now()}-${file.name}`;
+    const storagePath = attachmentStorageKey(conversationId, file.name, Date.now());
     const { error: uploadError } = await supabase.storage
       .from(ATTACHMENTS_BUCKET)
       .upload(storagePath, file);
     if (uploadError) throw uploadError;
 
+    const row = {
+      entry_id: entryId,
+      uploaded_by: userId,
+      storage_path: storagePath,
+      file_name: file.name,
+      mime_type: file.type || null,
+    };
     const { data, error } = await supabase
       .from("risk_conversation_attachments")
-      .insert({
-        entry_id: entryId,
-        uploaded_by: userId,
-        storage_path: storagePath,
-        file_name: file.name,
-        mime_type: file.type || null,
-      })
+      .insert({ ...row, storage_provider: "supabase", size_bytes: file.size })
       .select()
       .single();
+    // A database without migration 0027 has no provider columns; its rows read as Supabase-backed.
+    if (error && (error.code === "PGRST204" || error.code === "42703")) {
+      const fallback = await supabase
+        .from("risk_conversation_attachments")
+        .insert(row)
+        .select()
+        .single();
+      if (fallback.error) throw fallback.error;
+      return fallback.data;
+    }
     if (error) throw error;
     return data;
   },

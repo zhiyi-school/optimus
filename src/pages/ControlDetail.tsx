@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
-import { useLocation, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { FileText } from "lucide-react";
 import { useAuth } from "@/auth/useAuth";
 import { LoadingState, ErrorState } from "@/components/common";
@@ -22,16 +22,22 @@ import {
   useTicketControls,
 } from "@/hooks/queries";
 import { changedSinceCompleted, contentHashes, controlSummary, liveControls } from "@/lib/resolve";
+import { resolveRiskPath } from "@/lib/legacy-routes";
 import { stepCountLabel } from "@/lib/utils";
 
 export default function ControlDetail() {
   const { ticketId, controlId } = useParams<{ ticketId: string; controlId: string }>();
   const { can } = useAuth();
-  const inResolve = useLocation().pathname.startsWith("/resolve/");
-  const backTo = `${inResolve ? "/resolve" : ""}/tickets/${ticketId}`;
 
   const ticket = useTicket(ticketId);
   const platform = ticket.data?.finding?.platform ?? ticket.data?.application?.platform;
+  // Closing returns to the risk page that holds the conversation, never to a ticket page.
+  const backTo = ticket.data
+    ? resolveRiskPath({
+        applicationId: ticket.data.application_id,
+        riskId: ticket.data.finding?.test_id,
+      })
+    : "/resolve";
 
   const control = useControlDetail(platform, controlId);
   const controls = useTicketControls(ticketId);
@@ -85,7 +91,7 @@ export default function ControlDetail() {
       activeId={null}
       onSelect={() => {}}
       closeTo={backTo}
-      closeLabel="Back to remediation"
+      closeLabel="Back to the risk"
       navLabel="Remediation steps"
     >
       {children}
@@ -148,7 +154,7 @@ export default function ControlDetail() {
       aside={<EstimatedTime value={stepCountLabel(definitionSteps.length)} />}
       supporting={supporting}
       closeTo={backTo}
-      closeLabel="Back to remediation"
+      closeLabel="Back to the risk"
       navLabel="Remediation steps"
       finishLabel="Done"
     >

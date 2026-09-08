@@ -26,7 +26,9 @@ let historyFailed = false;
 let findingFound = true;
 let conversationFound = true;
 let conversationFailed = false;
-let ticketStatus: string | null = "fix_submitted";
+let ticketStatus: string | null = "in_progress";
+const CONTROL = "example-feature-01-risk-01-control-01";
+let stepStatus = "completed";
 let retestStatus: string | null = null;
 let createRequested: boolean | undefined;
 let conversationOwner: { applicationId?: string; originAssessmentId?: string | null } = {};
@@ -152,12 +154,20 @@ vi.mock("@/hooks/queries", () => {
       };
     },
     useRiskConversationEntries: () => ({ ...idle, data: entries }),
-    useRiskConversationAttachments: () => [],
+    useRiskConversationAttachments: () => ({ data: [], isError: false, refetch: () => {} }),
     useSendRiskMessage: () => mutation,
     useFindingTickets: () => ({
       ...idle,
       data: ticketStatus
-        ? [{ id: TICKET, finding_id: FINDING, type: "remediation", status: ticketStatus }]
+        ? [
+            {
+              id: TICKET,
+              finding_id: FINDING,
+              type: "remediation",
+              status: ticketStatus,
+              selected_control_id: CONTROL,
+            },
+          ]
         : [],
     }),
     useFindingRetests: () => ({
@@ -173,11 +183,31 @@ vi.mock("@/hooks/queries", () => {
     useClassifyRisk: () => mutation,
     useRequestReassessment: () => mutation,
     useUpdateTicketStatus: () => mutation,
-    useRiskControls: () => idle,
+    useRiskControls: () => ({
+      ...idle,
+      data: [
+        {
+          control_id: CONTROL,
+          status: "active",
+          required: true,
+          steps: [
+            { step_key: "step-one", step_index: 0, number: 1, content_hash: "sha256:one", content: [] },
+          ],
+        },
+      ],
+    }),
+    useTicketControls: () => ({
+      ...idle,
+      data: [{ id: "tc-1", ticket_id: TICKET, control_id: CONTROL, status: stepStatus }],
+    }),
+    useTicketControlSteps: () => ({
+      ...idle,
+      data: [{ id: "tc-1-step-one", ticket_control_id: "tc-1", step_key: "step-one", status: stepStatus }],
+    }),
+    useCriticalFindings: () => idle,
     useStartRemediation: () => mutation,
     useResumeTicket: () => mutation,
     useWithdrawTicket: () => mutation,
-    useSubmitFix: () => mutation,
     useCreateRiskAcceptanceTicket: () => mutation,
     useReviewRiskAcceptance: () => mutation,
   };
@@ -221,7 +251,8 @@ beforeEach(() => {
   entries = [];
   history = [];
   historyFailed = false;
-  ticketStatus = "fix_submitted";
+  ticketStatus = "in_progress";
+  stepStatus = "completed";
   retestStatus = null;
   createRequested = undefined;
   conversationOwner = {};
@@ -255,7 +286,7 @@ function text() {
 
 function panels() {
   return [...container.querySelectorAll("h2")].filter(
-    (heading) => heading.textContent === "Risk conversation",
+    (heading) => heading.textContent === "Conversation",
   );
 }
 
@@ -278,7 +309,7 @@ function feedItems() {
 }
 
 describe("the risk page is the one conversation location", () => {
-  it("renders exactly one risk conversation", () => {
+  it("renders exactly one conversation", () => {
     render();
     expect(panels()).toHaveLength(1);
     expect(container.querySelectorAll("textarea")).toHaveLength(1);
@@ -341,6 +372,14 @@ describe("the risk page is the one conversation location", () => {
     expect(items[2]).toContain("Shipped 2.1.");
   });
 
+  it("keeps the latest automated result in full on the assessment page", () => {
+    history = [historyRun()];
+    render();
+
+    expect(text()).toContain("Latest automated result");
+    expect(text()).toContain("2026-01-02_00-00-00");
+  });
+
   it("keeps the live progress panel separate from the history", () => {
     history = [historyRun()];
     render();
@@ -368,11 +407,73 @@ describe("the risk page is the one conversation location", () => {
   });
 });
 
+describe("the risk header carries the identity the removed card used to", () => {
+  it("has no 'What was found' card", () => {
+    render();
+    expect(text()).not.toContain("What was found");
+    expect(text()).not.toContain("Why it matters");
+  });
+
+  it("still names the risk, its classification, severity and platform", () => {
+    render();
+    const header = container.querySelector("h1")?.parentElement?.parentElement?.textContent ?? "";
+    expect(header).toContain("Example Risk");
+    expect(header).toContain("Example risk description.");
+    expect(header).toContain("At Risk");
+    expect(header).toContain("High");
+    expect(header).toContain("iOS");
+  });
+});
+
+describe("the conversation is named plainly", () => {
+  it("heads and labels itself 'Conversation'", () => {
+    render();
+    expect(panels()).toHaveLength(1);
+    expect(container.querySelector("[role='log']")?.getAttribute("aria-label")).toBe(
+      "Conversation",
+    );
+  });
+
+  it("no longer says 'risk conversation' anywhere a reader can see", () => {
+    conversationFailed = true;
+    render();
+    expect(text().toLowerCase()).not.toContain("risk conversation");
+  });
+});
+
 describe("security", () => {
+  function composerForm() {
+    return container.querySelector("form");
+  }
+
   it("can change the classification and run the tests", () => {
     render();
     expect(buttonLabels()).toContain("Change classification");
     expect(buttonLabels()).toContain("Run Again");
+  });
+
+  it("reaches the classification from inside the composer, not a strip above the thread", () => {
+    render();
+    const trigger = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent?.trim() === "Change classification",
+    )!;
+    expect(composerForm()?.contains(trigger)).toBe(true);
+  });
+
+  it("keeps a normal message possible without touching the classification", async () => {
+    render();
+    const field = container.querySelector("textarea") as HTMLTextAreaElement;
+    expect(field.getAttribute("aria-label")).toBe("Write a message");
+    expect(container.querySelector("#composer-classification")).toBeNull();
+  });
+
+  it("keeps Run Retest outside the composer, where it acts immediately", () => {
+    retestStatus = "queued";
+    render();
+    const run = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent?.trim() === "Run Retest",
+    )!;
+    expect(composerForm()?.contains(run)).toBe(false);
   });
 
   it("can run a reassessment a developer has requested", () => {
@@ -426,18 +527,18 @@ describe("a developer", () => {
     expect(buttonLabels()).not.toContain("Run Retest");
   });
 
-  it("can request a reassessment once a fix is submitted", () => {
+  it("can request a reassessment once every step of the approach is done", () => {
     render();
     expect(usableButtonLabels()).toContain("Request reassessment");
   });
 
-  it("is told to submit the fix first rather than shown nothing", () => {
-    ticketStatus = "in_progress";
+  it("is told which steps are outstanding rather than shown nothing", () => {
+    stepStatus = "not_started";
     render();
 
     expect(buttonLabels()).toContain("Request reassessment");
     expect(usableButtonLabels()).not.toContain("Request reassessment");
-    expect(text()).toContain("Submit your fix on the remediation ticket first");
+    expect(text()).toContain("Complete all 1 steps of the selected approach first");
   });
 
   it("is told to start a remediation when there is no ticket, and can still ask a question", () => {
@@ -507,7 +608,7 @@ describe("a conversation that could not be loaded", () => {
     render();
 
     expect(panels()).toHaveLength(1);
-    expect(text()).toContain("Unable to load this risk conversation.");
+    expect(text()).toContain("Unable to load this conversation.");
     expect(buttonLabels()).toContain("Retry");
   });
 

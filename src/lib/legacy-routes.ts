@@ -35,3 +35,18 @@ export function canonicalRiskPath(
 
   return null;
 }
+
+/**
+ * The Resolve workspace page a remediation belongs to. Always inside Resolve, so
+ * a mixed-role user following a `/resolve/...` URL is not moved into Assess, and
+ * it degrades to the application, then to Resolve itself, when links are missing.
+ */
+export function resolveRiskPath(
+  location: Pick<RiskLocation, "applicationId" | "riskId">,
+): string {
+  const riskId = location.riskId?.trim();
+  const applicationId = location.applicationId?.trim();
+  if (!applicationId) return "/resolve";
+  if (!riskId) return `/resolve/applications/${applicationId}`;
+  return `/resolve/applications/${applicationId}/risks/${encodeURIComponent(riskId)}`;
+}

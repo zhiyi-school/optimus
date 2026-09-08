@@ -1,9 +1,7 @@
 import { type ReactNode } from "react";
 import { Paperclip, type LucideIcon } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { StatusBadge } from "@/components/data-display";
-import { cn, formatDate } from "@/lib/utils";
-import type { Finding } from "@/data/types";
+import { cn } from "@/lib/utils";
 
 /** Sidebar plus detail column. Security and the developer share this geometry exactly. */
 export function RiskWorkspace({
@@ -58,40 +56,6 @@ export function RiskHeader({
         {meta && <div className="mt-1 text-xs text-muted-foreground">{meta}</div>}
       </div>
     </div>
-  );
-}
-
-export function FindingSummary({
-  finding,
-  emptyDescription = "Security has not recorded a description for this finding.",
-}: {
-  finding: Finding | undefined;
-  emptyDescription?: string;
-}) {
-  if (!finding) return null;
-  return (
-    <Card>
-      <CardContent className="space-y-2 py-3.5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-foreground">What was found</h2>
-          <span className="text-xs text-muted-foreground">
-            Found {formatDate(finding.created_at)}
-          </span>
-        </div>
-        <p className="text-sm text-foreground">{finding.description || emptyDescription}</p>
-        {finding.impact && (
-          <>
-            <p className="pt-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Why it matters
-            </p>
-            <p className="text-sm text-foreground">{finding.impact}</p>
-          </>
-        )}
-        <p className="flex items-center gap-2 pt-1 text-xs text-muted-foreground">
-          Current classification <StatusBadge status={finding.status} />
-        </p>
-      </CardContent>
-    </Card>
   );
 }
 

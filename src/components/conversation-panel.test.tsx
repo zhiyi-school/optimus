@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RiskConversationPanel } from "@/components/conversation-panel";
+import type { ComposerSubmission } from "@/hooks/conversation-composer";
 import { conversationTimeline } from "@/lib/conversation-timeline";
 import type { AutomationResultRow } from "@/api/automation-types";
 import type {
@@ -105,7 +106,7 @@ function attachment(entryId: string): RiskConversationAttachment {
 
 let container: HTMLDivElement;
 let root: Root;
-let sent: { message: string; file?: File }[];
+let sent: ComposerSubmission[];
 
 beforeEach(() => {
   nextEntry = 0;
@@ -134,8 +135,8 @@ function render({ entries, runs, ...props }: RenderProps = {}) {
         currentProfileId={DEVELOPER}
         profileMap={profiles}
         canComment
-        onSend={(input) => {
-          sent.push(input);
+        onSubmit={(submission) => {
+          sent.push(submission);
           return Promise.resolve();
         }}
         {...props}
@@ -343,7 +344,15 @@ describe("automated test history inside the conversation", () => {
     render({
       runs: [
         run({
-          evidence: [{ label: "Example screenshot", kind: "image", path: "shot.png" }],
+          evidence: [
+            {
+              label: "Example screenshot",
+              kind: "image",
+              path: "reports/run/shot.png",
+              ref: "ref-shot",
+              size_bytes: 9,
+            },
+          ],
         }),
       ],
       evidenceUrl: (timestamp, path) => `/example/${timestamp}/${path}`,
@@ -419,7 +428,7 @@ describe("states", () => {
     const retry = vi.fn();
     render({ entries: undefined, isError: true, onRetry: retry });
 
-    expect(text()).toContain("Unable to load this risk conversation.");
+    expect(text()).toContain("Unable to load this conversation.");
     const button = container.querySelector("button");
     act(() => button?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
     expect(retry).toHaveBeenCalled();
@@ -474,7 +483,7 @@ describe("composing", () => {
       container.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true }));
     });
 
-    expect(sent).toEqual([{ message: "Please retest this.", file: undefined }]);
+    expect(sent).toEqual([{ message: "Please retest this.", file: undefined, action: undefined }]);
     expect(composer()?.value).toBe("");
   });
 
@@ -497,7 +506,7 @@ describe("composing", () => {
 
   it("keeps what was typed when the send fails", async () => {
     render({
-      onSend: () => Promise.reject(new Error("Example transport failure.")),
+      onSubmit: () => Promise.reject(new Error("Example transport failure.")),
     });
     const field = composer()!;
     await act(async () => type(field, "Please retest this."));
@@ -516,12 +525,486 @@ describe("composing", () => {
       container.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true }));
     });
 
-    expect(sent).toEqual([{ message: "First line.\nSecond line.", file: undefined }]);
+    expect(sent).toEqual([
+      { message: "First line.\nSecond line.", file: undefined, action: undefined },
+    ]);
   });
 
-  it("renders the actions the caller supplies above the feed", () => {
-    render({ actions: <button type="button">Change classification</button> });
-    expect(text()).toContain("Change classification");
+  it("renders the operational actions the caller supplies above the feed", () => {
+    render({ actions: <button type="button">Run Retest</button> });
+    expect(text()).toContain("Run Retest");
+  });
+});
+
+describe("the optional composer actions", () => {
+  function buttonNamed(label: string) {
+    return [...container.querySelectorAll("button")].find(
+      (button) => button.textContent?.trim() === label,
+    );
+  }
+
+  function submit() {
+    return act(async () => {
+      container.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true }));
+    });
+  }
+
+  function statusSelect() {
+    return container.querySelector<HTMLSelectElement>("#composer-classification");
+  }
+
+  function fileInput() {
+    return container.querySelector<HTMLInputElement>("input[type='file']");
+  }
+
+  function attach(name = "example-evidence.png") {
+    const input = fileInput()!;
+    const file = new File(["x"], name, { type: "image/png" });
+    Object.defineProperty(input, "files", { configurable: true, value: [file] });
+    act(() => input.dispatchEvent(new Event("change", { bubbles: true })));
+    return file;
+  }
+
+  it("offers none at all when the caller supplies none", () => {
+    render();
+    expect(buttonNamed("Change classification")).toBeUndefined();
+    expect(buttonNamed("Request reassessment")).toBeUndefined();
+  });
+
+  it("sends an ordinary message with no action attached", async () => {
+    render({ composerOffers: [{ kind: "classification", currentStatus: "at_risk" }] });
+    await act(async () => type(composer()!, "Just a question."));
+    await submit();
+
+    expect(sent).toEqual([{ message: "Just a question.", file: undefined, action: undefined }]);
+  });
+
+  it("keeps the send interaction the same whichever action is selected", () => {
+    render({ composerOffers: [{ kind: "reassessment" }] });
+    const send = () => container.querySelector<HTMLButtonElement>("button[type='submit']")!;
+    expect(send().textContent).toContain("Send");
+
+    act(() => buttonNamed("Request reassessment")!.click());
+    expect(send().textContent).toContain("Send");
+    expect(composer()!.getAttribute("aria-label")).toBe("Write a message");
+    expect(composer()!.getAttribute("placeholder")).toBe("Write a message...");
+  });
+
+  it("adds classification as a removable chip without touching the draft or the file", async () => {
+    render({ composerOffers: [{ kind: "classification", currentStatus: "at_risk" }] });
+    await act(async () => type(composer()!, "Verified on the current build."));
+    attach();
+
+    act(() => buttonNamed("Change classification")!.click());
+    expect(statusSelect()).not.toBeNull();
+    expect(composer()!.value).toBe("Verified on the current build.");
+    expect(text()).toContain("example-evidence.png");
+
+    act(() =>
+      container
+        .querySelector<HTMLButtonElement>("button[aria-label='Remove change classification']")!
+        .click(),
+    );
+    expect(statusSelect()).toBeNull();
+    expect(composer()!.value).toBe("Verified on the current build.");
+    expect(text()).toContain("example-evidence.png");
+  });
+
+  it("keeps the draft and file when swapping one action for the other", async () => {
+    render({
+      composerOffers: [{ kind: "classification", currentStatus: "at_risk" }, { kind: "reassessment" }],
+    });
+    await act(async () => type(composer()!, "Context."));
+    attach();
+    act(() => buttonNamed("Change classification")!.click());
+    act(() => buttonNamed("Request reassessment")!.click());
+
+    expect(statusSelect()).toBeNull();
+    expect(composer()!.value).toBe("Context.");
+    expect(text()).toContain("example-evidence.png");
+  });
+
+  it("never offers the classification the risk already has", () => {
+    render({ composerOffers: [{ kind: "classification", currentStatus: "at_risk" }] });
+    act(() => buttonNamed("Change classification")!.click());
+
+    expect([...statusSelect()!.options].map((option) => option.value)).toEqual([
+      "reduced_risk",
+      "inconclusive",
+    ]);
+  });
+
+  it("requires a reason before a classification can be sent", async () => {
+    render({ composerOffers: [{ kind: "classification", currentStatus: "at_risk" }] });
+    act(() => buttonNamed("Change classification")!.click());
+    expect(container.querySelector<HTMLButtonElement>("button[type='submit']")!.disabled).toBe(true);
+
+    await act(async () => type(composer()!, "   "));
+    expect(container.querySelector<HTMLButtonElement>("button[type='submit']")!.disabled).toBe(true);
+  });
+
+  it("submits the chosen status with the message as its reason, and resets on success", async () => {
+    render({ composerOffers: [{ kind: "classification", currentStatus: "at_risk" }] });
+    act(() => buttonNamed("Change classification")!.click());
+    const select = statusSelect()!;
+    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;
+    setter?.call(select, "inconclusive");
+    act(() => select.dispatchEvent(new Event("change", { bubbles: true })));
+    await act(async () => type(composer()!, "  The evidence is not conclusive.  "));
+    await submit();
+
+    expect(sent).toEqual([
+      {
+        message: "The evidence is not conclusive.",
+        file: undefined,
+        action: { kind: "classification", status: "inconclusive" },
+      },
+    ]);
+    expect(composer()!.value).toBe("");
+    expect(statusSelect()).toBeNull();
+  });
+
+  it("requests a reassessment with no message at all", async () => {
+    render({ composerOffers: [{ kind: "reassessment" }] });
+    act(() => buttonNamed("Request reassessment")!.click());
+    expect(container.querySelector<HTMLButtonElement>("button[type='submit']")!.disabled).toBe(false);
+    await submit();
+
+    expect(sent).toEqual([{ message: "", file: undefined, action: { kind: "reassessment" } }]);
+  });
+
+  it("carries typed context on the request rather than as a second message", async () => {
+    render({ composerOffers: [{ kind: "reassessment" }] });
+    act(() => buttonNamed("Request reassessment")!.click());
+    await act(async () => type(composer()!, "Fixed in build 2.1."));
+    await submit();
+
+    expect(sent).toEqual([
+      { message: "Fixed in build 2.1.", file: undefined, action: { kind: "reassessment" } },
+    ]);
+  });
+
+  it("attaches a file to a classification", async () => {
+    render({ composerOffers: [{ kind: "classification", currentStatus: "at_risk" }] });
+    act(() => buttonNamed("Change classification")!.click());
+    await act(async () => type(composer()!, "Verified."));
+    const file = attach();
+    await submit();
+
+    expect(sent).toEqual([
+      {
+        message: "Verified.",
+        file,
+        action: { kind: "classification", status: "reduced_risk" },
+      },
+    ]);
+  });
+
+  it("attaches a file to a reassessment request", async () => {
+    render({ composerOffers: [{ kind: "reassessment" }] });
+    act(() => buttonNamed("Request reassessment")!.click());
+    const file = attach();
+    await submit();
+
+    expect(sent).toEqual([{ message: "", file, action: { kind: "reassessment" } }]);
+  });
+
+  it("keeps the attachment control available whatever is selected", () => {
+    render({
+      composerOffers: [{ kind: "classification", currentStatus: "at_risk" }, { kind: "reassessment" }],
+    });
+    expect(fileInput()).not.toBeNull();
+
+    act(() => buttonNamed("Change classification")!.click());
+    expect(fileInput()).not.toBeNull();
+
+    act(() =>
+      container
+        .querySelector<HTMLButtonElement>("button[aria-label='Remove change classification']")!
+        .click(),
+    );
+    act(() => buttonNamed("Request reassessment")!.click());
+    expect(fileInput()).not.toBeNull();
+  });
+
+  it("lets the reader take the file back off before sending", async () => {
+    render({ composerOffers: [{ kind: "reassessment" }] });
+    attach();
+    act(() =>
+      container
+        .querySelector<HTMLButtonElement>("button[aria-label='Remove example-evidence.png']")!
+        .click(),
+    );
+    expect(text()).not.toContain("example-evidence.png");
+
+    await act(async () => type(composer()!, "No file."));
+    await submit();
+    expect(sent).toEqual([{ message: "No file.", file: undefined, action: undefined }]);
+  });
+
+  it("keeps the message, file and chosen classification when the submit fails", async () => {
+    render({
+      composerOffers: [{ kind: "classification", currentStatus: "at_risk" }],
+      onSubmit: () => Promise.reject(new Error("Example transport failure.")),
+    });
+    act(() => buttonNamed("Change classification")!.click());
+    await act(async () => type(composer()!, "Verified on the current build."));
+    attach();
+    await submit();
+
+    expect(composer()!.value).toBe("Verified on the current build.");
+    expect(statusSelect()).not.toBeNull();
+    expect(text()).toContain("example-evidence.png");
+  });
+
+  it("keeps the reassessment selected when the request fails", async () => {
+    render({
+      composerOffers: [{ kind: "reassessment" }],
+      onSubmit: () => Promise.reject(new Error("Example transport failure.")),
+    });
+    act(() => buttonNamed("Request reassessment")!.click());
+    await act(async () => type(composer()!, "Fixed in build 2.1."));
+    await submit();
+
+    expect(composer()!.value).toBe("Fixed in build 2.1.");
+    expect(
+      container.querySelector("button[aria-label='Remove request reassessment']"),
+    ).not.toBeNull();
+  });
+
+  it("disables a blocked action and says why, accessibly", () => {
+    render({
+      composerOffers: [
+        { kind: "reassessment", blockedReason: "Submit your fix on the remediation ticket first." },
+      ],
+    });
+
+    const trigger = buttonNamed("Request reassessment")!;
+    expect(trigger.disabled).toBe(true);
+    const note = document.getElementById(trigger.getAttribute("aria-describedby") as string);
+    expect(note?.textContent).toBe("Submit your fix on the remediation ticket first.");
+  });
+
+  it("hides every action from a reader who may not comment", () => {
+    render({
+      canComment: false,
+      composerOffers: [{ kind: "classification" }, { kind: "reassessment" }],
+    });
+
+    expect(buttonNamed("Change classification")).toBeUndefined();
+    expect(buttonNamed("Request reassessment")).toBeUndefined();
+  });
+
+  it("keeps them outside the scrolling feed", () => {
+    render({ composerOffers: [{ kind: "reassessment" }] });
+    expect(feed().contains(buttonNamed("Request reassessment")!)).toBe(false);
+  });
+});
+
+describe("sending with the keyboard", () => {
+  async function press(field: HTMLTextAreaElement, init: KeyboardEventInit = {}) {
+    const event = new KeyboardEvent("keydown", {
+      key: "Enter",
+      bubbles: true,
+      cancelable: true,
+      ...init,
+    });
+    await act(async () => {
+      field.dispatchEvent(event);
+    });
+    return event;
+  }
+
+  function attach(file: File) {
+    const input = container.querySelector<HTMLInputElement>("input[type='file']")!;
+    Object.defineProperty(input, "files", { configurable: true, value: [file] });
+    act(() => input.dispatchEvent(new Event("change", { bubbles: true })));
+  }
+
+  it("sends exactly one message on Enter, through the form the button uses", async () => {
+    render();
+    const field = composer()!;
+    await act(async () => type(field, "Ready for another look."));
+    const event = await press(field);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(sent).toEqual([{ message: "Ready for another look.", file: undefined, action: undefined }]);
+  });
+
+  it("leaves Shift+Enter to insert a newline", async () => {
+    render();
+    const field = composer()!;
+    await act(async () => type(field, "First line."));
+    const event = await press(field, { shiftKey: true });
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(sent).toEqual([]);
+  });
+
+  it("does not send while an input method is composing a character", async () => {
+    render();
+    const field = composer()!;
+    await act(async () => type(field, "評価"));
+    await press(field, { isComposing: true });
+    expect(sent).toEqual([]);
+
+    await press(field);
+    expect(sent).toHaveLength(1);
+  });
+
+  it("does not send on the Enter that closes an IME candidate window", async () => {
+    render();
+    const field = composer()!;
+    await act(async () => type(field, "評価"));
+    const event = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+    Object.defineProperty(event, "keyCode", { value: 229 });
+    act(() => {
+      field.dispatchEvent(event);
+    });
+
+    expect(sent).toEqual([]);
+  });
+
+  it("does not send twice while the first send is still in flight", async () => {
+    render({ sending: true });
+    const field = composer()!;
+    await act(async () => type(field, "Ready for another look."));
+    await press(field);
+
+    expect(sent).toEqual([]);
+  });
+
+  it("does not repeat the message while Enter is held down", async () => {
+    render();
+    const field = composer()!;
+    await act(async () => type(field, "Ready for another look."));
+    await press(field);
+    await press(field, { repeat: true });
+
+    expect(sent).toHaveLength(1);
+  });
+
+  it("does nothing at all on an empty composer", async () => {
+    render();
+    const event = await press(composer()!);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(sent).toEqual([]);
+  });
+
+  it("carries the chosen file, exactly as the Send button does", async () => {
+    render();
+    const field = composer()!;
+    await act(async () => type(field, "Here is the proof."));
+    const file = new File(["x"], "example-evidence.png", { type: "image/png" });
+    await act(async () => attach(file));
+    await press(field);
+
+    expect(sent).toEqual([
+      { message: "Here is the proof.", file, action: undefined },
+    ]);
+  });
+
+  it("carries a classification the same way the Send button does", async () => {
+    render({ composerOffers: [{ kind: "classification", currentStatus: "at_risk" }] });
+    const offer = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent?.trim() === "Change classification",
+    );
+    await act(async () => offer?.click());
+
+    const field = composer()!;
+    await act(async () => type(field, "Verified on the current build."));
+    await press(field);
+
+    expect(sent).toEqual([
+      {
+        message: "Verified on the current build.",
+        file: undefined,
+        action: { kind: "classification", status: "reduced_risk" },
+      },
+    ]);
+  });
+
+  it("carries a reassessment request, with or without a message", async () => {
+    render({ composerOffers: [{ kind: "reassessment" }] });
+    const offer = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent?.trim() === "Request reassessment",
+    );
+    await act(async () => offer?.click());
+    await press(composer()!);
+
+    expect(sent).toEqual([{ message: "", file: undefined, action: { kind: "reassessment" } }]);
+  });
+
+  it("refuses a classification with no reason, exactly as the button does", async () => {
+    render({ composerOffers: [{ kind: "classification", currentStatus: "at_risk" }] });
+    const offer = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent?.trim() === "Change classification",
+    );
+    await act(async () => offer?.click());
+    await press(composer()!);
+
+    expect(sent).toEqual([]);
+  });
+});
+
+describe("attachments on workflow events", () => {
+  it("lists a file recorded against a classification decision", () => {
+    const decision = entry("classification_changed", {
+      message: "Verified on the current build.",
+      metadata: { previous_status: "at_risk", new_status: "reduced_risk" },
+    });
+    render({
+      entries: [decision],
+      attachmentsByEntry: new Map([[decision.id, [attachment(decision.id)]]]),
+    });
+
+    expect(feedItems()[0].textContent).toContain("example-evidence.png");
+  });
+
+  it("lists a file recorded against a reassessment request", () => {
+    const requested = entry("retest_requested", { message: "Fixed in build 2.1." });
+    render({
+      entries: [requested],
+      attachmentsByEntry: new Map([[requested.id, [attachment(requested.id)]]]),
+    });
+
+    expect(feedItems()[0].textContent).toContain("example-evidence.png");
+  });
+
+  it("offers a download wherever a file is listed, message or workflow event", () => {
+    const message = entry("message", { message: "See the screenshot." });
+    const decision = entry("classification_changed", {
+      metadata: { previous_status: "at_risk", new_status: "reduced_risk" },
+    });
+    render({
+      entries: [message, decision],
+      attachmentsByEntry: new Map([
+        [message.id, [attachment(message.id)]],
+        [decision.id, [attachment(decision.id)]],
+      ]),
+    });
+
+    expect(
+      container.querySelectorAll("button[aria-label='Download example-evidence.png']"),
+    ).toHaveLength(2);
+  });
+
+  it("says the files could not be loaded rather than showing the entries as having none", () => {
+    const retry = vi.fn();
+    render({
+      entries: [entry("message", { message: "See the screenshot." })],
+      attachmentsError: true,
+      onRetryAttachments: retry,
+    });
+
+    expect(text()).toContain("Unable to load the files attached to this conversation");
+    expect(text()).toContain("See the screenshot.");
+    const button = [...container.querySelectorAll("button")].find((candidate) =>
+      candidate.textContent?.includes("Retry"),
+    );
+    act(() => button?.click());
+    expect(retry).toHaveBeenCalled();
   });
 });
 
@@ -585,7 +1068,7 @@ describe("the card is bounded and only the feed scrolls", () => {
 
     expect(feed().getAttribute("tabindex")).toBe("0");
     expect(feed().getAttribute("role")).toBe("log");
-    expect(feed().getAttribute("aria-label")).toBe("Risk conversation");
+    expect(feed().getAttribute("aria-label")).toBe("Conversation");
   });
 
   it("wraps long words instead of scrolling sideways", () => {

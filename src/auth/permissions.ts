@@ -9,7 +9,6 @@ export type Capability =
   | "create_ticket"
   | "view_risk_conversation"
   | "comment_risk_conversation"
-  | "submit_fix"
   | "request_retest"
   | "update_control_progress"
   | "withdraw_ticket"
@@ -30,7 +29,6 @@ export const roleCapabilities: Record<UserRole, Capability[]> = {
     "create_ticket",
     "view_risk_conversation",
     "comment_risk_conversation",
-    "submit_fix",
     "request_retest",
     "update_control_progress",
     "withdraw_ticket",

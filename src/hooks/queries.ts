@@ -42,6 +42,7 @@ import type {
 import type { ControlReconciliation, FindingFilters, TicketFilters } from "@/data/services";
 import type { ControlDetail } from "@/api/playbook-types";
 import { selectableControls } from "@/lib/resolve";
+import { parseCriticalFindings } from "@/lib/critical-findings";
 
 /** Reference data that changes rarely; mutations still invalidate it explicitly. */
 const REFERENCE_DATA_STALE_TIME_MS = 5 * 60_000;
@@ -579,6 +580,7 @@ export function useRiskConversationEntries(conversationId: string | undefined) {
   return { ...query, data: query.data ?? (query.isLoading ? undefined : EMPTY_ENTRIES) };
 }
 
+/** The query itself, so a failure to load files is distinguishable from having none. */
 export function useRiskConversationAttachments(entryIds: string[]) {
   const key = [...entryIds].sort();
   const query = useQuery({
@@ -586,7 +588,7 @@ export function useRiskConversationAttachments(entryIds: string[]) {
     queryFn: () => riskConversationData.listAttachments(key),
     enabled: key.length > 0,
   });
-  return query.data ?? EMPTY_ATTACHMENTS;
+  return { ...query, data: query.data ?? EMPTY_ATTACHMENTS };
 }
 
 const CONVERSATION_KEYS = (conversationId: string) => [
@@ -619,11 +621,12 @@ export function useSendRiskMessage(conversationId: string | undefined) {
 export function useRequestReassessment(conversationId: string | undefined) {
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: (input: { findingId: string; ticketId?: string | null }) =>
+    mutationFn: (input: { findingId: string; ticketId?: string | null; message?: string }) =>
       retestData.requestRetest({
         conversationId: conversationId as string,
         findingId: input.findingId,
         ticketId: input.ticketId,
+        message: input.message,
       }),
     onSuccess: (_data, variables) =>
       invalidate([
@@ -793,23 +796,6 @@ export function useCreateRiskAcceptanceTicket() {
   });
 }
 
-export function useSubmitFix(ticketId: string) {
-  const invalidate = useInvalidate();
-  return useMutation({
-    mutationFn: (input: { notes: string; target_version?: string }) =>
-      ticketData.submitFix(ticketId, input),
-    onSuccess: () =>
-      invalidate([
-        ["ticket", ticketId],
-        ["ticketsWithRelations"],
-        ["riskConversationEntries"],
-        ["tickets"],
-        ["activity", "ticket", ticketId],
-        ["dashboardMetrics"],
-      ]),
-  });
-}
-
 export function useUpdateTicketStatus(ticketId: string) {
   const invalidate = useInvalidate();
   return useMutation({
@@ -961,14 +947,28 @@ const CONTROL_PROGRESS_KEYS = (ticketId: string) => [
   ["activity", "ticket", ticketId],
 ];
 
+/** The cached ticket carries the new approach immediately, and is put back if the write is refused. */
 export function useSelectRemediationControl(
   ticketId: string | undefined,
   findingId: string | null | undefined,
 ) {
+  const queryClient = useQueryClient();
   const invalidate = useInvalidate();
+  const key = ["ticket", ticketId];
   return useMutation({
     mutationFn: (controlId: string) =>
       ticketData.setSelectedControl(ticketId as string, controlId),
+    onMutate: async (controlId: string) => {
+      await queryClient.cancelQueries({ queryKey: key });
+      const previous = queryClient.getQueryData(key);
+      queryClient.setQueryData(key, (current: unknown) =>
+        current ? { ...(current as object), selected_control_id: controlId } : current,
+      );
+      return { previous };
+    },
+    onError: (_error, _controlId, context) => {
+      if (context) queryClient.setQueryData(key, context.previous);
+    },
     onSuccess: () =>
       invalidate([
         ...CONTROL_PROGRESS_KEYS(ticketId as string),
@@ -987,6 +987,23 @@ export function useReconcileTicketControls(ticketId: string | undefined) {
 }
 
 const PLAYBOOK_POLL_INTERVAL_MS = 45_000;
+
+/** One run's structured static-analysis report, fetched through the evidence endpoint. */
+export function useCriticalFindings(runTimestamp: string | undefined, ref: string | undefined) {
+  return useQuery({
+    queryKey: ["criticalFindings", runTimestamp, ref],
+    queryFn: async () => {
+      const response = await fetch(
+        assessmentApi.evidenceFileUrl(runTimestamp as string, ref as string),
+      );
+      if (!response.ok) throw new Error(`Static analysis unavailable (${response.status})`);
+      return parseCriticalFindings(await response.json());
+    },
+    enabled: !!runTimestamp && !!ref,
+    staleTime: REFERENCE_DATA_STALE_TIME_MS,
+    retry: false,
+  });
+}
 
 /** The revision seen on arrival is kept in session memory only, never written to the database. */
 export function usePlaybookRevisionWatch(

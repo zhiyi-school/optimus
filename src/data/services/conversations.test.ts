@@ -20,7 +20,9 @@ let uploads: string[] = [];
 let rpcCalls: { name: string; params: Record<string, unknown> }[] = [];
 let rpcError: unknown = null;
 let rpcResult: Record<string, unknown> | null = null;
+let rpcMissing: string[] = [];
 let raceOn: string | null = null;
+let missingColumns: string[] = [];
 
 // An update returns the whole row, not just the columns it changed, so a
 // service reading a field it did not write behaves the same here as in Postgres.
@@ -70,6 +72,14 @@ function table(name: string) {
           error: { message: "duplicate key value violates unique constraint" },
         });
       }
+      // A database behind on migrations rejects the whole insert, naming the column.
+      const absent = missingColumns.find((column) => column in payload);
+      if (op === "insert" && absent) {
+        return Promise.resolve({
+          data: null,
+          error: { code: "PGRST204", message: `Could not find the '${absent}' column` },
+        });
+      }
       if (op === "update") {
         const existing = match();
         if (existing) {
@@ -92,6 +102,12 @@ vi.mock("@/data/supabase", () => ({
     from: (name: string) => table(name),
     rpc: (name: string, params: Record<string, unknown>) => {
       rpcCalls.push({ name, params });
+      if (rpcMissing.includes(name)) {
+        return Promise.resolve({
+          data: null,
+          error: { code: "PGRST202", message: `Could not find the function public.${name}` },
+        });
+      }
       if (rpcError) return Promise.resolve({ data: null, error: rpcError });
       if (rpcResult) return Promise.resolve({ data: rpcResult, error: null });
       return Promise.resolve({
@@ -125,7 +141,9 @@ beforeEach(() => {
   rpcCalls = [];
   rpcError = null;
   rpcResult = null;
+  rpcMissing = [];
   raceOn = null;
+  missingColumns = [];
   rows = {
     risk_conversations: [],
     findings: [{ id: FINDING, status: "at_risk" }],
@@ -309,10 +327,64 @@ describe("entries", () => {
       uploaded_by: SECURITY,
     });
   });
+
+  it("records where the bytes live and how large they are", async () => {
+    await riskConversationData.uploadAttachment(
+      CONVERSATION,
+      "entry-1",
+      new File(["example"], "example-evidence.png", { type: "image/png" }),
+    );
+
+    expect(written("risk_conversation_attachments")[0].payload).toMatchObject({
+      storage_provider: "supabase",
+      size_bytes: 7,
+      mime_type: "image/png",
+    });
+  });
+
+  it("still attaches the file on a database without migration 0027", async () => {
+    missingColumns = ["storage_provider"];
+    const attachment = await riskConversationData.uploadAttachment(
+      CONVERSATION,
+      "entry-1",
+      new File(["example"], "example-evidence.png", { type: "image/png" }),
+    );
+
+    expect(attachment.file_name).toBe("example-evidence.png");
+    const payloads = written("risk_conversation_attachments").map((write) => write.payload);
+    expect(payloads[1]).not.toHaveProperty("storage_provider");
+    expect(payloads[1]).toMatchObject({ storage_path: uploads[0] });
+  });
+
+  it("keeps a space-and-Unicode name on the row but not in the storage key", async () => {
+    await riskConversationData.uploadAttachment(
+      CONVERSATION,
+      "entry-1",
+      new File(["x"], "評価 report (final).pdf", { type: "application/pdf" }),
+    );
+
+    expect(written("risk_conversation_attachments")[0].payload).toMatchObject({
+      file_name: "評価 report (final).pdf",
+    });
+    expect(uploads[0]).toMatch(/^conversation-[^/]+\/\d+-[A-Za-z0-9._-]+$/);
+  });
+
+  it("cannot be talked out of its own conversation folder by a file name", async () => {
+    await riskConversationData.uploadAttachment(
+      CONVERSATION,
+      "entry-1",
+      new File(["x"], "../../etc/passwd", { type: "" }),
+    );
+
+    expect(uploads[0].startsWith(`conversation-${CONVERSATION}/`)).toBe(true);
+    expect(uploads[0]).not.toContain("..");
+    expect(uploads[0]).not.toContain("/etc/");
+  });
 });
 
 describe("classification", () => {
   it("is one server-side call, so the finding cannot change without its record", async () => {
+    rpcResult = { finding: { id: FINDING, status: "reduced_risk" }, entry_id: "entry-1" };
     await findingData.classify({
       findingId: FINDING,
       conversationId: CONVERSATION,
@@ -322,7 +394,7 @@ describe("classification", () => {
 
     expect(rpcCalls).toEqual([
       {
-        name: "classify_risk",
+        name: "classify_risk_entry",
         params: {
           p_finding_id: FINDING,
           p_conversation_id: CONVERSATION,
@@ -333,6 +405,50 @@ describe("classification", () => {
     ]);
     // Nothing is written from the browser: the function owns all three writes.
     expect(writes).toHaveLength(0);
+  });
+
+  it("returns the entry it created, so a file can be attached to the decision itself", async () => {
+    rpcResult = { finding: { id: FINDING, status: "reduced_risk" }, entry_id: "entry-1" };
+
+    const result = await findingData.classify({
+      findingId: FINDING,
+      conversationId: CONVERSATION,
+      status: "reduced_risk",
+      reason: "Verified on the current build.",
+    });
+
+    expect(result.entryId).toBe("entry-1");
+    expect(result.finding).toMatchObject({ id: FINDING, status: "reduced_risk" });
+  });
+
+  it("falls back to the original function on a database without migration 0025", async () => {
+    rpcMissing = ["classify_risk_entry"];
+
+    const result = await findingData.classify({
+      findingId: FINDING,
+      conversationId: CONVERSATION,
+      status: "reduced_risk",
+      reason: "Verified.",
+    });
+
+    expect(rpcCalls.map((call) => call.name)).toEqual(["classify_risk_entry", "classify_risk"]);
+    // Without the new function there is no entry to attach a file to.
+    expect(result.entryId).toBeNull();
+    expect(result.finding).toMatchObject({ id: FINDING, status: "reduced_risk" });
+  });
+
+  it("surfaces a real refusal rather than falling back to the old function", async () => {
+    rpcError = { message: "only the security team can change a risk classification" };
+
+    await expect(
+      findingData.classify({
+        findingId: FINDING,
+        conversationId: CONVERSATION,
+        status: "reduced_risk",
+        reason: "Verified.",
+      }),
+    ).rejects.toMatchObject({ message: /only the security team/ });
+    expect(rpcCalls.map((call) => call.name)).toEqual(["classify_risk_entry"]);
   });
 
   it("refuses to change the classification without a reason", async () => {
@@ -402,8 +518,77 @@ describe("the retest lifecycle", () => {
     });
 
     expect(written("risk_conversation_entries")[0].payload).toMatchObject({
-      sync_key: `retest-requested::${first.id}`,
+      sync_key: `retest-requested::${first.run.id}`,
     });
+  });
+
+  it("carries the requester's context on the request event rather than as a second message", async () => {
+    await retestData.requestRetest({
+      conversationId: CONVERSATION,
+      findingId: FINDING,
+      ticketId: TICKET,
+      message: "  Fixed in build 2.1.  ",
+    });
+
+    const entries = written("risk_conversation_entries");
+    expect(entries).toHaveLength(1);
+    expect(entries[0].payload).toMatchObject({
+      kind: "retest_requested",
+      message: "Fixed in build 2.1.",
+    });
+  });
+
+  it("records no message when the requester added no context", async () => {
+    await retestData.requestRetest({
+      conversationId: CONVERSATION,
+      findingId: FINDING,
+      ticketId: TICKET,
+      message: "   ",
+    });
+
+    expect(written("risk_conversation_entries")[0].payload).toMatchObject({ message: null });
+  });
+
+  it("posts one request event however often the request is retried, context and all", async () => {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await retestData.requestRetest({
+        conversationId: CONVERSATION,
+        findingId: FINDING,
+        ticketId: TICKET,
+        message: "Fixed in build 2.1.",
+      });
+    }
+
+    expect(written("risk_conversation_entries")).toHaveLength(1);
+    expect(rows.risk_conversation_entries).toHaveLength(1);
+  });
+
+  it("returns the request event, so a file attaches to it rather than to a second message", async () => {
+    const { entryId } = await retestData.requestRetest({
+      conversationId: CONVERSATION,
+      findingId: FINDING,
+      ticketId: TICKET,
+    });
+
+    const entries = written("risk_conversation_entries");
+    expect(entries).toHaveLength(1);
+    expect(entryId).toBe(rows.risk_conversation_entries[0].id);
+  });
+
+  it("returns the entry the first attempt wrote when the request is retried", async () => {
+    const first = await retestData.requestRetest({
+      conversationId: CONVERSATION,
+      findingId: FINDING,
+      ticketId: TICKET,
+    });
+    const second = await retestData.requestRetest({
+      conversationId: CONVERSATION,
+      findingId: FINDING,
+      ticketId: TICKET,
+    });
+
+    expect(second.entryId).toBe(first.entryId);
+    expect(rows.risk_conversation_entries).toHaveLength(1);
   });
 
   it("reuses the reassessment already in flight instead of asking for a second", async () => {
@@ -411,7 +596,7 @@ describe("the retest lifecycle", () => {
       { id: "retest-1", conversation_id: CONVERSATION, ticket_id: TICKET, status: "queued" },
     ];
 
-    const run = await retestData.requestRetest({
+    const { run } = await retestData.requestRetest({
       conversationId: CONVERSATION,
       findingId: FINDING,
       ticketId: TICKET,
@@ -551,16 +736,6 @@ describe("withdrawing a reassessment", () => {
 });
 
 describe("remediation milestones", () => {
-  it("posts the submitted fix and its notes into the risk conversation", async () => {
-    await ticketData.submitFix(TICKET, { notes: "Rotated the key and shipped 2.1." });
-
-    expect(written("tickets")[0].payload).toMatchObject({ status: "fix_submitted" });
-    expect(written("risk_conversation_entries")[0].payload).toMatchObject({
-      kind: "fix_submitted",
-      message: "Rotated the key and shipped 2.1.",
-      source_ticket_id: TICKET,
-    });
-  });
 
   it("posts a withdrawal with its reason", async () => {
     await ticketData.withdraw(TICKET, "The affected feature is being removed.");
@@ -587,14 +762,6 @@ describe("remediation milestones", () => {
     });
   });
 
-  it("still works for a ticket with no conversation behind it", async () => {
-    rows.tickets = [{ id: TICKET, status: "open", risk_conversation_id: null }];
-
-    await ticketData.submitFix(TICKET, { notes: "Fixed." });
-
-    expect(written("tickets")[0].payload).toMatchObject({ status: "fix_submitted" });
-    expect(written("risk_conversation_entries")).toHaveLength(0);
-  });
 });
 
 describe("the legacy conversation tables", () => {
@@ -604,7 +771,6 @@ describe("the legacy conversation tables", () => {
       kind: "message",
       message: "Example.",
     });
-    await ticketData.submitFix(TICKET, { notes: "Fixed." });
     await ticketData.withdraw(TICKET, "Stopping.");
     await retestData.requestRetest({
       conversationId: CONVERSATION,

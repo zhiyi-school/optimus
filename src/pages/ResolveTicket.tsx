@@ -1,11 +1,9 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { Link, useParams } from "react-router-dom";
-import { Paperclip } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "@/auth/useAuth";
-import { PageHeader, LoadingState, ErrorState, EmptyState } from "@/components/common";
+import { LoadingState, ErrorState } from "@/components/common";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input, Textarea } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -13,40 +11,30 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
-import { ApplicationIcon } from "@/components/application-icon";
-import { PlatformBadge, SeverityBadge, StatusBadge } from "@/components/data-display";
 import { ControlChecklist } from "@/components/control-checklist";
 import {
   ResumeRemediationButton,
   WithdrawRemediationDialog,
   WithdrawalNotice,
 } from "@/components/ticket-actions";
-import { EvidenceViewer } from "@/components/evidence";
-import { Timeline } from "@/components/timeline";
-import { PlaybookUpdatedNotice, ProgressBar, ToneBadge } from "@/components/resolve-display";
+import { PlaybookUpdatedNotice, ToneBadge } from "@/components/resolve-display";
 import {
-  useActivity,
-  useFindingEvidenceItems,
   usePlaybookRevisionWatch,
   useReconcileTicketControls,
   useSelectRemediationControl,
   useProfiles,
   useRiskControls,
-  useSubmitFix,
   useTicket,
   useTicketControlSteps,
   useTicketControls,
-  useTicketEvidenceItems,
-  useUploadTicketEvidence,
 } from "@/hooks/queries";
 import {
+  approachChangeBlockedReason,
   canResumeTicket,
-  canSubmitFix,
+  canSelectApproach,
   canWithdrawTicket,
   controlProgress,
-  developerTicketLabel,
   effectiveSelectedControlId,
   isReconciled,
   liveControls,
@@ -54,35 +42,21 @@ import {
   selectedControl,
   selectedControlReconciliationPlan,
   selectionWasReplaced,
-  submitFixBlockedReason,
+  selectedApproachComplete,
 } from "@/lib/resolve";
-import { cn, errorMessage, formatDate } from "@/lib/utils";
+import { cn, errorMessage } from "@/lib/utils";
 import type { ControlDetail } from "@/api/playbook-types";
 
-/** `embedded` drops the page header and back-link: the risk workspace supplies both. */
-export default function ResolveTicket({
-  ticketId: ticketIdProp,
-  embedded = false,
-}: {
-  ticketId?: string;
-  embedded?: boolean;
-} = {}) {
-  const params = useParams<{ ticketId: string }>();
-  const ticketId = ticketIdProp ?? params.ticketId;
+/** The remediation area of the application-risk page; it has no page of its own. */
+export default function ResolveTicket({ ticketId }: { ticketId: string }) {
   const { can } = useAuth();
   const ticket = useTicket(ticketId);
   const finding = ticket.data?.finding;
-  const application = ticket.data?.application;
 
   const { data: profiles } = useProfiles();
-  const activity = useActivity("ticket", ticketId);
   const controls = useTicketControls(ticketId);
   const steps = useTicketControlSteps(ticketId);
   const definitions = useRiskControls(finding?.platform, finding?.test_id);
-  const findingEvidence = useFindingEvidenceItems(finding?.id);
-  const ticketEvidence = useTicketEvidenceItems(ticketId);
-
-  const uploadEvidence = useUploadTicketEvidence(ticketId);
   const reconcile = useReconcileTicketControls(ticketId);
 
   const profileMap = useMemo(
@@ -98,27 +72,28 @@ export default function ResolveTicket({
   const chosen = selectedControl(candidates, activeControlId);
   const replaced = selectionWasReplaced(storedSelection, candidates);
 
-  const editable = can("update_control_progress") && canSubmitFix(ticket.data);
+  const mayEdit = can("update_control_progress");
+  const mayChangeApproach = mayEdit && canSelectApproach(ticket.data);
   const plan = useMemo(() => selectedControlReconciliationPlan(chosen), [chosen]);
 
   const persisting = useRef(false);
   useEffect(() => {
-    if (!ticketId || !editable || !activeControlId) return;
+    if (!ticketId || !mayChangeApproach || !activeControlId) return;
     if (storedSelection === activeControlId || persisting.current) return;
     persisting.current = true;
     selectControl.mutate(activeControlId, { onSettled: () => (persisting.current = false) });
-  }, [ticketId, editable, activeControlId, storedSelection, selectControl]);
+  }, [ticketId, mayChangeApproach, activeControlId, storedSelection, selectControl]);
 
   const reconciling = useRef(false);
   useEffect(() => {
-    if (!ticketId || !editable || plan.length === 0) return;
+    if (!ticketId || !mayChangeApproach || plan.length === 0) return;
     if (controls.isLoading || steps.isLoading || reconciling.current) return;
     if (isReconciled(plan, controls.data ?? [], steps.data ?? [])) return;
     reconciling.current = true;
     reconcile.mutate(plan, { onSettled: () => (reconciling.current = false) });
   }, [
     ticketId,
-    editable,
+    mayChangeApproach,
     plan,
     controls.data,
     controls.isLoading,
@@ -138,131 +113,64 @@ export default function ResolveTicket({
     return <ErrorState message="Unable to load this remediation." onRetry={() => ticket.refetch()} />;
   }
 
-  const label = developerTicketLabel(ticket.data.status);
   const progress = controlProgress(live);
-  const submitBlockedReason = submitFixBlockedReason(ticket.data, {
-    loading: definitions.isLoading || controls.isLoading || steps.isLoading,
-    failed: definitions.isError,
-    replaced,
-    control: live[0],
-  });
-  const showSubmitFix = can("submit_fix") && canSubmitFix(ticket.data);
   const showWithdraw = can("withdraw_ticket") && canWithdrawTicket(ticket.data);
   const showResume = can("withdraw_ticket") && canResumeTicket(ticket.data);
+  const complete = selectedApproachComplete(live[0]);
 
   return (
     <div>
       {playbook.updated && <PlaybookUpdatedNotice onDismiss={playbook.dismiss} />}
-      {!embedded && <PageHeader
-        title={finding?.title ?? ticket.data.title}
-        description={
-          application ? `${application.name}${application.version ? ` · ${application.version}` : ""}` : undefined
-        }
-        actions={
-          <div className="flex items-center gap-2">
-            {application && (
-              <>
-                <ApplicationIcon application={application} className="h-8 w-8" iconClassName="h-4 w-4" />
-                <PlatformBadge platform={application.platform} />
-              </>
-            )}
-            {finding && <SeverityBadge severity={finding.severity} />}
-            {label && <ToneBadge tone={label.tone} label={label.label} />}
-          </div>
-        }
-      />}
 
-      <div className={cn("grid grid-cols-1 gap-4", !embedded && "lg:grid-cols-3")}>
-        <div className={cn("space-y-4", !embedded && "lg:col-span-2")}>
-          {!embedded && (
-            <Section title="What was found">
-              <p className="text-sm text-foreground">
-                {finding?.description || "Security recorded no description for this finding."}
-              </p>
-              {finding?.impact && (
-                <>
-                  <p className="mt-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Why it matters
-                  </p>
-                  <p className="text-sm text-foreground">{finding.impact}</p>
-                </>
+      <div className="grid grid-cols-1 gap-4">
+        <Section title="Remediation approach">
+          {definitions.isLoading || controls.isLoading ? (
+            <LoadingState label="Loading remediation approaches…" />
+          ) : definitions.isError ? (
+            <ErrorState
+              message="The automation backend could not provide the remediation instructions for this risk."
+              onRetry={() => definitions.refetch()}
+            />
+          ) : (
+            <>
+              {replaced && (
+                <div className="mb-3 rounded-lg border border-warning/40 bg-warning/5 p-3 text-xs text-foreground">
+                  The approach this remediation was following is no longer in the playbook. Your
+                  recorded progress is kept as history but no longer counts.{" "}
+                  {chosen
+                    ? "Review the approach now selected before asking for a reassessment."
+                    : "No replacement approach is available for this risk."}
+                </div>
               )}
-              {finding && (
-                <p className="mt-3 text-xs text-muted-foreground">
-                  Current status: <StatusBadge status={finding.status} />{" "}
-                  <Link to={`/findings/${finding.id}`} className="ml-2 text-primary hover:underline">
-                    Open the full finding
-                  </Link>
-                </p>
+              {!replaced && candidates.length > 1 && (
+                <div className="mb-3 rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+                  This risk has multiple remediation approaches. The first option is selected by
+                  default, but you can choose another.
+                </div>
               )}
-            </Section>
-          )}
-
-          <Section
-            title="Remediation approach"
-            aside={<ProgressBar label="Steps completed" progress={progress} />}
-          >
-            {definitions.isLoading || controls.isLoading ? (
-              <LoadingState label="Loading remediation approaches…" />
-            ) : definitions.isError ? (
-              <ErrorState
-                message="The automation backend could not provide the remediation instructions for this risk."
-                onRetry={() => definitions.refetch()}
+              <ControlChecklist
+                controls={live}
+                linkTo={(controlId) => `/resolve/tickets/${ticketId}/controls/${controlId}`}
+                emptyMessage={
+                  finding?.test_id
+                    ? "The playbook has no developer controls for this risk yet."
+                    : "This finding is not linked to a playbook risk, so it has no controls."
+                }
               />
-            ) : (
-              <>
-                {replaced && (
-                  <div className="mb-3 rounded-lg border border-warning/40 bg-warning/5 p-3 text-xs text-foreground">
-                    The approach this remediation was following is no longer in the playbook. Your
-                    recorded progress is kept as history but no longer counts.{" "}
-                    {chosen
-                      ? "Review the approach now selected before submitting a fix."
-                      : "No replacement approach is available for this risk."}
-                  </div>
-                )}
-                {!replaced && candidates.length > 1 && (
-                  <div className="mb-3 rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
-                    This risk has multiple remediation approaches. The first option is selected by
-                    default, but you can choose another.
-                  </div>
-                )}
-                <ControlChecklist
-                  controls={live}
-                  linkTo={(controlId) => `/resolve/tickets/${ticket.data!.id}/controls/${controlId}`}
-                  emptyMessage={
-                    finding?.test_id
-                      ? "The playbook has no developer controls for this risk yet."
-                      : "This finding is not linked to a playbook risk, so it has no controls."
-                  }
+              {candidates.length > 1 && (
+                <ApproachPicker
+                  candidates={candidates}
+                  selectedControlId={activeControlId}
+                  hasProgress={progress.completed > 0}
+                  findingId={finding?.id}
+                  blockedReason={approachChangeBlockedReason(ticket.data, mayEdit)}
+                  onSelect={(controlId) => selectControl.mutateAsync(controlId)}
                 />
-                {candidates.length > 1 && (
-                  <ApproachPicker
-                    candidates={candidates}
-                    selectedControlId={activeControlId}
-                    hasProgress={progress.completed > 0}
-                    findingId={finding?.id}
-                    disabled={!editable || selectControl.isPending}
-                    onSelect={(controlId) => selectControl.mutate(controlId)}
-                  />
-                )}
-                {selectControl.isError && (
-                  <p className="mt-2 text-xs text-danger">
-                    {errorMessage(selectControl.error, "Could not change the remediation approach.")}
-                  </p>
-                )}
-              </>
-            )}
-          </Section>
-
-          {!embedded && (
-            <Section title="Activity">
-              <Timeline entries={activity.data ?? []} />
-            </Section>
+              )}
+            </>
           )}
-        </div>
 
-        <div className="space-y-4">
-          <Section title="Your actions">
+          <div className="mt-4 space-y-2 border-t border-border pt-4">
             <WithdrawalNotice
               ticket={ticket.data}
               actorName={
@@ -271,72 +179,22 @@ export default function ResolveTicket({
                   : null
               }
             />
-            <div className="mt-3 flex flex-wrap gap-2">
-              {showSubmitFix && (
-                <SubmitFixDialog ticketId={ticket.data.id} blockedReason={submitBlockedReason} />
-              )}
+            <div className="flex flex-wrap items-center gap-2">
               {showResume && <ResumeRemediationButton ticket={ticket.data} />}
               {showWithdraw && <WithdrawRemediationDialog ticket={ticket.data} />}
-              {!showSubmitFix && !showResume && !showWithdraw && (
+              {!showResume && !showWithdraw && (
                 <p className="text-xs text-muted-foreground">
                   Nothing to do right now — security owns the next step on this finding.
                 </p>
               )}
             </div>
-            {showSubmitFix && submitBlockedReason && (
-              <p className="mt-2 text-xs text-muted-foreground">{submitBlockedReason}</p>
-            )}
-            <p className="mt-3 text-xs text-muted-foreground">
-              Completing every control step does not close the finding. Ask for a reassessment in
-              the risk conversation, where security runs it and decides whether the risk is
-              reduced.
+            <p className="text-xs text-muted-foreground">
+              {complete
+                ? "Every step is done. Ask for a reassessment in the conversation, where security runs it and decides whether the risk is reduced."
+                : "Completing every control step does not close the finding — it makes this risk ready for the reassessment you ask for in the conversation."}
             </p>
-          </Section>
-
-          <Section title="Your evidence">
-            <label className="mb-3 inline-flex cursor-pointer items-center gap-2 text-sm text-primary hover:underline">
-              <Paperclip className="h-3.5 w-3.5" />
-              {uploadEvidence.isPending ? "Uploading…" : "Upload evidence"}
-              <input
-                type="file"
-                className="hidden"
-                disabled={uploadEvidence.isPending}
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) void uploadEvidence.mutateAsync(file);
-                  event.target.value = "";
-                }}
-              />
-            </label>
-            {uploadEvidence.isError && (
-              <p className="mb-2 text-xs text-danger">
-                {errorMessage(uploadEvidence.error, "Could not upload that file.")}
-              </p>
-            )}
-            <EvidenceViewer items={ticketEvidence.data ?? []} />
-          </Section>
-
-          {/* The risk workspace owns security's evidence; only the standalone page repeats it. */}
-          {!embedded && (
-            <>
-              <Section title="Security evidence">
-                {findingEvidence.isLoading ? (
-                  <LoadingState label="Loading evidence…" />
-                ) : (findingEvidence.data ?? []).length === 0 ? (
-                  <EmptyState title="Security recorded no evidence for this finding." />
-                ) : (
-                  <EvidenceViewer items={findingEvidence.data ?? []} />
-                )}
-              </Section>
-
-              <Section title="Details">
-                <Detail label="Target version" value={ticket.data.target_version} />
-                <Detail label="Opened" value={formatDate(ticket.data.created_at)} />
-                <Detail label="Updated" value={formatDate(ticket.data.updated_at)} />
-              </Section>
-            </>
-          )}
-        </div>
+          </div>
+        </Section>
       </div>
     </div>
   );
@@ -347,27 +205,47 @@ function ApproachPicker({
   selectedControlId,
   hasProgress,
   findingId,
-  disabled,
+  blockedReason,
   onSelect,
 }: {
   candidates: ControlDetail[];
   selectedControlId: string | null;
   hasProgress: boolean;
   findingId: string | undefined;
-  disabled: boolean;
-  onSelect: (controlId: string) => void;
+  blockedReason: string | null;
+  onSelect: (controlId: string) => Promise<unknown>;
 }) {
   const [open, setOpen] = useState(false);
-  const [pending, setPending] = useState<ControlDetail | null>(null);
+  const [confirming, setConfirming] = useState<ControlDetail | null>(null);
+  const [switchingTo, setSwitchingTo] = useState<string | null>(null);
+  const [failed, setFailed] = useState<{ controlId: string; message: string } | null>(null);
+
+  // The picker stays open until the write lands, so a refusal is visible where it happened.
+  async function apply(control: ControlDetail) {
+    setSwitchingTo(control.control_id);
+    setFailed(null);
+    try {
+      await onSelect(control.control_id);
+    } catch (error) {
+      setFailed({
+        controlId: control.control_id,
+        message: errorMessage(error, "Could not change the remediation approach."),
+      });
+      return;
+    } finally {
+      setSwitchingTo(null);
+    }
+    setConfirming(null);
+    setOpen(false);
+  }
 
   function choose(control: ControlDetail) {
-    if (control.control_id === selectedControlId) return;
+    if (control.control_id === selectedControlId || switchingTo) return;
     if (hasProgress) {
-      setPending(control);
+      setConfirming(control);
       return;
     }
-    onSelect(control.control_id);
-    setOpen(false);
+    void apply(control);
   }
 
   return (
@@ -378,15 +256,15 @@ function ApproachPicker({
         aria-expanded={open}
         className="text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
       >
-        {open
-          ? "Hide other approaches"
-          : `View other approaches (${candidates.length - 1})`}
+        {open ? "Hide other approaches" : `View other approaches (${candidates.length - 1})`}
       </button>
 
       {open && (
         <ul className="mt-2 space-y-2">
           {candidates.map((control) => {
             const isSelected = control.control_id === selectedControlId;
+            const isSwitching = switchingTo === control.control_id;
+            const error = failed?.controlId === control.control_id ? failed.message : null;
             return (
               <li key={control.control_id}>
                 <div
@@ -423,21 +301,38 @@ function ApproachPicker({
                         type="button"
                         size="sm"
                         variant="outline"
-                        disabled={disabled}
+                        disabled={!!blockedReason || !!switchingTo}
+                        aria-describedby={
+                          blockedReason ? "approach-change-blocked" : undefined
+                        }
                         onClick={() => choose(control)}
                       >
-                        Use this approach
+                        {isSwitching ? "Switching…" : "Use this approach"}
                       </Button>
                     )}
                   </div>
+                  {error && <p className="mt-2 text-xs text-danger">{error}</p>}
                 </div>
               </li>
             );
           })}
+          {blockedReason && (
+            <li id="approach-change-blocked" className="text-xs text-muted-foreground">
+              {blockedReason}
+            </li>
+          )}
         </ul>
       )}
 
-      <Dialog open={!!pending} onOpenChange={(next) => !next && setPending(null)}>
+      <Dialog
+        open={!!confirming}
+        onOpenChange={(next) => {
+          if (!next && !switchingTo) {
+            setConfirming(null);
+            setFailed(null);
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Change remediation approach?</DialogTitle>
@@ -446,20 +341,27 @@ function ApproachPicker({
               ticket&apos;s completion. It remains available as historical workflow data.
             </DialogDescription>
           </DialogHeader>
+          {failed && confirming?.control_id === failed.controlId && (
+            <p className="text-xs text-danger">{failed.message}</p>
+          )}
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setPending(null)}>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!!switchingTo}
+              onClick={() => {
+                setConfirming(null);
+                setFailed(null);
+              }}
+            >
               Cancel
             </Button>
             <Button
               type="button"
-              disabled={disabled}
-              onClick={() => {
-                if (pending) onSelect(pending.control_id);
-                setPending(null);
-                setOpen(false);
-              }}
+              disabled={!!blockedReason || !!switchingTo}
+              onClick={() => confirming && void apply(confirming)}
             >
-              Change approach
+              {switchingTo ? "Switching…" : "Change approach"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -468,100 +370,13 @@ function ApproachPicker({
   );
 }
 
-function SubmitFixDialog({
-  ticketId,
-  blockedReason,
-}: {
-  ticketId: string;
-  blockedReason: string | null;
-}) {
-  const [open, setOpen] = useState(false);
-  const [notes, setNotes] = useState("");
-  const [version, setVersion] = useState("");
-  const submitFix = useSubmitFix(ticketId);
-
-  async function onSubmit(event: FormEvent) {
-    event.preventDefault();
-    await submitFix.mutateAsync({ notes, target_version: version || undefined });
-    setOpen(false);
-    setNotes("");
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm" disabled={!!blockedReason}>
-          Submit fix
-        </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Submit your fix</DialogTitle>
-          <DialogDescription>
-            Security reviews this and runs the reassessment. Submitting does not change the
-            finding&apos;s status.
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={onSubmit} className="space-y-3">
-          <Textarea
-            rows={4}
-            required
-            placeholder="What did you change, and which controls did you implement?"
-            value={notes}
-            onChange={(event) => setNotes(event.target.value)}
-          />
-          <Input
-            placeholder="Fixed in version (optional)"
-            value={version}
-            onChange={(event) => setVersion(event.target.value)}
-          />
-          {submitFix.isError && (
-            <p className="text-xs text-danger">
-              {errorMessage(submitFix.error, "Could not submit the fix.")}
-            </p>
-          )}
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={submitFix.isPending || !notes.trim()}>
-              {submitFix.isPending ? "Submitting…" : "Submit fix"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function Section({
-  title,
-  aside,
-  children,
-}: {
-  title: string;
-  aside?: React.ReactNode;
-  children: React.ReactNode;
-}) {
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="mb-2 flex flex-wrap items-end justify-between gap-3">
-        <h2 className="text-sm font-semibold text-foreground">{title}</h2>
-        {aside && <div className="min-w-[12rem] flex-1">{aside}</div>}
-      </div>
+      <h2 className="mb-2 text-sm font-semibold text-foreground">{title}</h2>
       <Card>
         <CardContent className="py-4">{children}</CardContent>
       </Card>
-    </div>
-  );
-}
-
-function Detail({ label, value }: { label: string; value: string | null | undefined }) {
-  if (!value) return null;
-  return (
-    <div className="mb-2">
-      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="text-sm text-foreground">{value}</p>
     </div>
   );
 }

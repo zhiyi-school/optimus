@@ -10,6 +10,20 @@ import type { TicketControl, TicketControlStep, UserRole } from "@/data/types";
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const TICKET = "example-ticket-id";
+const APPLICATION = "example-app-id";
+const RISK = "example-feature-01-risk-01";
+
+let ticketRow: Record<string, unknown> = {};
+
+function ticket(overrides: Record<string, unknown> = {}) {
+  return {
+    id: TICKET,
+    application_id: APPLICATION,
+    finding: { platform: "ios", test_id: RISK },
+    application: { platform: "ios" },
+    ...overrides,
+  };
+}
 const CONTROL = "example-feature-01-risk-01-control-01";
 
 let roles: UserRole[] = ["developer"];
@@ -115,11 +129,7 @@ vi.mock("@/hooks/queries", () => {
   return {
     useTicket: () => ({
       ...idle,
-      data: {
-        id: TICKET,
-        finding: { platform: "ios", test_id: "example-feature-01-risk-01" },
-        application: { platform: "ios" },
-      },
+      data: ticketRow,
     }),
     useControlDetail: () => ({ ...idle, data: definition }),
     useControlSource: () => ({ ...idle, data: source }),
@@ -142,6 +152,7 @@ let root: Root;
 
 beforeEach(() => {
   roles = ["developer"];
+  ticketRow = ticket();
   definition = control([
     step("rotate-example-key", 1, "Understand the fix", true),
     step("revoke-example-key", 2, "Implement protection"),
@@ -321,10 +332,58 @@ describe("the guided remediation steps", () => {
     expect(container.querySelector("pre")?.className).toContain("overflow-x-auto");
   });
 
-  it("offers the way back to the remediation", () => {
+  it("returns to the risk page that holds the conversation, not to a ticket page", () => {
     render();
     const hrefs = [...container.querySelectorAll("a")].map((a) => a.getAttribute("href"));
-    expect(hrefs).toContain(`/resolve/tickets/${TICKET}`);
+    expect(hrefs).toContain(`/resolve/applications/${APPLICATION}/risks/${RISK}`);
+    expect(hrefs).not.toContain(`/resolve/tickets/${TICKET}`);
+  });
+
+  it("sends Close, Cancel and Done to that same page", () => {
+    render();
+    const target = `/resolve/applications/${APPLICATION}/risks/${RISK}`;
+    const linkNamed = (name: string) =>
+      [...container.querySelectorAll("a")].find((a) => a.textContent?.trim() === name);
+
+    const close = container.querySelector("a[aria-label^='Back to']");
+    expect(close?.getAttribute("href")).toBe(target);
+    expect(linkNamed("Cancel")?.getAttribute("href")).toBe(target);
+
+    // Done only replaces Next Step on the final step.
+    act(() => {
+      [...container.querySelectorAll("button")]
+        .find((button) => button.textContent?.includes("Next Step"))
+        ?.click();
+    });
+    act(() => {
+      [...container.querySelectorAll("button")]
+        .find((button) => button.textContent?.includes("Next Step"))
+        ?.click();
+    });
+    expect(linkNamed("Done")?.getAttribute("href")).toBe(target);
+  });
+
+  it("url-encodes a risk id that needs it", () => {
+    ticketRow = ticket({ finding: { platform: "ios", test_id: "example risk/01" } });
+    render();
+    const close = container.querySelector("a[aria-label^='Back to']");
+    expect(close?.getAttribute("href")).toBe(
+      `/resolve/applications/${APPLICATION}/risks/example%20risk%2F01`,
+    );
+  });
+
+  it("falls back to the application when a legacy ticket names no risk", () => {
+    ticketRow = ticket({ finding: null });
+    render();
+    const close = container.querySelector("a[aria-label^='Back to']");
+    expect(close?.getAttribute("href")).toBe(`/resolve/applications/${APPLICATION}`);
+  });
+
+  it("falls back to Resolve when a legacy ticket names neither", () => {
+    ticketRow = ticket({ finding: null, application_id: null });
+    render();
+    const close = container.querySelector("a[aria-label^='Back to']");
+    expect(close?.getAttribute("href")).toBe("/resolve");
   });
 
   it("says so plainly when the playbook lists no steps", () => {

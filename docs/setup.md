@@ -61,6 +61,15 @@ A local Supabase (CLI) option is documented at the bottom for development.
    remediation workflow: control progress, the ticket-status guardrail, and the
    `withdrawn` state. Without `0018`, withdrawing a remediation fails with
    `violates check constraint "tickets_status_check"`.
+   `0025_classification_entry.sql` adds `classify_risk_entry()`, which returns
+   the conversation entry a classification created so a file can be attached to
+   the decision itself. It is optional: without it classification still works,
+   and the composer says a file cannot be attached to it yet.
+   `0026_reassessment_from_completed_steps.sql` retires the fix-submission step:
+   a reassessment is requested straight from an in-progress remediation, and the
+   database checks that every step of the selected approach is completed. Without
+   it, requesting one fails with `a reassessment can only be requested once a fix
+   has been submitted`.
    (Or, with the Supabase CLI linked to your project: `supabase db push`.)
    Migrations are additive — if you already applied earlier ones, just run
    whichever ones are new.

@@ -64,8 +64,16 @@ vi.mock("@/data/supabase", () => ({
 
 let addApp: () => Promise<unknown>;
 let invalidated: unknown[];
+let submitted: { platform?: string; identifier?: string }[];
 
-vi.mock("@/data/sync", () => ({ syncService: { addApp: () => addApp() } }));
+vi.mock("@/data/sync", () => ({
+  syncService: {
+    addApp: (input: { platform?: string; identifier?: string }) => {
+      submitted.push(input);
+      return addApp();
+    },
+  },
+}));
 
 vi.mock("@/hooks/queries", () => ({
   useAssessments: () => ({ data: rows, isLoading: false, isError: false }),
@@ -80,6 +88,7 @@ beforeEach(() => {
   rows = [assessmentRow(application())];
   addApp = () => Promise.resolve({ assessment: { id: "example-assessment-id" }, ticket: null });
   invalidated = [];
+  submitted = [];
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -288,6 +297,158 @@ describe("an incomplete assessment in the mini list", () => {
     expect(listed).toContain("Example Application");
     expect(listed).toContain("Assessing in progress");
     expect(listed).toContain("2 of 4");
+  });
+});
+
+describe("choosing the asset class", () => {
+  function options() {
+    return [...container.querySelectorAll<HTMLButtonElement>("[role='radio']")];
+  }
+
+  function optionNamed(label: string) {
+    return options().find((option) => option.textContent?.trim() === label) as HTMLButtonElement;
+  }
+
+  function packageField() {
+    return [...container.querySelectorAll("label")]
+      .find((label) => label.textContent?.startsWith("Package name"))
+      ?.parentElement?.querySelector("input") as HTMLInputElement | undefined;
+  }
+
+  it("offers iOS and Android as two options rather than a dropdown", () => {
+    render();
+    expect(options().map((option) => option.textContent?.trim())).toEqual(["iOS", "Android"]);
+    expect(container.querySelector("[role='radiogroup']")?.getAttribute("aria-label")).toBe(
+      "Asset class",
+    );
+    expect([...container.querySelectorAll("select")].some((s) => s.value === "ios")).toBe(false);
+  });
+
+  it("starts on iOS, the platform the form defaulted to before", () => {
+    render();
+    expect(optionNamed("iOS").getAttribute("aria-checked")).toBe("true");
+    expect(optionNamed("Android").getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("moves the selection, and the accessible state with it", () => {
+    render();
+    act(() => optionNamed("Android").click());
+
+    expect(optionNamed("Android").getAttribute("aria-checked")).toBe("true");
+    expect(optionNamed("iOS").getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("keeps only the selected option in the tab order, as a radio group does", () => {
+    render();
+    expect(optionNamed("iOS").tabIndex).toBe(0);
+    expect(optionNamed("Android").tabIndex).toBe(-1);
+
+    act(() => optionNamed("Android").click());
+    expect(optionNamed("Android").tabIndex).toBe(0);
+    expect(optionNamed("iOS").tabIndex).toBe(-1);
+  });
+
+  it("moves between the options with the arrow keys", () => {
+    render();
+    act(() => {
+      optionNamed("iOS").dispatchEvent(
+        new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }),
+      );
+    });
+
+    expect(optionNamed("Android").getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("marks the selected option visibly, not by position alone", () => {
+    render();
+    expect(optionNamed("iOS").className).toContain("bg-primary/5");
+    expect(optionNamed("Android").className).not.toContain("bg-primary/5");
+    // The filled dot is what distinguishes them without relying on colour alone.
+    expect(optionNamed("iOS").querySelectorAll("span")).toHaveLength(2);
+    expect(optionNamed("Android").querySelectorAll("span")).toHaveLength(1);
+  });
+
+  it("asks for a package name only on Android", () => {
+    render();
+    expect(packageField()).toBeUndefined();
+
+    act(() => optionNamed("Android").click());
+    expect(packageField()).not.toBeUndefined();
+    expect(text()).toContain("this is how the backend finds the app on the test device");
+  });
+
+  it("holds an Android assessment back until the package name is given", () => {
+    render();
+    act(() => setValue(container.querySelector("input") as HTMLInputElement, "Example Application"));
+    act(() => buttonNamed("custom-appsec")?.click());
+    act(() => optionNamed("Android").click());
+
+    expect(buttonNamed("Next")?.disabled).toBe(true);
+
+    act(() => setValue(packageField() as HTMLInputElement, "com.example.placeholder"));
+    expect(buttonNamed("Next")?.disabled).toBe(false);
+  });
+
+  it("does not hold an iOS assessment back for a package name", () => {
+    render();
+    act(() => setValue(container.querySelector("input") as HTMLInputElement, "Example Application"));
+    act(() => buttonNamed("custom-appsec")?.click());
+
+    expect(buttonNamed("Next")?.disabled).toBe(false);
+  });
+
+  it("keeps the choice reviewable before it is confirmed", () => {
+    goToReview();
+    expect(text()).toContain("iOS mobile app");
+    expect(text()).not.toContain("Android mobile app");
+  });
+
+  it("shows the package name on review once Android is chosen", () => {
+    render();
+    act(() => setValue(container.querySelector("input") as HTMLInputElement, "Example Application"));
+    act(() => buttonNamed("custom-appsec")?.click());
+    act(() => optionNamed("Android").click());
+    act(() => setValue(packageField() as HTMLInputElement, "com.example.placeholder"));
+    act(() => buttonNamed("Next")?.click());
+
+    expect(text()).toContain("Android mobile app");
+    expect(text()).toContain("com.example.placeholder");
+  });
+
+  it("submits the platform value the backend expects for iOS", async () => {
+    await submit();
+    expect(submitted).toEqual([expect.objectContaining({ platform: "ios" })]);
+  });
+
+  it("submits the platform value the backend expects for Android", async () => {
+    render();
+    act(() => setValue(container.querySelector("input") as HTMLInputElement, "Example Application"));
+    act(() => buttonNamed("custom-appsec")?.click());
+    act(() => optionNamed("Android").click());
+    act(() => setValue(packageField() as HTMLInputElement, "com.example.placeholder"));
+    act(() => buttonNamed("Next")?.click());
+    await act(async () => {
+      buttonNamed("Confirm & Create Assessment")?.click();
+    });
+
+    expect(submitted).toEqual([
+      expect.objectContaining({ platform: "android", identifier: "com.example.placeholder" }),
+    ]);
+  });
+
+  it("still creates the assessment after the platform is switched back and forth", async () => {
+    render();
+    act(() => setValue(container.querySelector("input") as HTMLInputElement, "Example Application"));
+    act(() => buttonNamed("custom-appsec")?.click());
+    act(() => optionNamed("Android").click());
+    act(() => optionNamed("iOS").click());
+    act(() => buttonNamed("Next")?.click());
+    await act(async () => {
+      buttonNamed("Confirm & Create Assessment")?.click();
+    });
+
+    expect(submitted).toEqual([expect.objectContaining({ platform: "ios" })]);
+    expect(text()).toContain("landed:/assessments");
   });
 });
 

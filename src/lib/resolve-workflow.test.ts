@@ -13,7 +13,7 @@ import {
   activeRemediationTicket,
   canRequestReassessment,
   canResumeTicket,
-  canSubmitFix,
+  canEditRemediation,
   canWithdrawTicket,
   resumableRemediationTicket,
   controlProgress,
@@ -232,13 +232,11 @@ describe("developer remediation, end to end", () => {
     expect(state.finding.status).toBe("at_risk");
     expect(state.ticket.status).toBe("open");
 
-    expect(canSubmitFix(state.ticket)).toBe(true);
-    state.move("fix_submitted");
-    expect(developerTicketLabel(state.ticket.status)?.label).toBe("Fix submitted");
-    expect(canSubmitFix(state.ticket)).toBe(false);
-
+    // The completed checklist is the readiness signal: no submission step stands between.
+    expect(canEditRemediation(state.ticket)).toBe(true);
     expect(canRequestReassessment(state.ticket)).toBe(true);
     state.move("retest_requested");
+    expect(canEditRemediation(state.ticket)).toBe(false);
     expect(developerTicketLabel(state.ticket.status)?.label).toBe("Awaiting reassessment");
     summary = summarizeApplication(APP, [state.finding], [state.ticket], state.controls, state.steps);
     expect(summary.status).toBe("awaiting_security");
@@ -271,14 +269,14 @@ describe("developer remediation, end to end", () => {
     state.reconcile([controlDefinition]);
     state.completeStep("rotate-example-key");
     state.completeStep("revoke-example-key");
-    state.move("fix_submitted");
+    state.move("retest_requested");
 
     expect(roleCan(securityEngineer.roles, "request_changes")).toBe(true);
     expect(roleCan(developer.roles, "request_changes")).toBe(false);
     state.move("rejected");
 
     expect(developerTicketLabel(state.ticket.status)?.label).toBe("Changes requested");
-    expect(canSubmitFix(state.ticket)).toBe(true);
+    expect(canEditRemediation(state.ticket)).toBe(true);
     const summary = summarizeApplication(
       APP,
       [state.finding],
@@ -421,7 +419,7 @@ describe("developer withdrawal, end to end", () => {
     expect(summary.controls.total).toBe(2);
     expect(summary.status).toBe("in_progress");
 
-    expect(canSubmitFix(state.ticket)).toBe(true);
+    expect(canEditRemediation(state.ticket)).toBe(true);
   });
 
   it("refuses withdrawal once the developer has asked for a reassessment", () => {

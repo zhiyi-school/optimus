@@ -186,9 +186,9 @@ export const assessmentApi = {
     return `${base}/reports/${encodeURIComponent(runTimestamp)}/files/${filePath}`;
   },
 
-  evidenceFileUrl(runTimestamp: string, filePath: string): string {
+  evidenceFileUrl(runTimestamp: string, ref: string): string {
     const base = automationClient.defaults.baseURL ?? "";
-    const params = new URLSearchParams({ path: filePath });
+    const params = new URLSearchParams({ ref });
     return `${base}/reports/${encodeURIComponent(runTimestamp)}/evidence-file?${params}`;
   },
 

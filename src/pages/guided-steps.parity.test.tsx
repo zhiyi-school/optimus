@@ -13,6 +13,7 @@ const ASSESSMENT = "example-assessment-id";
 const RISK = "example-feature-01-risk-01";
 const FINDING = "example-finding-id";
 const TICKET = "example-ticket-id";
+const APPLICATION = "example-app-id";
 const CONTROL = "example-feature-01-risk-01-control-01";
 
 let roles: UserRole[] = ["developer"];
@@ -162,6 +163,7 @@ vi.mock("@/hooks/queries", () => {
       ...idle,
       data: {
         id: TICKET,
+        application_id: APPLICATION,
         finding: { platform: "ios", test_id: RISK },
         application: { platform: "ios" },
       },
@@ -726,7 +728,7 @@ describe("leaving the workflow", () => {
     const parents: Record<PageName, string> = {
       manual: `/assessments/${ASSESSMENT}/tests/${RISK}`,
       preview: `/findings/${FINDING}`,
-      detail: `/resolve/tickets/${TICKET}`,
+      detail: `/resolve/applications/${APPLICATION}/risks/${RISK}`,
     };
     for (const page of ["manual", "preview", "detail"] as PageName[]) {
       remount();

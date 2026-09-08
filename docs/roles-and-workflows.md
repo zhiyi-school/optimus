@@ -18,7 +18,7 @@ the real authorization boundary** (`supabase/migrations/0002_rls.sql`,
 | view_assessments | | ✅ | ✅ | |
 | view_risk_conversation | ✅ | ✅ | ✅ | |
 | view_resolve | ✅ | | | |
-| create_ticket / submit_fix / request_retest | ✅ | | | |
+| create_ticket / request_retest | ✅ | | | |
 | update_control_progress / withdraw_ticket | ✅ | | | |
 | comment_risk_conversation | ✅ | ✅ | | |
 | run_test / update_finding / close_ticket / review_risk_acceptance / request_changes | | ✅ | | |
@@ -180,7 +180,7 @@ going through the dashboard or the Resolve tree. Every control card — in the
 preview list and on a ticket — is a single link covering the whole card, so a
 click anywhere on it opens the control.
 
-## The risk conversation
+## The conversation
 
 Every application feature-risk has exactly one conversation, and it is the only
 conversation dialogue in the dashboard. It lives with the risk it is about:
@@ -234,6 +234,48 @@ caller to name a remediation ticket with a fix submitted, or one security sent
 back, and refuses a ticket raised against a different risk. A developer with no
 eligible ticket can still post a message and ask a question.
 
+Both actions live inside the conversation composer rather than as buttons above
+the thread, and both are *additions* to an ordinary message rather than a
+different way of writing one. The message box, its placeholder, the attachment
+control and the Send button never change; a permitted user adds **Change
+classification** or **Request reassessment** as a removable chip, and Send then
+records that workflow step as well. Adding, swapping or removing a chip leaves
+the draft and any chosen file untouched.
+
+Classification uses the message as its required reason and refuses the
+classification the risk already has. A reassessment needs no text, and anything
+typed is carried as context on the request event rather than posted a second
+time.
+
+A file can be attached in all three cases. It is stored against the entry the
+action created — the `classification_changed` event, the `retest_requested`
+event, or the message itself — so a decision and its evidence are one timeline
+item. `classify_risk_entry()` returns the entry id it wrote rather than leaving
+the browser to search for it, which would race a concurrent classification of
+the same risk. If the upload fails the workflow step is *not* repeated: the
+composer keeps the draft and retries only the file against the entry that
+already exists.
+
+Every attached file is listed under its timeline item with a **Download**
+action, whether it hangs off a message or a workflow event. Who may download it
+is decided by access to the conversation, never by who uploaded it: security and
+the owning developer team can both retrieve the same file. Downloading fetches
+the bytes and saves them as a Blob under the name the uploader gave the file, so
+a refusal is reported with a **Try again** rather than written to disk under the
+file's name. Links are signed one download at a time and never cached, so a
+stale link cannot outlive the reader's access.
+
+**Enter** sends the message; **Shift+Enter** starts a new line. Enter goes
+through the same form the Send button submits, so a classification chip, a
+reassessment chip and an attached file are all carried exactly as they are when
+Send is clicked, and the same validation applies — an empty composer, a
+classification with no reason, or a send already in flight all do nothing. An
+input method's Enter, which accepts a candidate rather than finishing a
+sentence, never sends.
+
+**Run Retest** and **Withdraw reassessment** act immediately and so stay outside
+the composer.
+
 When an action cannot be used it stays visible and says why, rather than
 disappearing: a developer with no remediation ticket is told to start one, one
 who has not submitted a fix is told to do that first, and one whose
@@ -245,7 +287,7 @@ enforced by the database, not just by hiding the button.
 ### Classification versus severity
 
 The **classification** is the finding's status - At Risk, Reduced Risk or
-Inconclusive - and it is changed in the risk conversation, by security, with a
+Inconclusive - and it is changed in the conversation, by security, with a
 required reason. One database function, `classify_risk()`, writes
 `findings.status`, appends to `finding_history` and posts a
 `classification_changed` event into the conversation in a single statement, so
@@ -268,8 +310,8 @@ Developer opens an At Risk / Inconclusive finding
      (never edits the finding directly)
    → the ticket's required controls are initialised from the playbook
    → Developer works through each control's steps, marking them complete
-   → Developer attaches evidence and submits fix info
-   → in the risk conversation, Developer clicks "Request reassessment"
+   → in the conversation composer, Developer adds "Request reassessment"
+     (offered once every step of the selected approach is done)
      → ticket → retest_requested
    → in the same conversation, Security Team clicks "Run Retest"
      → automation API runs the test
@@ -278,16 +320,39 @@ Developer opens an At Risk / Inconclusive finding
    → Security Team closes the ticket
 ```
 
-Discussion, classification and reassessment all live in the risk conversation
-on the assessment's risk page, never on the ticket — see
-[the risk conversation](#the-risk-conversation).
+Discussion, classification and reassessment all live in the conversation on
+the assessment's risk page, never on the ticket — see
+[the conversation](#the-conversation).
 
 Completing every control step **does not** resolve the finding. It only makes
-the control ready to submit; the finding's status changes on a real
-reassessment result or an explicit Security Team override.
+the risk ready for the reassessment the developer then asks for; the finding's
+status changes on a real reassessment result or an explicit Security Team
+override.
+
+### Asking for a reassessment
+
+There is no separate fix submission. The step checklist already says whether the
+work is done, so a developer asks for a reassessment straight from an in-progress
+remediation, and the request is offered only when all of these hold:
+
+- a remediation ticket exists and is `open`, `in_progress` or `rejected`;
+- an approach is selected and the playbook still offers it;
+- its progress rows have been reconciled with the playbook's current steps;
+- it has at least one step, and every one of them is completed;
+- no reassessment is already queued or running;
+- the developer holds `request_retest`.
+
+Each of those has its own message when it does not hold, so the disabled control
+always says what is missing. `enforce_retest_request_permissions` re-checks the
+selected approach, its rows and their completion, so a client that skipped the
+page cannot request one early.
+
+`fix_submitted` remains a legal ticket status: remediations recorded before this
+keep it and may still be reassessed, and old timelines still render the event.
+Nothing puts a ticket into it any more.
 
 Security can send work back at any point with **Request Changes**, which moves
-the ticket to `rejected` and posts the reason into the risk conversation. The
+the ticket to `rejected` and posts the reason into the conversation. The
 developer sees that as "Changes requested" and can submit again.
 
 A finding has at most one remediation ticket in flight. When one is already
@@ -313,7 +378,7 @@ offered only while the developer still owns the next step — `open`,
 requested the work is in security's queue, so withdrawal is refused and the
 decision is security's.
 
-Nothing is lost: the risk conversation, evidence, control progress and
+Nothing is lost: the conversation, evidence, control progress and
 activity survive, and resuming puts the ticket back to `in_progress` with all
 of it intact and the withdrawal still on the record.
 
@@ -325,7 +390,7 @@ The Resolve workspace renames every ticket status for a developer audience:
 |---|---|
 | `open` | Action required |
 | `in_progress` | In progress |
-| `fix_submitted` | Fix submitted |
+| `fix_submitted` | Fix submitted — historical only, see below |
 | `retest_requested` | Awaiting reassessment |
 | `retest_in_progress` | Security verification in progress |
 | `under_review` | Under security review |
@@ -339,7 +404,7 @@ The Resolve workspace renames every ticket status for a developer audience:
 | Action | Developer | Security |
 |---|---|---|
 | Create a remediation ticket | ✅ | ✅ |
-| Read and post in a risk conversation | ✅ | ✅ |
+| Read and post in a conversation | ✅ | ✅ |
 | Upload evidence | ✅ | ✅ |
 | Update control-step progress | ✅ | |
 | Submit a fix | ✅ | |
@@ -367,8 +432,9 @@ is a separate call that refuses an empty reason, and `updateStatus()` rejects
 ```text
 /resolve                                                applications in your team's scope
 /resolve/applications/:applicationId                    one application's remediation progress
+/resolve/applications/:applicationId/risks/:riskId      one feature-risk, with its conversation
 /resolve/findings/:findingId/controls/:controlId        preview a control before starting
-/resolve/tickets/:ticketId                              one finding's remediation workspace
+/resolve/tickets/:ticketId                             redirects to the risk page above
 /resolve/tickets/:ticketId/controls/:controlId          one control's ordered steps, writable
 ```
 

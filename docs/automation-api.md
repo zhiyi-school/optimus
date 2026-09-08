@@ -10,6 +10,24 @@ run), `POST /runs` / `GET /runs/{id}` (start/poll a run), `GET /reports` /
 (evidence files). Per-app risk history comes from
 `GET /apps/{app_id}/risks/{risk_id}/history`.
 
+Both `/reports/{run_timestamp}/summary` and the per-risk history return each
+row's `evidence` with the artifacts its test actually wrote — the detailed
+report, critical findings, analysis output, screenshots, page sources,
+recordings and the run log — resolved against the row's own `report_path` and
+filtered to files that still exist. Rows are enriched as they are served, so a
+run recorded before this carries its artifacts too, and a deleted file simply
+drops out. The dashboard's evidence rail shows the latest run for the
+application and risk it is displaying; the conversation keeps the full history.
+Each artifact carries an opaque `ref` alongside its display `path` and
+`size_bytes`. `GET /reports/{run_timestamp}/evidence-file?ref=` is the only way
+to read one: it resolves the handle against the installation's own roots rather
+than the process working directory, refuses a handle that names another run, and
+refuses traversal, absolute paths, symlinks leaving the root and missing files
+with a structured JSON error carrying no host path. A served file comes back with
+its sanitized filename in `Content-Disposition: attachment`, its media type and
+its length — `Content-Disposition` is CORS-exposed so the browser can read it.
+The `path` field is for display and SARIF only; it is never used to fetch.
+
 The backend is designed for localhost or a trusted lab network. If
 `VITE_API_BASE_URL` points anywhere else, that URL should be an
 authenticated VPN or reverse-proxy entrypoint, not the bare FastAPI server.

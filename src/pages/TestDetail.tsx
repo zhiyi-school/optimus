@@ -8,19 +8,14 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge, PlatformBadge, SeverityBadge } from "@/components/data-display";
 import { Badge } from "@/components/ui/badge";
 import { EvidenceList } from "@/components/evidence";
-import {
-  EvidenceRail,
-  FindingSummary,
-  RiskDetailGrid,
-  RiskHeader,
-  RiskWorkspace,
-} from "@/components/risk-workspace";
+import { EvidenceRail, RiskDetailGrid, RiskHeader, RiskWorkspace } from "@/components/risk-workspace";
 import { AssessmentSidebar } from "@/components/assessment-sidebar";
 import { TestRunStages } from "@/components/assessment-progress";
 import { RunEventTimeline } from "@/components/run-events";
 import { CtaCard } from "@/components/cta-card";
 import { RiskConversationPanel } from "@/components/conversation-panel";
 import { RiskConversationActions } from "@/components/ticket-actions";
+import { useRiskComposer } from "@/hooks/conversation-composer";
 import {
   useAssessment,
   useFindingEvidenceItems,
@@ -32,12 +27,12 @@ import {
   useRiskConversation,
   useRiskConversationAttachments,
   useRiskConversationEntries,
-  useSendRiskMessage,
   useActiveRun,
   useResyncRun,
   useRunEvents,
   useRunSyncStatus,
   useTestRunHistory,
+  useCriticalFindings,
 } from "@/hooks/queries";
 import { DashboardSyncNotice } from "@/components/dashboard-sync-notice";
 import { assessmentApi, defaultConfigPath } from "@/api/automation-services";
@@ -51,6 +46,14 @@ import { useAuth } from "@/auth/useAuth";
 import { riskIcon } from "@/lib/entity-icons";
 import { hasAutomation } from "@/lib/risk-automation";
 import { conversationTimeline } from "@/lib/conversation-timeline";
+import {
+  artifactNamed,
+  combinedEvidence,
+  latestResult,
+  latestResultDetail,
+} from "@/lib/automation-evidence";
+import { LatestResultPanel } from "@/components/latest-result";
+import { CriticalFindingsTable } from "@/components/critical-findings";
 import { activeRemediationTicket, resumableRemediationTicket } from "@/lib/resolve";
 import { cn, errorMessage, formatDate } from "@/lib/utils";
 import type { Application, Finding } from "@/data/types";
@@ -100,24 +103,41 @@ function TestPage() {
   const attachments = useRiskConversationAttachments(
     useMemo(() => (entries.data ?? []).map((entry) => entry.id), [entries.data]),
   );
+  const attachmentRows = attachments.data;
   const attachmentsByEntry = useMemo(() => {
-    const map = new Map<string, typeof attachments>();
-    for (const attachment of attachments) {
+    const map = new Map<string, typeof attachmentRows>();
+    for (const attachment of attachmentRows) {
       map.set(attachment.entry_id, [...(map.get(attachment.entry_id) ?? []), attachment]);
     }
     return map;
-  }, [attachments]);
-  const sendMessage = useSendRiskMessage(conversation.data?.id);
+  }, [attachmentRows]);
   const { data: findingTickets } = useFindingTickets(currentFinding?.id);
   const { data: retests } = useFindingRetests(currentFinding?.id);
   const evidence = useFindingEvidenceItems(currentFinding?.id);
   const remediationTicket =
     activeRemediationTicket(currentFinding?.id ?? "", findingTickets) ??
     resumableRemediationTicket(currentFinding?.id ?? "", findingTickets);
+  const composer = useRiskComposer({
+    conversation: conversation.data,
+    finding: currentFinding,
+    ticket: remediationTicket,
+    retests,
+    can,
+  });
 
   const appExternalId = assessment?.application?.external_id ?? undefined;
   const { data: history, isLoading, isError, refetch } = useTestRunHistory(appExternalId, testId);
   const timeline = useMemo(() => conversationTimeline(entries.data, history), [entries.data, history]);
+  const newest = useMemo(
+    () => latestResult(history, appExternalId, testId),
+    [history, appExternalId, testId],
+  );
+  const railEvidence = useMemo(
+    () => combinedEvidence(newest, evidence.data, assessmentApi.evidenceFileUrl),
+    [newest, evidence.data],
+  );
+  const findingsRef = artifactNamed(newest, "critical_findings.json");
+  const staticAnalysis = useCriticalFindings(newest?.run_timestamp, findingsRef?.ref);
 
   const [watching, setWatching] = useState(false);
   const [startedRunId, setStartedRunId] = useState<string | undefined>();
@@ -216,6 +236,12 @@ function TestPage() {
     return <LoadingState label="Loading test…" />;
   }
 
+  const markdownRef = () => {
+    const artifact = artifactNamed(newest, "critical_findings.md");
+    return artifact && newest
+      ? assessmentApi.evidenceFileUrl(newest.run_timestamp, artifact.ref)
+      : undefined;
+  };
   const RiskIcon = riskIcon(risk.name);
   const automated = hasAutomation(risk);
 
@@ -256,11 +282,18 @@ function TestPage() {
 
       <RiskDetailGrid
         rail={
-          currentFinding ? (
-            <EvidenceRail count={(evidence.data ?? []).length}>
-              <EvidenceList items={evidence.data ?? []} />
-            </EvidenceRail>
-          ) : undefined
+          <EvidenceRail count={railEvidence.length}>
+            {isLoading && !history ? (
+              <LoadingState label="Loading evidence…" />
+            ) : isError ? (
+              <ErrorState
+                message="The automation backend could not provide this risk's results."
+                onRetry={() => void refetch()}
+              />
+            ) : (
+              <EvidenceList items={railEvidence} />
+            )}
+          </EvidenceRail>
         }
       >
         <div className={cn("grid grid-cols-1 items-stretch gap-3", can("run_test") && "sm:grid-cols-2")}>
@@ -337,7 +370,20 @@ function TestPage() {
         </div>
         {runError && <p className="text-xs text-danger">{runError}</p>}
 
-        <FindingSummary finding={currentFinding} />
+        <LatestResultPanel result={latestResultDetail(newest)} />
+
+        <CriticalFindingsTable
+          findings={staticAnalysis.data}
+          isLoading={staticAnalysis.isLoading}
+          isError={staticAnalysis.isError}
+          onRetry={() => void staticAnalysis.refetch()}
+          jsonUrl={
+            findingsRef && newest
+              ? assessmentApi.evidenceFileUrl(newest.run_timestamp, findingsRef.ref)
+              : undefined
+          }
+          markdownUrl={markdownRef()}
+        />
 
         {(executing || queued) && (
           <Card className="border-primary/40">
@@ -403,6 +449,8 @@ function TestPage() {
             historyError={isError}
             onRetryHistory={() => void refetch()}
             attachmentsByEntry={attachmentsByEntry}
+            attachmentsError={attachments.isError}
+            onRetryAttachments={() => void attachments.refetch()}
             evidenceUrl={assessmentApi.evidenceFileUrl}
             highlightRunTimestamp={runId}
             currentProfileId={profile?.id}
@@ -413,9 +461,10 @@ function TestPage() {
                 ? "This conversation could not be opened, so there is nothing to post to yet. Retry above."
                 : undefined
             }
-            onSend={(input) => sendMessage.mutateAsync(input)}
-            sending={sendMessage.isPending}
-            sendError={sendMessage.error}
+            onSubmit={composer.submit}
+            composerOffers={composer.offers}
+            sending={composer.pending}
+            sendError={composer.error}
             emptyStateDescription={
               automated
                 ? "Every automated run of this risk appears here, alongside the discussion, classification decisions and reassessments."

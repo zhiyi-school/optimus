@@ -5,10 +5,11 @@ import {
   useRef,
   useState,
   type FormEvent,
+  type KeyboardEvent,
   type ReactNode,
   type UIEvent,
 } from "react";
-import { ArrowDown, MessageCircle, Paperclip, ShieldCheck } from "lucide-react";
+import { ArrowDown, MessageCircle, Paperclip, RefreshCw, ShieldCheck, X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -17,6 +18,7 @@ import { ErrorState, LoadingState } from "@/components/common";
 import { StatusBadge } from "@/components/data-display";
 import { ToneBadge } from "@/components/resolve-display";
 import { EvidenceViewer, type EvidenceItem } from "@/components/evidence";
+import { AttachmentList } from "@/components/attachments";
 import { initialsOf, roleBubbleTone, roleLabel } from "@/lib/people";
 import { primaryRole } from "@/auth/permissions";
 import { mapVerdictToFindingStatus } from "@/data/sync";
@@ -27,8 +29,25 @@ import {
   type ConversationEventKind,
 } from "@/lib/status";
 import { cn, errorMessage, formatDate, formatDuration } from "@/lib/utils";
+import { CLASSIFICATION_OPTIONS } from "@/hooks/conversation-composer";
+import type {
+  ComposerAction,
+  ComposerActionKind,
+  ComposerActionOffer,
+  ComposerSubmission,
+} from "@/hooks/conversation-composer";
 import type { AutomationResultRow } from "@/api/automation-types";
-import type { Profile, RiskConversationAttachment, RiskConversationEntry } from "@/data/types";
+import type {
+  FindingStatus,
+  Profile,
+  RiskConversationAttachment,
+  RiskConversationEntry,
+} from "@/data/types";
+
+const ACTION_LABEL: Record<ComposerActionKind, string> = {
+  classification: "Change classification",
+  reassessment: "Request reassessment",
+};
 
 export interface RiskConversationPanelProps {
   title?: string;
@@ -40,6 +59,9 @@ export interface RiskConversationPanelProps {
   historyError?: boolean;
   onRetryHistory?: () => void;
   attachmentsByEntry?: Map<string, RiskConversationAttachment[]>;
+  /** Attachments are fetched separately, so losing them must not hide the messages. */
+  attachmentsError?: boolean;
+  onRetryAttachments?: () => void;
   evidenceUrl?: (runTimestamp: string, path: string) => string;
   /** The run named in the URL, scrolled to and outlined on arrival. */
   highlightRunTimestamp?: string;
@@ -47,16 +69,17 @@ export interface RiskConversationPanelProps {
   profileMap: Map<string, Profile>;
   canComment: boolean;
   composerNote?: string;
-  onSend: (input: { message: string; file?: File }) => Promise<unknown>;
+  onSubmit: (submission: ComposerSubmission) => Promise<unknown>;
+  composerOffers?: ComposerActionOffer[];
   sending?: boolean;
   sendError?: unknown;
   emptyStateDescription?: string;
-  /** Classification and reassessment controls, so every action on the risk sits with its thread. */
+  /** Operational controls that act immediately, kept out of the Send flow. */
   actions?: ReactNode;
 }
 
 export function RiskConversationPanel({
-  title = "Risk conversation",
+  title = "Conversation",
   items,
   isLoading,
   isError,
@@ -64,13 +87,16 @@ export function RiskConversationPanel({
   historyError,
   onRetryHistory,
   attachmentsByEntry,
+  attachmentsError,
+  onRetryAttachments,
   evidenceUrl,
   highlightRunTimestamp,
   currentProfileId,
   profileMap,
   canComment,
   composerNote,
-  onSend,
+  onSubmit,
+  composerOffers,
   sending,
   sendError,
   emptyStateDescription,
@@ -78,6 +104,7 @@ export function RiskConversationPanel({
 }: RiskConversationPanelProps) {
   const [draft, setDraft] = useState("");
   const [file, setFile] = useState<File | undefined>();
+  const [action, setAction] = useState<ComposerAction | null>(null);
   const [hasUnread, setHasUnread] = useState(false);
   const highlightedRef = useRef<HTMLLIElement>(null);
   const feedRef = useRef<HTMLDivElement>(null);
@@ -118,16 +145,46 @@ export function RiskConversationPanel({
     if (nearBottom) setHasUnread(false);
   }
 
-  async function handleSend(event: FormEvent) {
+  const message = draft.trim();
+  // Classification is an audit decision, so its reason is the message and is required.
+  const ready =
+    action?.kind === "classification" ? !!message : action?.kind === "reassessment" || !!message;
+
+  /** Adding or removing an action never touches the draft or the chosen file. */
+  function selectOffer(offer: ComposerActionOffer) {
+    setAction(
+      offer.kind === "classification"
+        ? {
+            kind: "classification",
+            status:
+              CLASSIFICATION_OPTIONS.find((option) => option.value !== offer.currentStatus)
+                ?.value ?? CLASSIFICATION_OPTIONS[0].value,
+          }
+        : { kind: "reassessment" },
+    );
+  }
+
+  /** Enter sends through the form itself; Shift+Enter stays a newline. */
+  function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== "Enter" || event.shiftKey) return;
+    // An IME uses Enter to accept a candidate, which must never send.
+    if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
     event.preventDefault();
-    if (!draft.trim()) return;
+    if (event.repeat || sending || !ready) return;
+    event.currentTarget.form?.requestSubmit();
+  }
+
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (!ready) return;
     try {
-      await onSend({ message: draft.trim(), file });
+      await onSubmit({ message, file, action: action ?? undefined });
     } catch {
       return;
     }
     setDraft("");
     setFile(undefined);
+    setAction(null);
     scrollToLatest();
   }
 
@@ -150,7 +207,7 @@ export function RiskConversationPanel({
             {isLoading && <LoadingState label="Loading conversation…" />}
 
             {isError && (
-              <ErrorState message="Unable to load this risk conversation." onRetry={onRetry} />
+              <ErrorState message="Unable to load this conversation." onRetry={onRetry} />
             )}
 
             {!isLoading && !isError && historyError && (
@@ -158,6 +215,15 @@ export function RiskConversationPanel({
                 <ErrorState
                   message="Unable to load the automated test history. The conversation below is complete apart from the automated runs."
                   onRetry={onRetryHistory}
+                />
+              </div>
+            )}
+
+            {!isLoading && !isError && attachmentsError && (
+              <div className="mb-4">
+                <ErrorState
+                  message="Unable to load the files attached to this conversation. The messages below are complete apart from their attachments."
+                  onRetry={onRetryAttachments}
                 />
               </div>
             )}
@@ -201,6 +267,7 @@ export function RiskConversationPanel({
                     <EventEntry
                       key={item.key}
                       entry={item.entry}
+                      attachments={attachmentsByEntry?.get(item.entry.id) ?? []}
                       author={item.entry.author_id ? profileMap.get(item.entry.author_id) : undefined}
                     />
                   ),
@@ -222,7 +289,7 @@ export function RiskConversationPanel({
         </div>
 
         {canComment ? (
-          <form onSubmit={handleSend} className="mt-4 flex shrink-0 items-start gap-2">
+          <form onSubmit={handleSubmit} className="mt-4 flex shrink-0 items-start gap-2">
             <Avatar className="mt-0.5">
               <AvatarFallback>
                 {currentProfileId
@@ -231,11 +298,20 @@ export function RiskConversationPanel({
               </AvatarFallback>
             </Avatar>
             <div className="flex-1">
+              {action && (
+                <ComposerActionChip
+                  action={action}
+                  offer={(composerOffers ?? []).find((offer) => offer.kind === action.kind)}
+                  onStatus={(status) => setAction({ kind: "classification", status })}
+                  onRemove={() => setAction(null)}
+                />
+              )}
               <div className="flex items-end gap-2 rounded-lg border border-border bg-card p-2">
                 <Textarea
                   rows={2}
                   value={draft}
                   onChange={(event) => setDraft(event.target.value)}
+                  onKeyDown={handleKeyDown}
                   placeholder="Write a message..."
                   aria-label="Write a message"
                   className="flex-1 resize-none border-0 p-1 shadow-none focus:ring-0"
@@ -249,7 +325,7 @@ export function RiskConversationPanel({
                     onChange={(event) => setFile(event.target.files?.[0])}
                   />
                 </label>
-                <Button type="submit" size="sm" disabled={sending || !draft.trim()}>
+                <Button type="submit" size="sm" disabled={sending || !ready}>
                   {sending ? "Sending…" : "Send"}
                 </Button>
               </div>
@@ -257,8 +333,21 @@ export function RiskConversationPanel({
                 <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
                   <Paperclip className="h-3 w-3" />
                   {file.name}
+                  <button
+                    type="button"
+                    onClick={() => setFile(undefined)}
+                    aria-label={`Remove ${file.name}`}
+                    className="rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
                 </p>
               )}
+              <ComposerOfferBar
+                offers={composerOffers}
+                selected={action?.kind ?? null}
+                onSelect={selectOffer}
+              />
               {sendError ? (
                 <p className="mt-1 text-xs text-danger">
                   {errorMessage(sendError, "Could not post that message.")}
@@ -271,6 +360,100 @@ export function RiskConversationPanel({
         ) : null}
       </CardContent>
     </Card>
+  );
+}
+
+/** The optional actions this reader may add to a message, and why one is unavailable. */
+function ComposerOfferBar({
+  offers,
+  selected,
+  onSelect,
+}: {
+  offers: ComposerActionOffer[] | undefined;
+  selected: ComposerActionKind | null;
+  onSelect: (offer: ComposerActionOffer) => void;
+}) {
+  const available = (offers ?? []).filter((offer) => offer.kind !== selected);
+  if (available.length === 0) return null;
+
+  return (
+    <div className="mt-2 flex flex-wrap items-start gap-x-3 gap-y-1">
+      {available.map((offer) => {
+        const noteId = offer.blockedReason ? `composer-${offer.kind}-blocked` : undefined;
+        return (
+          <div key={offer.kind} className="min-w-0">
+            <button
+              type="button"
+              disabled={!!offer.blockedReason}
+              aria-describedby={noteId}
+              onClick={() => onSelect(offer)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {offer.kind === "classification" ? (
+                <ShieldCheck className="h-3.5 w-3.5" />
+              ) : (
+                <RefreshCw className="h-3.5 w-3.5" />
+              )}
+              {ACTION_LABEL[offer.kind]}
+            </button>
+            {offer.blockedReason && (
+              <p id={noteId} className="mt-1 max-w-xs text-xs text-muted-foreground">
+                {offer.blockedReason}
+              </p>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ComposerActionChip({
+  action,
+  offer,
+  onStatus,
+  onRemove,
+}: {
+  action: ComposerAction;
+  offer: ComposerActionOffer | undefined;
+  onStatus: (status: FindingStatus) => void;
+  onRemove: () => void;
+}) {
+  const currentStatus = offer?.kind === "classification" ? offer.currentStatus : undefined;
+  return (
+    <div className="mb-2 flex flex-wrap items-center gap-2 rounded-md border border-primary/40 bg-primary/5 px-2 py-1.5">
+      <span className="text-xs font-medium text-foreground">{ACTION_LABEL[action.kind]}</span>
+      {action.kind === "classification" && (
+        <>
+          <label htmlFor="composer-classification" className="sr-only">
+            New classification
+          </label>
+          <select
+            id="composer-classification"
+            value={action.status}
+            onChange={(event) => onStatus(event.target.value as FindingStatus)}
+            className="h-7 rounded-md border border-border bg-card px-1.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+          >
+            {CLASSIFICATION_OPTIONS.filter((option) => option.value !== currentStatus).map(
+              (option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ),
+            )}
+          </select>
+          <span className="text-xs text-muted-foreground">Your message is the reason.</span>
+        </>
+      )}
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label={`Remove ${ACTION_LABEL[action.kind].toLowerCase()}`}
+        className="ml-auto rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
+    </div>
   );
 }
 
@@ -305,19 +488,7 @@ function MessageEntry({
           <span className="text-xs text-muted-foreground">{formatDate(entry.created_at)}</span>
         </div>
         <p className="whitespace-pre-wrap break-words text-sm text-foreground">{entry.message}</p>
-        {attachments.length > 0 && (
-          <ul className="mt-2 space-y-1">
-            {attachments.map((attachment) => (
-              <li
-                key={attachment.id}
-                className="flex items-center gap-2 text-xs text-muted-foreground"
-              >
-                <Paperclip className="h-3 w-3" />
-                {attachment.file_name}
-              </li>
-            ))}
-          </ul>
-        )}
+        <AttachmentList attachments={attachments} />
       </div>
     </li>
   );
@@ -325,9 +496,11 @@ function MessageEntry({
 
 function EventEntry({
   entry,
+  attachments,
   author,
 }: {
   entry: RiskConversationEntry;
+  attachments: RiskConversationAttachment[];
   author: Profile | undefined;
 }) {
   const kind = entry.kind as ConversationEventKind;
@@ -352,6 +525,7 @@ function EventEntry({
             {entry.message}
           </p>
         )}
+        <AttachmentList attachments={attachments} />
       </div>
     </li>
   );

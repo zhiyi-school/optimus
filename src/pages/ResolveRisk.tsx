@@ -3,17 +3,12 @@ import { useParams } from "react-router-dom";
 import { useAuth } from "@/auth/useAuth";
 import { LoadingState, ErrorState, EmptyState } from "@/components/common";
 import { Card, CardContent } from "@/components/ui/card";
-import { SeverityBadge, StatusBadge } from "@/components/data-display";
+import { PlatformBadge, SeverityBadge, StatusBadge } from "@/components/data-display";
 import { ToneBadge } from "@/components/resolve-display";
 import { RiskSidebar, type RiskSidebarEntry } from "@/components/risk-sidebar";
-import {
-  EvidenceRail,
-  FindingSummary,
-  RiskDetailGrid,
-  RiskHeader,
-  RiskWorkspace,
-} from "@/components/risk-workspace";
+import { EvidenceRail, RiskDetailGrid, RiskHeader, RiskWorkspace } from "@/components/risk-workspace";
 import { RiskConversationActions, WorkOnRiskButton } from "@/components/ticket-actions";
+import { useRiskComposer } from "@/hooks/conversation-composer";
 import { EvidenceList } from "@/components/evidence";
 import { RiskConversationPanel } from "@/components/conversation-panel";
 import ResolveTicket from "@/pages/ResolveTicket";
@@ -27,14 +22,17 @@ import {
   useRiskConversation,
   useRiskConversationAttachments,
   useRiskConversationEntries,
-  useSendRiskMessage,
   useTestRunHistory,
   useTickets,
+  useCriticalFindings,
 } from "@/hooks/queries";
 import { assessmentApi } from "@/api/automation-services";
 import { conversationTimeline } from "@/lib/conversation-timeline";
+import { artifactNamed, combinedEvidence, latestResult } from "@/lib/automation-evidence";
+import { CriticalFindingsTable } from "@/components/critical-findings";
 import {
   activeRemediationTicket,
+  developerRiskOrder,
   developerTicketLabel,
   resumableRemediationTicket,
 } from "@/lib/resolve";
@@ -75,14 +73,14 @@ function RiskPage() {
   const attachments = useRiskConversationAttachments(
     useMemo(() => (entries.data ?? []).map((entry) => entry.id), [entries.data]),
   );
+  const attachmentRows = attachments.data;
   const attachmentsByEntry = useMemo(() => {
-    const map = new Map<string, typeof attachments>();
-    for (const attachment of attachments) {
+    const map = new Map<string, typeof attachmentRows>();
+    for (const attachment of attachmentRows) {
       map.set(attachment.entry_id, [...(map.get(attachment.entry_id) ?? []), attachment]);
     }
     return map;
-  }, [attachments]);
-  const sendMessage = useSendRiskMessage(conversation.data?.id);
+  }, [attachmentRows]);
   const { data: profiles } = useProfiles();
   const profileMap = useMemo(() => new Map((profiles ?? []).map((p) => [p.id, p])), [profiles]);
 
@@ -92,27 +90,44 @@ function RiskPage() {
     [entries.data, history.data],
   );
   const securityEvidence = useFindingEvidenceItems(finding?.id);
+  const newest = useMemo(
+    () => latestResult(history.data, application?.external_id, riskId),
+    [history.data, application?.external_id, riskId],
+  );
+  const railEvidence = useMemo(
+    () => combinedEvidence(newest, securityEvidence.data, assessmentApi.evidenceFileUrl),
+    [newest, securityEvidence.data],
+  );
+  const findingsRef = artifactNamed(newest, "critical_findings.json");
+  const markdownArtifact = artifactNamed(newest, "critical_findings.md");
+  const staticAnalysis = useCriticalFindings(newest?.run_timestamp, findingsRef?.ref);
   const retests = useFindingRetests(finding?.id);
+  const composer = useRiskComposer({
+    conversation: conversation.data,
+    finding,
+    ticket,
+    retests: retests.data,
+    can,
+  });
 
-  // The sidebar lists the risks this application actually has findings for, so a
-  // developer never navigates into a risk security has not raised.
-  const sidebarRisks = useMemo<RiskSidebarEntry[]>(() => {
-    const byRisk = new Map((risks ?? []).map((entry) => [entry.risk_id, entry.name]));
-    return (findings.data ?? [])
-      .filter((candidate) => candidate.test_id)
-      .map((candidate) => {
+  // Only the risks security has actually raised, in the catalogue's own order so
+  // the list reads the same here as it does under Assess.
+  const sidebarRisks = useMemo<RiskSidebarEntry[]>(
+    () =>
+      developerRiskOrder(risks, findings.data).map((finding) => {
         const related =
-          activeRemediationTicket(candidate.id, tickets.data) ??
-          resumableRemediationTicket(candidate.id, tickets.data);
+          activeRemediationTicket(finding.id, tickets.data) ??
+          resumableRemediationTicket(finding.id, tickets.data);
         const label = developerTicketLabel(related?.status);
         return {
-          riskId: candidate.test_id as string,
-          name: byRisk.get(candidate.test_id as string) ?? candidate.title,
-          status: candidate.status,
+          riskId: finding.test_id as string,
+          name: risks?.find((entry) => entry.risk_id === finding.test_id)?.name ?? finding.title,
+          status: finding.status,
           note: label ? { label: label.label, tone: label.tone } : undefined,
         };
-      });
-  }, [findings.data, risks, tickets.data]);
+      }),
+    [findings.data, risks, tickets.data],
+  );
 
   const resolved = (findings.data ?? []).filter((c) => c.status === "reduced_risk").length;
   const actionable = (findings.data ?? []).filter(
@@ -175,6 +190,7 @@ function RiskPage() {
               <>
                 <SeverityBadge severity={finding.severity} />
                 <StatusBadge status={finding.status} />
+                <PlatformBadge platform={application.platform} />
                 {ticketLabel && <ToneBadge tone={ticketLabel.tone} label={ticketLabel.label} />}
               </>
             }
@@ -182,15 +198,36 @@ function RiskPage() {
 
           <RiskDetailGrid
             rail={
-              <EvidenceRail
-                title="Security evidence"
-                count={(securityEvidence.data ?? []).length}
-              >
-                <EvidenceList items={securityEvidence.data ?? []} />
+              <EvidenceRail title="Evidence" count={railEvidence.length}>
+                {history.isLoading && !history.data ? (
+                  <LoadingState label="Loading evidence…" />
+                ) : history.isError ? (
+                  <ErrorState
+                    message="The automation backend could not provide this risk's results."
+                    onRetry={() => void history.refetch()}
+                  />
+                ) : (
+                  <EvidenceList items={railEvidence} />
+                )}
               </EvidenceRail>
             }
           >
-            <FindingSummary finding={finding} />
+            <CriticalFindingsTable
+              findings={staticAnalysis.data}
+              isLoading={staticAnalysis.isLoading}
+              isError={staticAnalysis.isError}
+              onRetry={() => void staticAnalysis.refetch()}
+              jsonUrl={
+                findingsRef && newest
+                  ? assessmentApi.evidenceFileUrl(newest.run_timestamp, findingsRef.ref)
+                  : undefined
+              }
+              markdownUrl={
+                markdownArtifact && newest
+                  ? assessmentApi.evidenceFileUrl(newest.run_timestamp, markdownArtifact.ref)
+                  : undefined
+              }
+            />
 
             {!ticket && (
               <Card>
@@ -200,7 +237,7 @@ function RiskPage() {
               </Card>
             )}
 
-            {ticket && <ResolveTicket ticketId={ticket.id} embedded />}
+            {ticket && <ResolveTicket ticketId={ticket.id} />}
           </RiskDetailGrid>
 
           {can("view_risk_conversation") && (
@@ -215,6 +252,8 @@ function RiskPage() {
                 historyError={history.isError}
                 onRetryHistory={() => void history.refetch()}
                 attachmentsByEntry={attachmentsByEntry}
+                attachmentsError={attachments.isError}
+                onRetryAttachments={() => void attachments.refetch()}
                 evidenceUrl={assessmentApi.evidenceFileUrl}
                 currentProfileId={profile?.id}
                 profileMap={profileMap}
@@ -224,9 +263,10 @@ function RiskPage() {
                     ? "This conversation could not be opened, so there is nothing to post to yet. Retry above."
                     : undefined
                 }
-                onSend={(input) => sendMessage.mutateAsync(input)}
-                sending={sendMessage.isPending}
-                sendError={sendMessage.error}
+                onSubmit={composer.submit}
+                composerOffers={composer.offers}
+                sending={composer.pending}
+                sendError={composer.error}
                 emptyStateDescription="Ask security about this risk, or record what you have changed. Automated runs, classification decisions and reassessments appear here too."
                 actions={
                   <RiskConversationActions

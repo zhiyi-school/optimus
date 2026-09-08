@@ -111,6 +111,19 @@ events in one feed.
 - **The feed is append-only.** There are `select` and `insert` policies and no
   `update` or `delete` policy on entries or attachments, and RLS denies whatever
   no policy allows. Not even security can rewrite a past workflow event.
+- **An attachment records where its bytes live.** `0027` adds
+  `risk_conversation_attachments.storage_provider` — `supabase` for an object in
+  the private `ticket-attachments` bucket, `server` for a key held by the
+  automation backend — defaulting to `supabase` so every row written before it
+  reads correctly, and `size_bytes` so a reader is told how large a file is
+  before fetching it. A check constraint keeps `storage_path` a relative key
+  inside its provider: never absolute, never containing a `..` segment. Reading
+  an attachment is decided by `can_access_risk_conversation` on its entry, not by
+  `uploaded_by`, so any participant in a conversation can download any file in
+  it. The dashboard resolves the provider before downloading; a row with no
+  provider column at all — a database behind on this migration — is treated as
+  Supabase-backed, and an upload against such a database falls back to writing
+  only the original columns rather than failing.
 - **Who may write what is decided by `kind`.** `classification_changed`,
   `retest_started`, `retest_completed` and `retest_failed` require
   `has_role('security')`; `message`, `retest_requested`, `remediation_started`,
@@ -345,7 +358,11 @@ policy must agree on these conventions:
   `can_access_attachment_object` (`0020`) reads the `conversation-` prefix and
   checks the risk conversation. A bare `<ticket_id>/<filename>` first segment is
   also accepted, because a ticket attachment migrated into a conversation entry
-  keeps the object path it was uploaded to.
+  keeps the object path it was uploaded to. `<filename>` is
+  `<epoch-milliseconds>-<sanitised name>`: the browser's own name is reduced to
+  `[A-Za-z0-9._-]` before it becomes part of a key, so no file name can place an
+  object outside its conversation's folder. The name the reader sees and
+  downloads under is `file_name`, which keeps spaces and non-Latin characters.
 - `evidence/finding-<finding_id>/<filename>` or
   `evidence/ticket-<ticket_id>/<filename>` — `can_access_evidence_object`
   reads the `finding-`/`ticket-` prefix to decide which table to check

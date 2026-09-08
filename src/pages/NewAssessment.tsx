@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { Boxes, ChevronLeft, Plus, ShieldCheck, Terminal, Trash2, X } from "lucide-react";
@@ -49,9 +49,71 @@ const CONNECTORS = [
   },
 ];
 
+const PLATFORMS: { value: Platform; label: string; review: string }[] = [
+  { value: "ios", label: "iOS", review: "iOS mobile app" },
+  { value: "android", label: "Android", review: "Android mobile app" },
+];
+
 function ConnectorStatusBadge({ available }: { available: boolean }) {
   return (
     <Badge tone={available ? "success" : "neutral"}>{available ? "Available" : "Unavailable"}</Badge>
+  );
+}
+
+function PlatformChoice({
+  value,
+  onChange,
+}: {
+  value: Platform;
+  onChange: (platform: Platform) => void;
+}) {
+  function move(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+    const step = ["ArrowRight", "ArrowDown"].includes(event.key)
+      ? 1
+      : ["ArrowLeft", "ArrowUp"].includes(event.key)
+        ? -1
+        : 0;
+    if (step === 0) return;
+    event.preventDefault();
+    const next = (index + step + PLATFORMS.length) % PLATFORMS.length;
+    onChange(PLATFORMS[next].value);
+    (event.currentTarget.parentElement?.children[next] as HTMLButtonElement | undefined)?.focus();
+  }
+
+  return (
+    <div role="radiogroup" aria-label="Asset class" className="grid grid-cols-2 gap-2 sm:max-w-sm">
+      {PLATFORMS.map((option, index) => {
+        const selected = value === option.value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            tabIndex={selected ? 0 : -1}
+            onClick={() => onChange(option.value)}
+            onKeyDown={(event) => move(event, index)}
+            className={cn(
+              "flex h-10 items-center justify-center gap-2 rounded-lg border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+              selected
+                ? "border-primary bg-primary/5 text-foreground"
+                : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground",
+            )}
+          >
+            <span
+              aria-hidden
+              className={cn(
+                "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2",
+                selected ? "border-primary" : "border-border",
+              )}
+            >
+              {selected && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
+            </span>
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -238,11 +300,8 @@ export default function NewAssessment() {
                     <p className="mt-1 text-xs text-muted-foreground">Defaulted to black box testing.</p>
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-muted-foreground">Asset class</label>
-                    <Select value={platform} onChange={(e) => setPlatform(e.target.value as Platform)}>
-                      <option value="ios">iOS mobile app</option>
-                      <option value="android">Android mobile app</option>
-                    </Select>
+                    <p className="mb-1 text-xs font-medium text-muted-foreground">Asset class</p>
+                    <PlatformChoice value={platform} onChange={setPlatform} />
                   </div>
                   {platform === "android" && (
                     <div>
@@ -372,7 +431,10 @@ export default function NewAssessment() {
                     <Detail label="Application Name" value={name || "—"} />
                     <Detail label="Version" value={version || "—"} />
                     <Detail label="Testing type" value="Black box testing" />
-                    <Detail label="Asset class" value={platform === "ios" ? "iOS mobile app" : "Android mobile app"} />
+                    <Detail
+                      label="Asset class"
+                      value={PLATFORMS.find((option) => option.value === platform)?.review ?? platform}
+                    />
                     {platform === "android" && (
                       <Detail label="Package name" value={identifier || "—"} />
                     )}

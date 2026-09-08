@@ -132,16 +132,32 @@ export const findingData = {
     conversationId: string;
     status: FindingStatus;
     reason: string;
-  }): Promise<Finding> {
+  }): Promise<{ finding: Finding; entryId: string | null }> {
     const trimmed = input.reason.trim();
     if (!trimmed) throw new Error("Changing the risk classification needs a reason.");
-    const { data, error } = await supabase.rpc("classify_risk", {
+    const params = {
       p_finding_id: input.findingId,
       p_conversation_id: input.conversationId,
       p_status: input.status,
       p_reason: trimmed,
-    });
-    if (error) throw error;
-    return data as Finding;
+    };
+
+    const { data, error } = await supabase.rpc("classify_risk_entry", params);
+    if (!error) {
+      const payload = data as { finding: Finding; entry_id: string };
+      return { finding: payload.finding, entryId: payload.entry_id };
+    }
+    // Before migration 0025 only the finding comes back, so nothing can be attached.
+    if (!isMissingFunction(error)) throw error;
+
+    const legacy = await supabase.rpc("classify_risk", params);
+    if (legacy.error) throw legacy.error;
+    return { finding: legacy.data as Finding, entryId: null };
   },
 };
+
+function isMissingFunction(error: unknown): boolean {
+  const code = (error as { code?: unknown })?.code;
+  const message = String((error as { message?: unknown })?.message ?? "");
+  return code === "PGRST202" || /could not find the function/i.test(message);
+}

@@ -21,7 +21,7 @@ import {
   canResumeTicket,
   canWithdrawTicket,
   resumableRemediationTicket,
-  canSubmitFix,
+  canEditRemediation,
   changedSinceCompleted,
   contentHashes,
   controlProgress,
@@ -33,10 +33,11 @@ import {
   selectedControlReconciliationPlan,
   selectionWasReplaced,
   selectedControlProgress,
-  submitFixBlockedReason,
+  selectedApproachComplete,
   developerTicketLabel,
   developerTicketLabels,
   findingProgress,
+  developerRiskOrder,
   preferredDeveloperRisk,
   summarizeApplication,
 } from "./resolve";
@@ -369,7 +370,7 @@ describe("summarizeApplication", () => {
     expect(summary.awaitingReassessment).toBe(0);
   });
 
-  it("counts fixes submitted and reassessments awaiting security separately", () => {
+  it("counts every reassessment awaiting security together", () => {
     const tickets = [
       ticket({ id: "t1", status: "fix_submitted" }),
       ticket({ id: "t2", status: "retest_requested" }),
@@ -377,7 +378,6 @@ describe("summarizeApplication", () => {
       ticket({ id: "t4", status: "under_review" }),
     ];
     const summary = summarizeApplication(APP, [finding()], tickets, [], []);
-    expect(summary.fixesSubmitted).toBe(1);
     expect(summary.awaitingReassessment).toBe(3);
   });
 
@@ -732,24 +732,48 @@ describe("selected-control progress", () => {
   });
 });
 
-describe("submitFixBlockedReason", () => {
+describe("reassessmentBlockedReason", () => {
   const first = definition();
   const rows = [control()];
   const done = [step("tc-1", ROTATE, "completed"), step("tc-1", REVOKE, "completed")];
   const partial = [step("tc-1", ROTATE, "completed"), step("tc-1", REVOKE, "not_started")];
 
-  function reason(overrides: Parameters<typeof submitFixBlockedReason>[1], t = ticket()) {
-    return submitFixBlockedReason(t, overrides);
+  function readiness(
+    overrides: Partial<Parameters<typeof reassessmentBlockedReason>[0]> = {},
+  ): Parameters<typeof reassessmentBlockedReason>[0] {
+    return {
+      ticket: ticket(),
+      loading: false,
+      replaced: false,
+      reconciled: true,
+      control: selectedControlProgress([first], first.control_id, rows, done),
+      activeRetest: undefined,
+      mayRequest: true,
+      ...overrides,
+    };
   }
 
-  it("allows submission once every current selected step is complete", () => {
-    const live = selectedControlProgress([first], first.control_id, rows, done);
-    expect(reason({ loading: false, replaced: false, control: live })).toBeNull();
+  it("allows the request once every current selected step is complete", () => {
+    expect(reassessmentBlockedReason(readiness())).toBeNull();
   });
 
-  it("blocks while any current selected step is outstanding", () => {
-    const live = selectedControlProgress([first], first.control_id, rows, partial);
-    expect(reason({ loading: false, replaced: false, control: live })).toContain("Complete all 2 steps");
+  it("allows it straight from an in-progress remediation, with no submission first", () => {
+    expect(reassessmentBlockedReason(readiness({ ticket: ticket({ status: "in_progress" }) }))).toBeNull();
+    expect(reassessmentBlockedReason(readiness({ ticket: ticket({ status: "open" }) }))).toBeNull();
+    expect(reassessmentBlockedReason(readiness({ ticket: ticket({ status: "rejected" }) }))).toBeNull();
+  });
+
+  it("still allows one on a remediation recorded before the submission step was retired", () => {
+    expect(
+      reassessmentBlockedReason(readiness({ ticket: ticket({ status: "fix_submitted" }) })),
+    ).toBeNull();
+  });
+
+  it("blocks while any current selected step is outstanding, and says how far along it is", () => {
+    const control = selectedControlProgress([first], first.control_id, rows, partial);
+    expect(reassessmentBlockedReason(readiness({ control }))).toBe(
+      "Complete all 2 steps of the selected approach first — 1 done.",
+    );
   });
 
   it("ignores an incomplete alternative", () => {
@@ -764,31 +788,118 @@ describe("submitFixBlockedReason", () => {
       done,
     );
 
-    expect(reason({ loading: false, replaced: false, control: live })).toBeNull();
+    expect(reassessmentBlockedReason(readiness({ control: live }))).toBeNull();
   });
 
   it("blocks while the approaches are still loading", () => {
-    expect(reason({ loading: true, replaced: false, control: undefined })).toContain("Loading");
+    expect(reassessmentBlockedReason(readiness({ loading: true, control: undefined }))).toContain(
+      "Loading",
+    );
   });
 
   it("blocks when the approaches could not be loaded", () => {
-    expect(reason({ loading: false, failed: true, replaced: false, control: undefined }))
-      .toContain("could not be loaded");
+    expect(
+      reassessmentBlockedReason(readiness({ failed: true, control: undefined })),
+    ).toContain("could not be loaded");
   });
 
   it("blocks until a replaced approach has been reviewed", () => {
-    const live = selectedControlProgress([first], first.control_id, rows, done);
-    expect(reason({ loading: false, replaced: true, control: live })).toContain("no longer in the playbook");
+    expect(reassessmentBlockedReason(readiness({ replaced: true }))).toContain(
+      "no longer in the playbook",
+    );
   });
 
-  it("blocks when no approach is available at all", () => {
-    expect(reason({ loading: false, replaced: false, control: undefined })).toContain("Select a remediation approach");
+  it("blocks when no approach is chosen at all", () => {
+    expect(reassessmentBlockedReason(readiness({ control: undefined }))).toContain(
+      "Choose a remediation approach",
+    );
   });
 
-  it("blocks when the ticket is no longer the developer's to submit", () => {
-    const live = selectedControlProgress([first], first.control_id, rows, done);
-    expect(reason({ loading: false, replaced: false, control: live }, ticket({ status: "under_review" })))
-      .toContain("not yours to submit");
+  it("blocks until the approach's rows have been reconciled", () => {
+    expect(reassessmentBlockedReason(readiness({ reconciled: false }))).toContain("Preparing");
+  });
+
+  it("blocks when the approach has no steps to complete", () => {
+    const empty = definition({ steps: [] });
+    const control = selectedControlProgress([empty], empty.control_id, rows, []);
+    expect(reassessmentBlockedReason(readiness({ control }))).toContain("no steps to complete");
+  });
+
+  it("blocks a second request while one is queued or running", () => {
+    const inFlight = (status: "queued" | "running") =>
+      ({ id: "example-retest-id", status }) as RetestRun;
+    expect(reassessmentBlockedReason(readiness({ activeRetest: inFlight("queued") }))).toContain(
+      "has been requested",
+    );
+    expect(reassessmentBlockedReason(readiness({ activeRetest: inFlight("running") }))).toContain(
+      "already started verifying",
+    );
+  });
+
+  it("blocks a reader who may not request one", () => {
+    expect(reassessmentBlockedReason(readiness({ mayRequest: false }))).toContain(
+      "Only the developers assigned",
+    );
+  });
+
+  it("points a developer with no remediation at starting one", () => {
+    expect(reassessmentBlockedReason(readiness({ ticket: null }))).toMatch(/start a remediation/i);
+    expect(
+      reassessmentBlockedReason(readiness({ ticket: ticket({ type: "risk_acceptance" }) })),
+    ).toMatch(/start a remediation/i);
+  });
+
+  it("says security already has it once verification has started", () => {
+    for (const status of ["retest_requested", "retest_in_progress", "under_review"] as TicketStatus[]) {
+      expect(
+        reassessmentBlockedReason(readiness({ ticket: ticket({ status }) })),
+        status,
+      ).toMatch(/already verifying/i);
+    }
+  });
+
+  it("says a withdrawn remediation has to be resumed first", () => {
+    expect(reassessmentBlockedReason(readiness({ ticket: ticket({ status: "withdrawn" }) }))).toMatch(
+      /resume/i,
+    );
+  });
+
+  it("says security has finished once the ticket is closed or accepted", () => {
+    for (const status of ["closed", "accepted"] as TicketStatus[]) {
+      expect(reassessmentBlockedReason(readiness({ ticket: ticket({ status }) })), status).toMatch(
+        /finished/i,
+      );
+    }
+  });
+
+  it("never asks for a fix to be submitted", () => {
+    for (const status of [
+      "open",
+      "in_progress",
+      "rejected",
+      "retest_requested",
+      "under_review",
+      "closed",
+      "withdrawn",
+    ] as TicketStatus[]) {
+      const reason = reassessmentBlockedReason(readiness({ ticket: ticket({ status }) })) ?? "";
+      expect(reason.toLowerCase(), status).not.toContain("submit");
+    }
+  });
+
+  it("always explains itself rather than going quiet", () => {
+    for (const status of [
+      "retest_requested",
+      "retest_in_progress",
+      "under_review",
+      "accepted",
+      "closed",
+      "withdrawn",
+    ] as TicketStatus[]) {
+      const reason = reassessmentBlockedReason(readiness({ ticket: ticket({ status }) }));
+      expect(reason, status).toBeTruthy();
+      expect((reason ?? "").length, status).toBeGreaterThan(10);
+    }
   });
 });
 
@@ -851,98 +962,65 @@ describe("changedSinceCompleted", () => {
 });
 
 describe("workflow gates", () => {
-  it("offers submit fix while the developer still owns the ticket", () => {
+  it("lets the developer record progress while they still own the ticket", () => {
     for (const status of ["open", "in_progress", "rejected"] as TicketStatus[]) {
-      expect(canSubmitFix(ticket({ status })), status).toBe(true);
+      expect(canEditRemediation(ticket({ status })), status).toBe(true);
     }
   });
 
-  it("withdraws submit fix once security owns the next step", () => {
+  it("stops progress edits once security owns the next step", () => {
     for (const status of [
-      "fix_submitted",
       "retest_requested",
       "retest_in_progress",
       "under_review",
       "closed",
       "accepted",
     ] as TicketStatus[]) {
-      expect(canSubmitFix(ticket({ status })), status).toBe(false);
+      expect(canEditRemediation(ticket({ status })), status).toBe(false);
     }
   });
 
-  it("offers a reassessment request only after a fix is submitted or sent back", () => {
-    expect(canRequestReassessment(ticket({ status: "fix_submitted" }))).toBe(true);
-    expect(canRequestReassessment(ticket({ status: "rejected" }))).toBe(true);
-    expect(canRequestReassessment(ticket({ status: "open" }))).toBe(false);
+  it("offers a reassessment request straight from the developer's own states", () => {
+    for (const status of ["open", "in_progress", "rejected"] as TicketStatus[]) {
+      expect(canRequestReassessment(ticket({ status })), status).toBe(true);
+    }
     expect(canRequestReassessment(ticket({ status: "closed" }))).toBe(false);
+    expect(canRequestReassessment(ticket({ status: "retest_requested" }))).toBe(false);
   });
 
   it("offers neither on a risk-acceptance ticket", () => {
     const acceptance = ticket({ type: "risk_acceptance", status: "open" });
-    expect(canSubmitFix(acceptance)).toBe(false);
+    expect(canEditRemediation(acceptance)).toBe(false);
     expect(canRequestReassessment(acceptance)).toBe(false);
   });
 
   it("offers neither with no ticket at all", () => {
-    expect(canSubmitFix(null)).toBe(false);
+    expect(canEditRemediation(null)).toBe(false);
     expect(canRequestReassessment(undefined)).toBe(false);
   });
-});
 
-describe("why a reassessment cannot be requested", () => {
-  it("gives no reason when it can be", () => {
-    expect(reassessmentBlockedReason(ticket({ status: "fix_submitted" }))).toBeNull();
-    expect(reassessmentBlockedReason(ticket({ status: "rejected" }))).toBeNull();
-  });
-
-  it("points a developer with no ticket at starting a remediation", () => {
-    expect(reassessmentBlockedReason(null)).toMatch(/start a remediation/i);
-    expect(reassessmentBlockedReason(ticket({ type: "risk_acceptance" }))).toMatch(
-      /start a remediation/i,
-    );
-  });
-
-  it("asks for the fix first while the developer still holds the ticket", () => {
-    for (const status of ["open", "in_progress"] as TicketStatus[]) {
-      expect(reassessmentBlockedReason(ticket({ status })), status).toMatch(/submit your fix/i);
-    }
-  });
-
-  it("says security already has it once verification has started", () => {
-    for (const status of [
-      "retest_requested",
-      "retest_in_progress",
-      "under_review",
-    ] as TicketStatus[]) {
-      expect(reassessmentBlockedReason(ticket({ status })), status).toMatch(/already verifying/i);
-    }
-  });
-
-  it("says a withdrawn remediation has to be resumed first", () => {
-    expect(reassessmentBlockedReason(ticket({ status: "withdrawn" }))).toMatch(/resume/i);
-  });
-
-  it("says security has finished once the ticket is closed or accepted", () => {
-    for (const status of ["closed", "accepted"] as TicketStatus[]) {
-      expect(reassessmentBlockedReason(ticket({ status })), status).toMatch(/finished/i);
-    }
-  });
-
-  it("always explains itself rather than going quiet", () => {
-    for (const status of [
-      "open",
-      "in_progress",
-      "retest_requested",
-      "retest_in_progress",
-      "under_review",
-      "accepted",
-      "closed",
-      "withdrawn",
-    ] as TicketStatus[]) {
-      const reason = reassessmentBlockedReason(ticket({ status }));
-      expect(reason, status).toBeTruthy();
-      expect((reason ?? "").length, status).toBeGreaterThan(10);
-    }
+  it("calls an approach complete only when it has steps and they are all done", () => {
+    const first = definition();
+    const rows = [control()];
+    expect(
+      selectedApproachComplete(
+        selectedControlProgress([first], first.control_id, rows, [
+          step("tc-1", ROTATE, "completed"),
+          step("tc-1", REVOKE, "completed"),
+        ]),
+      ),
+    ).toBe(true);
+    expect(
+      selectedApproachComplete(
+        selectedControlProgress([first], first.control_id, rows, [step("tc-1", ROTATE, "completed")]),
+      ),
+    ).toBe(false);
+    expect(
+      selectedApproachComplete(
+        selectedControlProgress([definition({ steps: [] })], first.control_id, rows, []),
+      ),
+    ).toBe(false);
+    expect(selectedApproachComplete(undefined)).toBe(false);
   });
 });
 
@@ -1043,7 +1121,6 @@ describe("withdrawn tickets in the dashboard", () => {
   it("counts a withdrawn ticket as withdrawn and nothing else", () => {
     const summary = summarizeApplication(APP, [finding()], [withdrawnTicket], [], []);
     expect(summary.withdrawnTickets).toBe(1);
-    expect(summary.fixesSubmitted).toBe(0);
     expect(summary.awaitingReassessment).toBe(0);
     expect(summary.resolvedFindings).toBe(0);
   });
@@ -1062,6 +1139,67 @@ describe("withdrawn tickets in the dashboard", () => {
     const summary = summarizeApplication(APP, [finding()], [withdrawnTicket], [], []);
     expect(summary.status).toBe("action_required");
     expect(summary.findingsRequiringAction).toBe(1);
+  });
+});
+
+describe("the order Resolve lists an application's risks in", () => {
+  const catalogue = [
+    { risk_id: "example-feature-01-risk-01" },
+    { risk_id: "example-feature-02-risk-01" },
+    { risk_id: "example-feature-03-risk-01" },
+  ];
+  const first = finding({ id: "f1", test_id: "example-feature-01-risk-01" });
+  const second = finding({ id: "f2", test_id: "example-feature-02-risk-01" });
+  const third = finding({ id: "f3", test_id: "example-feature-03-risk-01" });
+
+  it("follows the playbook catalogue, not the order findings came back in", () => {
+    expect(
+      developerRiskOrder(catalogue, [third, first, second]).map((row) => row.test_id),
+    ).toEqual([
+      "example-feature-01-risk-01",
+      "example-feature-02-risk-01",
+      "example-feature-03-risk-01",
+    ]);
+  });
+
+  it("lists only the risks this application actually has findings for", () => {
+    expect(developerRiskOrder(catalogue, [third, first]).map((row) => row.test_id)).toEqual([
+      "example-feature-01-risk-01",
+      "example-feature-03-risk-01",
+    ]);
+  });
+
+  it("drops a finding that is not linked to a playbook risk", () => {
+    const unlinked = finding({ id: "f4", test_id: null });
+    expect(developerRiskOrder(catalogue, [unlinked, first])).toHaveLength(1);
+  });
+
+  it("keeps a finding the catalogue no longer lists, at the end", () => {
+    const retired = finding({ id: "f5", test_id: "example-feature-09-risk-01" });
+    expect(developerRiskOrder(catalogue, [retired, second]).map((row) => row.test_id)).toEqual([
+      "example-feature-02-risk-01",
+      "example-feature-09-risk-01",
+    ]);
+  });
+
+  it("keeps the findings' own order when the catalogue is unavailable", () => {
+    expect(developerRiskOrder(undefined, [third, first]).map((row) => row.test_id)).toEqual([
+      "example-feature-03-risk-01",
+      "example-feature-01-risk-01",
+    ]);
+  });
+
+  it("does not mutate the findings it was given", () => {
+    const findings = [third, first];
+    developerRiskOrder(catalogue, findings);
+    expect(findings.map((row) => row.test_id)).toEqual([
+      "example-feature-03-risk-01",
+      "example-feature-01-risk-01",
+    ]);
+  });
+
+  it("has nothing to list without findings", () => {
+    expect(developerRiskOrder(catalogue, undefined)).toEqual([]);
   });
 });
 

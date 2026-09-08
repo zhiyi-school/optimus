@@ -214,7 +214,11 @@ export interface AppProvisioning {
 export interface EvidenceRef {
   kind: string;
   label: string;
+  /** Display path, relative to the automation installation. Never used to fetch. */
   path: string;
+  /** The opaque handle the evidence endpoint accepts. */
+  ref: string;
+  size_bytes: number;
 }
 
 export interface AutomationResultRow {

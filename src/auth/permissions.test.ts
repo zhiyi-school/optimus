@@ -27,7 +27,6 @@ describe("developer capabilities", () => {
   it("lets a developer open the Resolve workspace and record progress", () => {
     expect(roleCan(["developer"], "view_resolve")).toBe(true);
     expect(roleCan(["developer"], "update_control_progress")).toBe(true);
-    expect(roleCan(["developer"], "submit_fix")).toBe(true);
     expect(roleCan(["developer"], "request_retest")).toBe(true);
   });
 

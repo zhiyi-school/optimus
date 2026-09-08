@@ -192,7 +192,8 @@ supabase/migrations/
 /resolve                                                 Developer workspace: applications in the team's scope
 /resolve/applications/:applicationId                     One application's remediation progress
 /resolve/findings/:findingId/controls/:controlId         One control, read-only, before any ticket exists
-/resolve/tickets/:ticketId                               One finding's remediation workspace
+/resolve/applications/:applicationId/risks/:riskId       One feature-risk: conversation, evidence, remediation
+/resolve/tickets/:ticketId                               Redirects to the risk page above
 /resolve/tickets/:ticketId/controls/:controlId           One control's ordered steps, writable
 /settings                                                Profile + automation defaults
 /admin                                                   Teams, users, roles, applications (admin role only)
@@ -205,11 +206,14 @@ setup state, never a grant: an unassigned developer sees an explanation rather
 than a fallback list of every application. RLS refuses the same thing
 independently, so the guard is UX, not authorization.
 
-`/tickets/:ticketId` and `/resolve/tickets/:ticketId` show the same ticket from
-two sides. The Tickets route is the shared, security-oriented view of every
-ticket type; the Resolve route is a developer's remediation workspace for one
-finding, leading with the required controls and the actions the developer owns.
-Both read the same rows.
+A remediation has no page of its own. `ResolveTicket` is a section of the
+feature-risk workspace, beneath the risk header and beside its conversation, so
+a developer never leaves the thread to work through the controls.
+`/resolve/tickets/:ticketId` exists only to redirect an old bookmark onto that
+page; it stays inside `/resolve` so a mixed-role user is not moved into Assess,
+and it degrades to the application, then to `/resolve`, when a legacy ticket
+names no risk or no application. Closing, cancelling or finishing the guided
+steps returns to the same place.
 
 The three control routes render one component pair — `ControlDetail` for a
 ticket, `ControlPreview` for a finding — over a shared `control-content`

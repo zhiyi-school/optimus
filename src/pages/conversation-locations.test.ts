@@ -62,14 +62,26 @@ describe("the conversation has exactly one home", () => {
   });
 
   it("owns the classification control, which no longer sits on the finding page", () => {
-    expect(source("src/components/ticket-actions.tsx")).toContain("useClassifyRisk");
+    expect(source("src/hooks/conversation-composer.ts")).toContain("useClassifyRisk");
+    for (const path of sourceFiles("src/pages")) {
+      expect(source(path), path).not.toContain("useClassifyRisk");
+    }
   });
 
   it("owns the reassessment controls, which no longer sit on a ticket page", () => {
-    expect(source("src/components/ticket-actions.tsx")).toContain("RiskConversationActions");
+    expect(source("src/hooks/conversation-composer.ts")).toContain("useRequestReassessment");
     const page = source("src/pages/ResolveTicket.tsx");
     expect(page).not.toContain("RequestReassessment");
     expect(page).not.toContain("RunRetest");
+  });
+
+  it("composes classification and reassessment rather than standing them beside the thread", () => {
+    const actions = source("src/components/ticket-actions.tsx");
+    expect(actions).not.toContain("ClassifyRiskDialog");
+    expect(actions).not.toContain("RequestReassessmentButton");
+    // The operational controls stay outside the Send flow.
+    expect(actions).toContain("WithdrawReassessmentDialog");
+    expect(actions).toContain("RunRetestButton");
   });
 });
 

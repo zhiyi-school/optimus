@@ -166,7 +166,7 @@ The dashboard's expectations are encoded in `src/api/automation-types.ts` and
 | `/reports` | GET | — | array of run timestamps, newest first | 200 |
 | `/reports/{run_timestamp}/summary` | GET | — | array of result rows | 200, 404 |
 | `/reports/{run_timestamp}/files/{file_path}` | GET | — | the raw file | 200, 404 |
-| `/reports/{run_timestamp}/evidence-file?path=` | GET | — | the raw file | 200, 404 |
+| `/reports/{run_timestamp}/evidence-file?ref=` | GET | — | the raw file, named and typed | 200, 400, 404 |
 | `/reports/{run_timestamp}/sarif` | GET | — | SARIF 2.1.0 document | 200, 404 |
 | `/apps/{app_id}/risks/{risk_id}/history` | GET | `limit` query, 1–100 | array of result rows, newest first | 200 |
 
@@ -186,7 +186,7 @@ endpoints and by history:
   "verdict": "Inconclusive",
   "severity": "medium",
   "summary": "One-line human-readable outcome.",
-  "evidence": [{"kind": "screenshot", "label": "Example", "path": "<EVIDENCE_PATH>"}],
+  "evidence": [{"kind": "screenshot", "label": "Example", "path": "<DISPLAY_PATH>", "ref": "<OPAQUE_REF>", "size_bytes": 0}],
   "started_at": "<TIMESTAMP>",
   "completed_at": "<TIMESTAMP>",
   "duration_seconds": 0,

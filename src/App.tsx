@@ -9,6 +9,7 @@ import {
   LegacyFindingRedirect,
   LegacyListRedirect,
   LegacyTicketRedirect,
+  ResolveTicketRedirect,
 } from "@/pages/LegacyRedirect";
 // The two landing pages load eagerly: they are where nearly every session
 // starts, so a chunk fetch there reads as a page reload.
@@ -23,7 +24,6 @@ const TestDetail = lazy(() => import("@/pages/TestDetail"));
 const ManualTestSteps = lazy(() => import("@/pages/ManualTestSteps"));
 const RunDetail = lazy(() => import("@/pages/RunDetail"));
 const ResolveApplication = lazy(() => import("@/pages/ResolveApplication"));
-const ResolveTicket = lazy(() => import("@/pages/ResolveTicket"));
 const ResolveRisk = lazy(() => import("@/pages/ResolveRisk"));
 const ControlDetail = lazy(() => import("@/pages/ControlDetail"));
 const ControlPreview = lazy(() => import("@/pages/ControlPreview"));
@@ -194,7 +194,7 @@ export default function App() {
           path="resolve/tickets/:ticketId"
           element={
             <ResolveGuard>
-              <ResolveTicket />
+              <ResolveTicketRedirect />
             </ResolveGuard>
           }
         />

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ControlDetail } from "@/api/playbook-types";
 import type { Ticket, TicketControl, TicketControlStep, TicketStatus } from "@/data/types";
@@ -61,10 +61,11 @@ let storedSelection: string | null = null;
 let ticketStatus: TicketStatus = "in_progress";
 let controlRows: TicketControl[] = [];
 let stepRows: TicketControlStep[] = [];
-let capabilities: string[] = ["update_control_progress", "submit_fix", "view_resolve"];
+let capabilities: string[] = ["update_control_progress", "view_resolve"];
 
 let selected: string[] = [];
 let reconciled: { control_id: string; step_keys: string[] }[][] = [];
+let selectRejects: string | null = null;
 
 function ticket(): Ticket {
   return {
@@ -162,12 +163,19 @@ vi.mock("@/hooks/queries", () => {
     useTicketEvidenceItems: () => ({ ...idle, data: [] }),
     useUploadTicketEvidence: () => ({ mutateAsync: () => Promise.resolve(), isPending: false, isError: false }),
     usePlaybookRevisionWatch: () => ({ updated: false, dismiss: () => {} }),
-    useSubmitFix: () => ({ mutateAsync: () => Promise.resolve(), isPending: false, isError: false }),
+    useWithdrawTicket: () => ({ mutateAsync: () => Promise.resolve(), isPending: false, isError: false }),
+    useResumeTicket: () => ({ mutateAsync: () => Promise.resolve(), isPending: false, isError: false }),
     useSelectRemediationControl: () => ({
       mutate: (controlId: string, options?: { onSettled?: () => void }) => {
         selected.push(controlId);
         storedSelection = controlId;
         options?.onSettled?.();
+      },
+      mutateAsync: (controlId: string) => {
+        if (selectRejects) return Promise.reject(new Error(selectRejects));
+        selected.push(controlId);
+        storedSelection = controlId;
+        return Promise.resolve({ id: TICKET, selected_control_id: controlId });
       },
       isPending: false,
       isError: false,
@@ -206,9 +214,10 @@ beforeEach(() => {
   ticketStatus = "in_progress";
   controlRows = [];
   stepRows = [];
-  capabilities = ["update_control_progress", "submit_fix", "view_resolve"];
+  capabilities = ["update_control_progress", "view_resolve"];
   selected = [];
   reconciled = [];
+  selectRejects = null;
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -222,10 +231,8 @@ afterEach(() => {
 function render() {
   act(() =>
     root.render(
-      <MemoryRouter initialEntries={[`/resolve/tickets/${TICKET}`]}>
-        <Routes>
-          <Route path="/resolve/tickets/:ticketId" element={<ResolveTicket />} />
-        </Routes>
+      <MemoryRouter initialEntries={[`/resolve/applications/example-app-id/risks/example-risk`]}>
+        <ResolveTicket ticketId={TICKET} />
       </MemoryRouter>,
     ),
   );
@@ -405,6 +412,105 @@ describe("switching approach", () => {
     act(() => buttonNamed("View other approaches (1)")?.click());
     expect(buttonNamed("Use this approach")?.disabled).toBe(true);
   });
+
+  it("says why the switch is unavailable rather than disabling the button in silence", () => {
+    twoApproaches();
+    storedSelection = FIRST;
+    ticketStatus = "retest_requested";
+    render();
+    act(() => buttonNamed("View other approaches (1)")?.click());
+
+    const button = buttonNamed("Use this approach")!;
+    expect(button.disabled).toBe(true);
+    const note = document.getElementById(button.getAttribute("aria-describedby") as string);
+    expect(note?.textContent).toContain("Security is verifying this remediation");
+  });
+
+  // The database allows a switch from fix_submitted; the page used to disable it there.
+  it("still allows a switch after the fix is submitted, as the database does", async () => {
+    twoApproaches();
+    storedSelection = FIRST;
+    ticketStatus = "fix_submitted";
+    render();
+    act(() => buttonNamed("View other approaches (1)")?.click());
+
+    const button = buttonNamed("Use this approach")!;
+    expect(button.disabled).toBe(false);
+    await act(async () => button.click());
+
+    expect(selected).toEqual([SECOND]);
+  });
+
+  it("keeps the alternative visible and reports the refusal when the switch fails", async () => {
+    twoApproaches();
+    storedSelection = FIRST;
+    selectRejects = "the remediation approach cannot be changed once security verification has started";
+    render();
+    act(() => buttonNamed("View other approaches (1)")?.click());
+    await act(async () => buttonNamed("Use this approach")!.click());
+
+    expect(selected).toEqual([]);
+    // The list stays open, with the failure beside the approach that refused it.
+    expect(buttonNamed("Use this approach")).not.toBeUndefined();
+    // Database text is never shown; the caller's own wording is.
+    expect(text()).toContain("Could not change the remediation approach.");
+    expect(text()).not.toContain("security verification has started");
+  });
+
+  it("can be retried after a failure once the refusal no longer applies", async () => {
+    twoApproaches();
+    storedSelection = FIRST;
+    selectRejects = "Example transport failure.";
+    render();
+    act(() => buttonNamed("View other approaches (1)")?.click());
+    await act(async () => buttonNamed("Use this approach")!.click());
+
+    selectRejects = null;
+    await act(async () => buttonNamed("Use this approach")!.click());
+
+    expect(selected).toEqual([SECOND]);
+  });
+
+  it("keeps the confirmation open while the switch is saving and closes it on success", async () => {
+    twoApproaches();
+    storedSelection = FIRST;
+    controlRows = [controlRow(FIRST, "tc-1")];
+    stepRows = [
+      stepRow("tc-1", "rotate-example-key", "completed"),
+      stepRow("tc-1", "revoke-example-key", "not_started"),
+    ];
+    render();
+    act(() => buttonNamed("View other approaches (1)")?.click());
+    act(() => buttonNamed("Use this approach")?.click());
+
+    const confirm = [...document.querySelectorAll("button")].find(
+      (button) => button.textContent?.trim() === "Change approach",
+    )!;
+    await act(async () => confirm.click());
+
+    expect(selected).toEqual([SECOND]);
+    expect(document.body.textContent).not.toContain("Change remediation approach?");
+  });
+
+  it("holds the confirmation open and shows the refusal when a confirmed switch fails", async () => {
+    twoApproaches();
+    storedSelection = FIRST;
+    controlRows = [controlRow(FIRST, "tc-1")];
+    stepRows = [stepRow("tc-1", "rotate-example-key", "completed")];
+    selectRejects = "Example transport failure.";
+    render();
+    act(() => buttonNamed("View other approaches (1)")?.click());
+    act(() => buttonNamed("Use this approach")?.click());
+    await act(async () => {
+      [...document.querySelectorAll("button")]
+        .find((button) => button.textContent?.trim() === "Change approach")
+        ?.click();
+    });
+
+    expect(selected).toEqual([]);
+    expect(document.body.textContent).toContain("Change remediation approach?");
+    expect(document.body.textContent).toContain("Could not change the remediation approach.");
+  });
 });
 
 describe("an approach the playbook has withdrawn", () => {
@@ -436,47 +542,106 @@ describe("an approach the playbook has withdrawn", () => {
   });
 });
 
-describe("submitting the fix", () => {
-  function completeSelected() {
+describe("the simplified remediation view", () => {
+  function headings() {
+    return [...container.querySelectorAll("h2")].map((heading) => heading.textContent);
+  }
+
+  it("has no 'What was found' section", () => {
+    render();
+    expect(text()).not.toContain("What was found");
+    expect(headings()).not.toContain("What was found");
+  });
+
+  it("has no steps-completed progress bar beside the 'Remediation approach' heading", () => {
+    render();
+    const bars = [...container.querySelectorAll("[role='progressbar']")];
+    // The only progress left is the checklist's own, inside each control's card.
+    expect(bars).toHaveLength(1);
+    expect(bars[0].closest("li")).not.toBeNull();
+  });
+
+  it("has no 'Your actions' or 'Your evidence' card", () => {
+    render();
+    expect(headings()).not.toContain("Your actions");
+    expect(headings()).not.toContain("Your evidence");
+    expect(text()).not.toContain("Upload evidence");
+  });
+
+  it("has no activity or ticket-detail sections left to make it a page of its own", () => {
+    render();
+    expect(headings()).toEqual(["Remediation approach"]);
+  });
+
+  it("keeps the control checklist", () => {
+    render();
+    expect(text()).toContain("Approach one");
+  });
+
+  it("offers no Submit fix control at all", () => {
     storedSelection = FIRST;
     controlRows = [controlRow(FIRST, "tc-1")];
     stepRows = [
       stepRow("tc-1", "rotate-example-key", "completed"),
       stepRow("tc-1", "revoke-example-key", "completed"),
     ];
-  }
-
-  it("is available once every step of the selected approach is done", () => {
-    completeSelected();
     render();
 
-    expect(buttonNamed("Submit fix")?.disabled).toBe(false);
+    expect(buttonNamed("Submit fix")).toBeUndefined();
+    expect(text()).not.toContain("Submit");
   });
 
-  it("is blocked while a step of the selected approach is outstanding", () => {
+  it("says the risk is ready for a reassessment once every step is done", () => {
+    storedSelection = FIRST;
+    controlRows = [controlRow(FIRST, "tc-1")];
+    stepRows = [
+      stepRow("tc-1", "rotate-example-key", "completed"),
+      stepRow("tc-1", "revoke-example-key", "completed"),
+    ];
+    render();
+
+    expect(text()).toContain("Every step is done.");
+    expect(text()).toContain("Ask for a reassessment in the conversation");
+  });
+
+  it("says completing the steps is what readies the risk while work is outstanding", () => {
     storedSelection = FIRST;
     controlRows = [controlRow(FIRST, "tc-1")];
     stepRows = [stepRow("tc-1", "rotate-example-key", "completed"), stepRow("tc-1", "revoke-example-key")];
     render();
 
-    expect(buttonNamed("Submit fix")?.disabled).toBe(true);
-    expect(text()).toContain("Complete all 2 steps");
+    expect(text()).toContain("makes this risk ready for the reassessment");
   });
 
-  it("does not require the alternatives to be completed", () => {
-    twoApproaches();
-    completeSelected();
-    controlRows = [...controlRows, controlRow(SECOND, "tc-2")];
-    stepRows = [...stepRows, stepRow("tc-2", "rotate-example-key")];
+  it("keeps Withdraw remediation reachable", () => {
+    capabilities = [...capabilities, "withdraw_ticket"];
     render();
-
-    expect(buttonNamed("Submit fix")?.disabled).toBe(false);
+    expect(buttonNamed("Withdraw remediation")).not.toBeUndefined();
   });
 
-  it("is blocked while a withdrawn approach still needs review", () => {
-    storedSelection = "example-removed-control";
+  it("keeps Resume remediation reachable on a withdrawn remediation", () => {
+    capabilities = [...capabilities, "withdraw_ticket"];
+    ticketStatus = "withdrawn";
     render();
 
-    expect(buttonNamed("Submit fix")?.disabled).toBe(true);
+    expect(buttonNamed("Resume remediation")).not.toBeUndefined();
+    expect(text()).toContain("Withdrawn by developer");
+  });
+
+  it("points at the conversation for the reassessment, by its new name", () => {
+    render();
+    expect(text()).toContain("reassessment");
+    expect(text()).not.toContain("risk conversation");
+  });
+
+  it("sends the remediation steps back to the risk page, not to a ticket page", () => {
+    render();
+    const link = [...container.querySelectorAll("a")].find((anchor) =>
+      anchor.getAttribute("aria-label")?.startsWith("View steps for"),
+    );
+    expect(link?.getAttribute("href")).toBe(
+      `/resolve/tickets/${TICKET}/controls/${FIRST}`,
+    );
   });
 });
+

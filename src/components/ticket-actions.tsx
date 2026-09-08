@@ -14,10 +14,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
-  useClassifyRisk,
   useCreateRiskAcceptanceTicket,
   useFindingTickets,
-  useRequestReassessment,
   useResumeTicket,
   useReviewRiskAcceptance,
   useRiskControls,
@@ -25,12 +23,12 @@ import {
   useRunEvents,
   useSendRiskMessage,
   useStartRemediation,
-  useSubmitFix,
   useUpdateTicketStatus,
   useWithdrawReassessment,
   useWithdrawTicket,
 } from "@/hooks/queries";
 import { RunEventTimeline } from "@/components/run-events";
+import type { RiskConversationContext } from "@/hooks/conversation-composer";
 import { syncService, riskProgressInRun, type RunCancelToken } from "@/data/sync";
 import { retestData } from "@/data/services";
 import { defaultConfigPath } from "@/api/automation-services";
@@ -38,10 +36,8 @@ import {
   activeReassessment,
   activeRemediationTicket,
   canResumeTicket,
-  canSubmitFix,
   canWithdrawReassessment,
   canWithdrawTicket,
-  reassessmentBlockedReason,
   effectiveSelectedControlId,
   selectableControls,
   selectedControl,
@@ -52,9 +48,7 @@ import { errorMessage, formatDate } from "@/lib/utils";
 import type {
   Application,
   Finding,
-  FindingStatus,
   RetestRun,
-  RiskConversation,
   Ticket,
 } from "@/data/types";
 import type { Capability } from "@/auth/permissions";
@@ -436,8 +430,8 @@ function RequestChangesDialog({
         <DialogHeader>
           <DialogTitle>Request changes from the developer</DialogTitle>
           <DialogDescription>
-            This sends the ticket back for more work and posts your comment in the risk
-            conversation. It does not change the risk classification.
+            This sends the ticket back for more work and posts your comment in the conversation.
+            It does not change the risk classification.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="space-y-3">
@@ -457,55 +451,6 @@ function RequestChangesDialog({
               disabled={updateStatus.isPending || sendMessage.isPending || !comment.trim()}
             >
               Request changes
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function SubmitFixDialog({ ticketId }: { ticketId: string }) {
-  const [open, setOpen] = useState(false);
-  const [notes, setNotes] = useState("");
-  const [version, setVersion] = useState("");
-  const submitFix = useSubmitFix(ticketId);
-
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
-    await submitFix.mutateAsync({ notes, target_version: version || undefined });
-    setOpen(false);
-    setNotes("");
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm">Submit Fix</Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Submit fix information</DialogTitle>
-        </DialogHeader>
-        <form onSubmit={onSubmit} className="space-y-3">
-          <Textarea
-            rows={3}
-            required
-            placeholder="Describe the fix that was implemented…"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-          />
-          <Input
-            placeholder="Target / fixed version"
-            value={version}
-            onChange={(e) => setVersion(e.target.value)}
-          />
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={submitFix.isPending}>
-              {submitFix.isPending ? "Submitting…" : "Submit"}
             </Button>
           </DialogFooter>
         </form>
@@ -730,35 +675,6 @@ function RunRetestButton({
   );
 }
 
-export function RequestReassessmentButton({
-  conversationId,
-  findingId,
-  ticketId,
-}: {
-  conversationId: string;
-  findingId: string;
-  ticketId: string | null;
-}) {
-  const request = useRequestReassessment(conversationId);
-  return (
-    <div>
-      <Button
-        size="sm"
-        variant="outline"
-        disabled={request.isPending}
-        onClick={() => void request.mutateAsync({ findingId, ticketId })}
-      >
-        {request.isPending ? "Requesting…" : "Request reassessment"}
-      </Button>
-      {request.isError && (
-        <p className="mt-1 text-xs text-danger">
-          {errorMessage(request.error, "Could not request the reassessment.")}
-        </p>
-      )}
-    </div>
-  );
-}
-
 /** Withdraws the reassessment request only — the remediation and its work stay. */
 export function WithdrawReassessmentDialog({
   retest,
@@ -833,113 +749,11 @@ export function WithdrawReassessmentDialog({
   );
 }
 
-function ClassifyRiskDialog({
-  finding,
-  conversationId,
-}: {
-  finding: Finding;
-  conversationId: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const [status, setStatus] = useState<FindingStatus>(finding.status);
-  const [reason, setReason] = useState("");
-  const classify = useClassifyRisk(finding.id, conversationId);
-
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
-    await classify.mutateAsync({ status, reason });
-    setOpen(false);
-    setReason("");
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm">Change classification</Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Change the risk classification</DialogTitle>
-          <DialogDescription>
-            This records the decision in the finding history and posts it in this conversation. A
-            later automated result supersedes it.
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={onSubmit} className="space-y-3">
-          <div>
-            <label
-              htmlFor="risk-classification"
-              className="mb-1 block text-xs font-medium text-muted-foreground"
-            >
-              Classification
-            </label>
-            <select
-              id="risk-classification"
-              className="h-9 w-full rounded-md border border-border bg-card px-2 text-sm"
-              value={status}
-              onChange={(e) => setStatus(e.target.value as FindingStatus)}
-            >
-              <option value="at_risk">At Risk</option>
-              <option value="reduced_risk">Reduced Risk</option>
-              <option value="inconclusive">Inconclusive</option>
-            </select>
-          </div>
-          <div>
-            <label
-              htmlFor="risk-classification-reason"
-              className="mb-1 block text-xs font-medium text-muted-foreground"
-            >
-              Reason *
-            </label>
-            <Textarea
-              id="risk-classification-reason"
-              rows={3}
-              required
-              placeholder="Why is this the right classification?"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-            />
-          </div>
-          {classify.isError && (
-            <p className="text-xs text-danger">
-              {errorMessage(classify.error, "Could not update the classification.")}
-            </p>
-          )}
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              disabled={
-                classify.isPending || !reason.trim() || status === finding.status
-              }
-            >
-              {classify.isPending ? "Updating…" : "Update classification"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/** A control that stays visible when it cannot be used, and says why. */
-function UnavailableAction({ label, note }: { label: string; note: string }) {
-  return (
-    <div>
-      <Button size="sm" variant="outline" disabled className="cursor-not-allowed">
-        {label}
-      </Button>
-      <p className="mt-1 max-w-xs text-xs text-muted-foreground">{note}</p>
-    </div>
-  );
-}
-
 /**
- * Everything that acts on the risk, beside its conversation. Retests are found
- * by finding rather than by conversation, so a reassessment requested before
- * the conversation model existed is still runnable here.
+ * The operational controls beside the conversation: they act immediately rather
+ * than being composed with a message. Retests are found by finding rather than
+ * by conversation, so a reassessment requested before the conversation model
+ * existed is still runnable here.
  */
 export function RiskConversationActions({
   conversation,
@@ -949,44 +763,20 @@ export function RiskConversationActions({
   retests,
   can,
   profileId,
-}: {
-  conversation: RiskConversation | null | undefined;
-  finding: Finding | null | undefined;
-  application: Application | null | undefined;
-  ticket: Ticket | null | undefined;
-  retests: RetestRun[] | undefined;
-  can: (capability: Capability) => boolean;
-  /** Withdrawal is the requester's own action, so the viewer's identity decides it. */
-  profileId: string | undefined;
-}) {
+}: RiskConversationContext) {
   const pending = activeReassessment(retests);
-  const mayClassify = can("update_finding");
-  const mayRequest = can("request_retest");
-  const mayRun = can("run_test");
-  if (!mayClassify && !mayRequest && !mayRun) return null;
+  if (!pending || !finding) return null;
 
-  const blocked = reassessmentBlockedReason(ticket);
   const mayWithdraw =
-    mayRequest && conversation && finding && canWithdrawReassessment(pending, ticket, profileId);
+    can("request_retest") &&
+    !!conversation &&
+    canWithdrawReassessment(pending, ticket, profileId);
+  const mayRun = can("run_test") && !!application;
+  if (!mayWithdraw && !mayRun) return null;
 
   return (
     <div className="flex flex-wrap items-start gap-3">
-      {mayClassify &&
-        (!conversation ? (
-          <UnavailableAction
-            label="Change classification"
-            note="This conversation has not loaded, so there is nowhere to record the decision yet."
-          />
-        ) : !finding ? (
-          <UnavailableAction
-            label="Change classification"
-            note="No result has been published for this risk yet, so there is no classification to change. Run the test to produce one."
-          />
-        ) : (
-          <ClassifyRiskDialog finding={finding} conversationId={conversation.id} />
-        ))}
-
-      {mayWithdraw && pending && conversation && finding && (
+      {mayWithdraw && conversation && (
         <WithdrawReassessmentDialog
           retest={pending}
           conversationId={conversation.id}
@@ -995,33 +785,7 @@ export function RiskConversationActions({
         />
       )}
 
-      {mayRequest &&
-        !mayWithdraw &&
-        (pending ? (
-          <UnavailableAction
-            label="Request reassessment"
-            note={
-              pending.status === "running"
-                ? "Security has already started verifying this fix, so the request can no longer be taken back."
-                : "A reassessment has been requested. Security runs it from this conversation."
-            }
-          />
-        ) : !conversation || !finding ? (
-          <UnavailableAction
-            label="Request reassessment"
-            note="No result has been published for this risk yet, so there is nothing to reassess."
-          />
-        ) : blocked ? (
-          <UnavailableAction label="Request reassessment" note={blocked} />
-        ) : (
-          <RequestReassessmentButton
-            conversationId={conversation.id}
-            findingId={finding.id}
-            ticketId={ticket?.id ?? null}
-          />
-        ))}
-
-      {mayRun && pending && finding && application && (
+      {mayRun && application && (
         <RunRetestButton
           key={pending.id}
           ticket={ticket}
@@ -1048,10 +812,6 @@ export function TicketActions({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {isDeveloperFlow && can("submit_fix") && canSubmitFix(ticket) && (
-        <SubmitFixDialog ticketId={ticket.id} />
-      )}
-
       {can("withdraw_ticket") && canWithdrawTicket(ticket) && (
         <WithdrawRemediationDialog ticket={ticket} />
       )}
@@ -1069,7 +829,7 @@ export function TicketActions({
 
       {isDeveloperFlow &&
         can("request_changes") &&
-        ["fix_submitted", "retest_requested", "under_review"].includes(ticket.status) && (
+        ["retest_requested", "under_review"].includes(ticket.status) && (
           <RequestChangesDialog
             ticketId={ticket.id}
             conversationId={ticket.risk_conversation_id}

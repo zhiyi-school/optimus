@@ -206,11 +206,17 @@ export interface RiskConversationAttachment {
   id: string;
   entry_id: string;
   uploaded_by: string;
+  /** Opaque key within its provider — never a host filesystem path. */
   storage_path: string;
   file_name: string;
   mime_type: string | null;
   created_at: string;
+  /** Absent on rows written before migration 0027; those are Supabase objects. */
+  storage_provider?: AttachmentProvider | null;
+  size_bytes?: number | null;
 }
+
+export type AttachmentProvider = "supabase" | "server";
 
 export interface Evidence {
   id: string;

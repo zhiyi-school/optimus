@@ -266,37 +266,6 @@ export const ticketData = {
     return data;
   },
 
-  async submitFix(
-    ticketId: string,
-    input: { notes: string; target_version?: string },
-  ): Promise<Ticket> {
-    const { data, error } = await supabase
-      .from("tickets")
-      .update({
-        status: "fix_submitted",
-        target_version: input.target_version ?? undefined,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", ticketId)
-      .select()
-      .single();
-    if (error) throw error;
-    if (data.risk_conversation_id) {
-      await riskConversationData.addEntry({
-        conversation_id: data.risk_conversation_id,
-        kind: "fix_submitted",
-        message: input.notes,
-        source_ticket_id: ticketId,
-      });
-    }
-    await activityData.log({
-      entity_type: "ticket",
-      entity_id: ticketId,
-      action: "fix_submitted",
-    });
-    return data;
-  },
-
   async withdraw(ticketId: string, reason: string): Promise<Ticket> {
     const trimmed = reason.trim();
     if (!trimmed) throw new Error("Withdrawing a remediation needs a reason.");
@@ -383,7 +352,9 @@ export const retestData = {
     conversationId: string;
     findingId: string;
     ticketId?: string | null;
-  }): Promise<RetestRun> {
+    /** Optional context, carried on the request event rather than posted twice. */
+    message?: string | null;
+  }): Promise<{ run: RetestRun; entryId: string }> {
     const userId = await requireUserId();
     let run = await retestData.findActiveForConversation(input.conversationId);
     if (!run) {
@@ -407,9 +378,10 @@ export const retestData = {
       }
     }
 
-    await riskConversationData.addEntryOnce({
+    const entry = await riskConversationData.addEntryOnce({
       conversation_id: input.conversationId,
       kind: "retest_requested",
+      message: input.message?.trim() || null,
       source_ticket_id: input.ticketId ?? null,
       sync_key: `retest-requested::${run.id}`,
     });
@@ -425,7 +397,7 @@ export const retestData = {
         });
       }
     }
-    return run;
+    return { run, entryId: entry.id };
   },
 
   /**

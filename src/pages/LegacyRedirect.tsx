@@ -3,7 +3,7 @@ import { useAuth } from "@/auth/useAuth";
 import { LoadingState } from "@/components/common";
 import { Card, CardContent } from "@/components/ui/card";
 import { useFinding, useFindingTickets, useTicket } from "@/hooks/queries";
-import { canonicalRiskPath, type RiskLocation } from "@/lib/legacy-routes";
+import { canonicalRiskPath, resolveRiskPath, type RiskLocation } from "@/lib/legacy-routes";
 
 /** Where a role's own list lives now that Findings and Tickets left the navigation. */
 function listHomeFor(can: (capability: "view_assessments" | "view_resolve") => boolean): string {
@@ -77,6 +77,29 @@ export function LegacyTicketRedirect() {
   });
   if (!target) return <UnlinkedNotice what="ticket" id={ticketId} />;
   return <Navigate to={target} replace />;
+}
+
+/**
+ * A remediation has no page of its own: it is a section of the risk workspace.
+ * This stays inside Resolve so a mixed-role user following a `/resolve/...` link
+ * is not moved into the assessment workspace.
+ */
+export function ResolveTicketRedirect() {
+  const { ticketId } = useParams<{ ticketId: string }>();
+  const ticket = useTicket(ticketId);
+
+  if (ticket.isLoading) return <LoadingState label="Opening this remediation…" />;
+  if (ticket.isError || !ticket.data) return <Navigate to="/resolve" replace />;
+
+  return (
+    <Navigate
+      to={resolveRiskPath({
+        applicationId: ticket.data.application_id,
+        riskId: ticket.data.finding?.test_id,
+      })}
+      replace
+    />
+  );
 }
 
 /**

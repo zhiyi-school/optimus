@@ -68,7 +68,7 @@ and will be deleted by whoever hits it next.
 
 ## Database tests
 
-Six SQL files in `supabase/tests/` check the rules the developer workflow
+Nine SQL files in `supabase/tests/` check the rules the developer workflow
 depends on at the table level, where they are actually enforced:
 
 | File | What it proves |
@@ -79,6 +79,9 @@ depends on at the table level, where they are actually enforced:
 | `0021_application_risk_conversations_rls.sql` | one conversation per application risk that cannot be moved and is reached from any of that application's assessments, a merge that carries every entry, attachment, ticket link and retest record into the oldest thread, a ticket that keeps the assessment it was raised against, access decided by the application so no other organisation is reachable, a classification function that writes all three records or none and refuses anyone but security, one reassessment in flight per risk, and an idempotent historical placement |
 | `0022_selected_remediation_control_rls.sql` | one chosen remediation approach per ticket, changeable only while the developer still owns it |
 | `0023_assessment_run_requests_rls.sql` | only security may queue a run and only where it has access, one active request per assessment however often it is asked for, an atomic claim two workers cannot both win, an expired lease returned to the queue, a manual retry that wakes the existing request rather than opening another, a queue no client can write to directly, and assessment transitions that refuse to restart a completed assessment |
+| `0024_reassessment_withdrawal_rls.sql` | only the requester may withdraw a queued reassessment, a withdrawal must carry a reason, one that security has already started is refused, and two concurrent withdrawals cannot both win |
+| `0026_reassessment_from_completed_steps_rls.sql` | a reassessment requested from a remediation whose selected approach is finished rather than from a fix submission, refused while any step is outstanding, and still open to security without a checklist |
+| `0027_attachment_download_rls.sql` | a conversation attachment readable by its uploader and by every other participant but by nobody outside the application, the same for the stored object itself, a file on a workflow event behaving like one on a message, an upload defaulting to the Supabase provider, and a storage key that can be neither absolute nor walked out of its folder |
 
 None is part of `npm test` — they need a database. Paste one into the
 Supabase SQL Editor and run it. Each creates its own placeholder fixtures,
@@ -87,7 +90,10 @@ impersonates each role by setting `request.jwt.claims`, asserts, and ends with
 failed assertion raises; a clean run prints `0017 RLS checks passed`,
 `0018 withdrawal checks passed`, `0020 risk conversation checks passed`,
 `0021 application risk conversation checks passed`, `0022 selection checks
-passed` or `0023 assessment run request checks passed`.
+passed`, `0023 assessment run request checks passed`,
+`0024 reassessment withdrawal checks passed`,
+`0026 reassessment readiness checks passed` or
+`0027 attachment download checks passed`.
 
 **A migration that replaces a shared trigger has to carry forward what earlier
 ones added.** `0022` rewrote `enforce_ticket_update_permissions` with
