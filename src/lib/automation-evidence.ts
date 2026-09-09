@@ -1,14 +1,12 @@
 import type { AutomationResultRow, EvidenceRef } from "@/api/automation-types";
-import type { EvidenceItem } from "@/components/evidence";
+import type { EvidenceItem } from "@/lib/evidence-types";
 import { formatDate, formatDuration } from "@/lib/utils";
 
 export const AUTOMATION_SOURCE = "Automated test";
 export const MANUAL_SOURCE = "Security team";
 
-/** The rail is one narrow column: a long artefact list belongs in the run's own report. */
 export const RAIL_ARTIFACT_LIMIT = 6;
 
-/** The most recent run of exactly this application and risk, or undefined. */
 export function latestResult(
   history: AutomationResultRow[] | undefined,
   appExternalId: string | null | undefined,
@@ -42,7 +40,6 @@ export interface LatestResultDetail {
   testName: string;
 }
 
-/** The run's outcome as named fields, so nothing is squeezed into one truncated line. */
 export function latestResultDetail(
   row: AutomationResultRow | undefined,
 ): LatestResultDetail | undefined {
@@ -59,7 +56,6 @@ export function latestResultDetail(
   };
 }
 
-/** One artefact per file, in the order the backend offered them. */
 export function artifactsOf(row: AutomationResultRow | undefined): EvidenceRef[] {
   const seen = new Set<string>();
   const artifacts: EvidenceRef[] = [];
@@ -72,7 +68,6 @@ export function artifactsOf(row: AutomationResultRow | undefined): EvidenceRef[]
   return artifacts;
 }
 
-/** The named artefact the caller wants, by file name. */
 export function artifactNamed(
   row: AutomationResultRow | undefined,
   fileName: string,
@@ -80,7 +75,6 @@ export function artifactNamed(
   return artifactsOf(row).find((artifact) => artifact.path.split("/").pop() === fileName);
 }
 
-/** The run's artefacts as rail items. The outcome is presented separately, in full. */
 export function automationEvidence(
   row: AutomationResultRow | undefined,
   evidenceUrl: (runTimestamp: string, ref: string) => string,
@@ -114,7 +108,6 @@ export function automationEvidence(
   return items;
 }
 
-/** Automated evidence first, then anything security recorded by hand. */
 export function combinedEvidence(
   row: AutomationResultRow | undefined,
   manual: EvidenceItem[] | undefined,

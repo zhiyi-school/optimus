@@ -33,14 +33,14 @@ see [data-model.md](./data-model.md).
 
 | | Requirement |
 | --- | --- |
-| Node.js | 20+ with npm (Vite 7) |
-| Build | `npm install`, then `npm run build` (runs `tsc -b` then `vite build`) |
+| Node.js | 22 with its bundled npm (CI runtime); Vite also supports 20.19+ |
+| Build | `npm ci`, then `npm run build` (runs `tsc -b` then `vite build`) |
 | Output | static files in `dist/`, servable by any static host |
 | Supabase | project with `supabase/migrations/*.sql` applied |
 | Backend | only for automation features |
 
 ```bash
-npm install
+npm ci
 npm run dev         # dev server on :5173
 npm test            # vitest
 npm run typecheck   # tsc -b
@@ -93,7 +93,7 @@ merging into an existing project, these are the dependencies:
 | Tables | `profiles`, `teams`, `applications`, `assessments`, `findings`, `finding_history`, `evidence`, `tickets`, `retest_runs`, `risk_acceptance`, `activity_log`, `ticket_controls`, `ticket_control_steps`, `risk_conversations` (one per `(application_id, risk_id)`), `risk_conversation_entries`, `risk_conversation_attachments`, `assessment_run_requests` (the durable execution queue). `assessment_messages`, `ticket_messages` and `ticket_attachments` are created by `0001`/`0008` and archived by `0020`: they keep their historical rows but no policy grants access to them |
 | Team scoping | a `team_id` column on `profiles`, `developer_team_id` on `applications`, `assigned_team_id` on `tickets` — there is no join table |
 | Contacts | columns on `applications` (`owner_email`, `developer_contact_*`, `contact_emails[]`), added by `0004` and `0009` — not a separate table |
-| RPC | `dashboard_metrics()` — the overview page's fast path; the UI falls back to per-table queries and logs a console warning naming `0012_dashboard_metrics_rpc.sql` if it is absent. `classify_risk()` (`0021`) — **required**: changing a risk classification goes through it, and there is no client-side fallback, because the finding, its history and the conversation event have to be written together |
+| RPC | `dashboard_metrics()` — the overview page's fast path; the UI falls back to per-table queries if it is absent. `classify_risk()` (`0021`) is the legacy atomic classification operation; `classify_risk_entry()` (`0025`) additionally returns the conversation entry id so the same decision can own an attachment. |
 | Execution RPC | `request_assessment_run()` (`0023`) — **required**: creating or retrying an assessment run goes through it, and there is no client-side fallback, because it is what keeps one active request per assessment. `claim_assessment_run_request()` and `recover_expired_assessment_run_leases()` are for the worker's service role only |
 | Migration helpers | `merge_duplicate_risk_conversations()` and `place_unlinked_ticket_conversations()` (`0021`) — called by the migration and kept in the schema so the RLS suite exercises them; `execute` is revoked from `public` |
 | Storage | `ticket-attachments` and `evidence` buckets, both private (`0003_storage.sql`) |
@@ -104,6 +104,46 @@ merging into an existing project, these are the dependencies:
 
 Migrations are additive and must be applied in numeric order. Table
 relationships and the RLS rationale: [data-model.md](./data-model.md).
+
+## Database and API compatibility
+
+Full support requires migrations through `0028`, the backend evidence-ref API,
+and this frontend deployed together. Older states degrade as follows; they are
+compatibility paths, not the recommended steady state.
+
+| Contract | Full support | Degraded fallback |
+| --- | --- | --- |
+| Classification | `classify_risk_entry` from `0025` atomically returns both finding and entry id | If that function is missing, the client calls legacy `classify_risk`; classification is still atomic, but a selected file cannot be attached to the decision and must be posted later as a message |
+| Classification attachment | `0025` present | Without `0025`, the workflow succeeds without the attachment and explains the limitation; it never guesses which entry was created |
+| Completed-step reassessment | `0026` present; the database verifies the selected approach has at least one step and all are completed | Without `0026`, the current UI cannot request reassessment from completed steps. The older database still accepts a historical `fix_submitted` ticket, but the current UI creates no new ticket in that state |
+| Attachment provider metadata | `0027` stores `storage_provider` and `size_bytes`; absent artifacts surface a download error | Without `0027`, uploads retry with the original columns, reads treat rows as Supabase-backed, and size is unknown. Server-backed rows cannot be represented |
+| Workflow RPC grants | `0028` revokes anonymous workflow execution and reserves worker queue claims/recovery for `service_role` | A schema through `0027` has the functional capabilities but retains broader function grants. That state is not a supported security posture; there is no application fallback for missing `0028` |
+| Historical tickets | New work goes directly from completed steps to `retest_requested` | Existing `fix_submitted` tickets and timeline events remain readable; the ticket is still a requestable state, subject to the current selected-approach completion checks. Nothing creates new ones |
+| Evidence path-to-ref change | New backend returns `ref`/`size_bytes`; new frontend sends `?ref=` and uses `path` only for display/name metadata | New frontend with an old path-only backend cannot download automation evidence because no usable ref exists. Old frontend with a new backend sends `path` and receives `422` for missing `ref`. Arbitrary path downloads are intentionally not restored |
+
+Deployment order for full support is: apply migrations through `0028`, deploy
+the backend ref contract, then deploy the frontend. The backend/frontend cutover
+must be close together because either mixed version temporarily loses automation
+evidence downloads. Applied migrations stay applied. Rolling back only the
+frontend after the backend change restores obsolete `path` requests; rolling
+back only the backend removes refs expected by the frontend. Roll back the pair
+together only if the old path-based exposure is acceptable, otherwise roll
+forward. See [automation-api.md](./automation-api.md) for evidence behavior.
+
+The compatibility code is intentionally narrow. It falls back only when
+PostgREST reports the recognized missing `classify_risk_entry` function or the
+recognized `storage_provider`/`size_bytes` columns. Authorization, validation,
+network and unrelated schema errors are returned unchanged. A successful legacy
+classification has no entry id: the decision is complete, its selected file is
+not, and the client never repeats the decision or guesses the latest entry.
+
+Retire the `0025` fallback only after every supported database has that
+function, and retire the `0027` fallback only after every supported database has
+both metadata columns and all rollback targets include them. Historical
+`fix_submitted` display and transitions must remain until those rows and events
+have either aged out under an explicit retention policy or been migrated by a
+new additive migration. The authoritative state/action matrix is in
+[roles-and-workflows.md](./roles-and-workflows.md#authoritative-transition-matrix).
 
 ## Required backend compatibility contract
 
@@ -166,12 +206,11 @@ The dashboard's expectations are encoded in `src/api/automation-types.ts` and
 | `/reports` | GET | — | array of run timestamps, newest first | 200 |
 | `/reports/{run_timestamp}/summary` | GET | — | array of result rows | 200, 404 |
 | `/reports/{run_timestamp}/files/{file_path}` | GET | — | the raw file | 200, 404 |
-| `/reports/{run_timestamp}/evidence-file?ref=` | GET | — | the raw file, named and typed | 200, 400, 404 |
+| `/reports/{run_timestamp}/evidence-file?ref=` | GET | — | the raw file, named and typed | 200; 422 missing query; 400 malformed ref; 404 missing/wrong-run artifact |
 | `/reports/{run_timestamp}/sarif` | GET | — | SARIF 2.1.0 document | 200, 404 |
 | `/apps/{app_id}/risks/{risk_id}/history` | GET | `limit` query, 1–100 | array of result rows, newest first | 200 |
 
-**Result row shape** (`dashboard_results.json`), returned by both summary
-endpoints and by history:
+**Result row shape**, returned by both summary endpoints and history:
 
 ```json
 {
@@ -196,6 +235,12 @@ endpoints and by history:
 }
 ```
 
+On disk, each `dashboard_results.json` evidence item contains only `kind`,
+`label` and `path`. The backend adds `ref` and `size_bytes` while serving summary
+or history, including for historical reports, without rewriting the file. Items
+whose artifact no longer exists are omitted. Consequently the JSON example above
+is the served shape, not the literal persisted evidence shape.
+
 **SSE format.** `text/event-stream`, one JSON object per `data:` line. Event
 types the dashboard renders: `risk_started`, `risk_completed`,
 `appium_recovery`, `device_unlocked`, and a terminal `done` carrying
@@ -210,10 +255,13 @@ Supabase-backed views on the transition into `completed`; a server that reports
 `completed` early will show stale data. `retryable` gates whether a retry button
 appears at all.
 
-**Evidence URL behaviour.** Both file endpoints must serve bytes with a
-sensible content type, and must reject paths that escape their roots. The
-dashboard builds URLs with `assessmentApi.evidenceFileUrl` and
-`reportFileUrl`; it does not proxy or rewrite them.
+**Evidence URL behaviour.** The report-file endpoint accepts a path confined to
+the named run. The evidence endpoint accepts only the API-issued opaque `ref` and
+must not restore arbitrary path lookup. It returns a download filename, media
+type and content length; the browser must be allowed to read
+`Content-Disposition` through CORS. The dashboard builds URLs with
+`assessmentApi.evidenceFileUrl` and `reportFileUrl`; it does not proxy or rewrite
+them. A ref is an identifier, not an authorization credential.
 
 **Error behaviour.** Errors should carry `{"detail": ...}` — a string, or an
 object whose `app_id` the provisioning flow reads on `409`. The client wraps
@@ -243,8 +291,8 @@ backend does not support the feature" and degrades instead of erroring.
 | HTTP client | `src/api/automation-client.ts` | axios instance, 30s timeout, error interceptor producing `AutomationApiError` |
 | Typed services | `src/api/automation-services.ts` | `testApi`, `configApi`, `provisioningApi`, `assessmentApi`, `syncApi`, `healthApi`, plus URL helpers |
 | Types | `src/api/automation-types.ts` | the response shapes above |
-| Query hooks | `src/hooks/queries.ts` | TanStack Query wrappers, polling intervals, cache invalidation |
-| Supabase services | `src/data/services.ts` | all dashboard reads and writes |
+| Query hooks | `src/hooks/queries/` | Domain TanStack Query wrappers, polling intervals, cache invalidation |
+| Supabase services | `src/data/services/` | Domain dashboard reads and writes |
 | Pure logic | `src/data/sync/runs.ts`, `src/lib/` | run matching, sync presentation, SARIF gating — unit-tested |
 
 Polling intervals and timeouts: [configuration.md](./configuration.md).
@@ -352,9 +400,10 @@ The full document format is in the backend's `docs/developer-playbook.md`.
 
 ## Current limitations and follow-up work
 
-- **No versioned contract.** The compatibility table above is prose. There is
-  no OpenAPI or JSON Schema file to validate a replacement server against, and
-  no version negotiation between dashboard and backend.
+- **No negotiated API schema version.** The compatibility table and focused
+  API tests define the HTTP boundary, but there is no version negotiation or
+  portable OpenAPI/JSON Schema artifact for a replacement server. The versioned
+  `playbook-control-v1.json` fixture covers only the parser-to-renderer boundary.
 - **The automation API has no authentication**, so the dashboard cannot pass
   user identity to it; backend actions are not attributable per user.
 - **Eventual consistency** between a completed run and dashboard data, with
@@ -368,7 +417,7 @@ The full document format is in the backend's `docs/developer-playbook.md`.
   posture and an all-or-nothing `PLAYBOOK_SOURCE_DOWNLOAD_ENABLED` switch. A
   deployment that needs per-application control over who downloads a reference
   implementation has to add it at a proxy.
-- **No page is mounted in a test.** Individual components and the workflow rules
+- **No complete data-backed page is mounted in a test.** Individual components and the workflow rules
   are covered, but nothing renders a page with a real query client, so a
   mis-wired hook or a broken loading branch would not be caught — see
   [testing.md](./testing.md#what-is-not-covered).

@@ -13,7 +13,8 @@ import { EstimatedTime, GuidedSteps, type GuidedStep } from "@/components/guided
 import { RiskGoal } from "@/components/risk-goal";
 import { renderInline } from "@/lib/inline-markdown";
 import { stepCountLabel } from "@/lib/utils";
-import { useRiskCatalogue, useAssessment } from "@/hooks/queries";
+import { useAssessment } from "@/hooks/queries/assessments";
+import { useRiskCatalogue } from "@/hooks/queries/automation";
 
 function SetupTable({ block }: { block: DemonstrationTableBlock }) {
   const columns = useMemo(() => {

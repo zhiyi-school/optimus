@@ -13,7 +13,6 @@ function Field({ label, value }: { label: string; value: string }) {
   );
 }
 
-/** The run's outcome in full: each fact keeps its own field rather than one truncated line. */
 export function LatestResultPanel({ result }: { result: LatestResultDetail | undefined }) {
   if (!result) return null;
   return (

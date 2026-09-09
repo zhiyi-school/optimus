@@ -19,6 +19,12 @@ interface Call {
 let calls: Call[] = [];
 let uploads: { conversationId: string; entryId: string; fileName: string }[] = [];
 let uploadFails = false;
+let uploadFailureHasBytes = false;
+let attachmentInputs: { bytesUploaded: boolean; fileName: string }[] = [];
+let recordFails = false;
+let legacyClassification = false;
+let holdRecord = false;
+let finishRecord: (() => void) | null = null;
 let definitions: unknown[] = [];
 let definitionsFailed = false;
 let controlRows: unknown[] = [];
@@ -52,40 +58,69 @@ vi.mock("@/data/supabase", () => ({
   supabase: { from: () => ({}), auth: {}, storage: { from: () => ({}) } },
 }));
 
-vi.mock("@/data/services", () => ({
-  riskConversationData: {
-    uploadAttachment: (conversationId: string, entryId: string, file: File) => {
-      if (uploadFails) return Promise.reject(new Error("Example storage failure."));
-      uploads.push({ conversationId, entryId, fileName: file.name });
-      return Promise.resolve({ id: "attachment-1" });
-    },
-  },
-}));
+vi.mock("@/hooks/queries/assessments", async () => await import("@/test-support/query-hooks"));
+vi.mock("@/hooks/queries/automation", async () => await import("@/test-support/query-hooks"));
+vi.mock("@/hooks/queries/conversations", async () => await import("@/test-support/query-hooks"));
+vi.mock("@/hooks/queries/evidence", async () => await import("@/test-support/query-hooks"));
+vi.mock("@/hooks/queries/reference", async () => await import("@/test-support/query-hooks"));
+vi.mock("@/hooks/queries/tickets", async () => await import("@/test-support/query-hooks"));
 
-vi.mock("@/hooks/queries", () => ({
+vi.mock("@/test-support/query-hooks", () => ({
   useRiskControls: () => ({ data: definitions, isLoading: false, isError: definitionsFailed }),
   useTicketControls: () => ({ data: controlRows, isLoading: false, isError: false }),
   useTicketControlSteps: () => ({ data: stepRows, isLoading: false, isError: false }),
   useSendRiskMessage: () => ({
     mutateAsync: (input: unknown) => {
       calls.push({ name: "message", input });
+      if (recordFails) return Promise.reject(new Error("Example entry failure."));
+      if (holdRecord) {
+        return new Promise((resolve) => {
+          finishRecord = () => resolve({ id: "entry-message" });
+        });
+      }
       return Promise.resolve({ id: "entry-message" });
     },
     isPending: false,
     error: null,
+    reset: vi.fn(),
   }),
   useClassifyRisk: () => ({
     mutateAsync: (input: unknown) => {
       calls.push({ name: "classify", input });
-      return Promise.resolve({ finding: { id: FINDING }, entryId: "entry-classification" });
+      return Promise.resolve({
+        finding: { id: FINDING },
+        entryId: legacyClassification ? null : "entry-classification",
+      });
     },
     isPending: false,
     error: null,
+    reset: vi.fn(),
   }),
   useRequestReassessment: () => ({
     mutateAsync: (input: unknown) => {
       calls.push({ name: "reassessment", input });
       return Promise.resolve({ run: { id: "retest-1" }, entryId: "entry-reassessment" });
+    },
+    isPending: false,
+    error: null,
+    reset: vi.fn(),
+  }),
+  ConversationAttachmentFailure: class ConversationAttachmentFailure extends Error {},
+  useSaveConversationAttachment: () => ({
+    mutateAsync: ({ pending, bytesUploaded }: { pending: { conversationId: string; entryId: string; file: File }; bytesUploaded: boolean }) => {
+      attachmentInputs.push({ bytesUploaded, fileName: pending.file.name });
+      if (uploadFails) {
+        return Promise.reject(Object.assign(new Error("Example storage failure."), {
+          pending,
+          bytesUploaded: uploadFailureHasBytes,
+        }));
+      }
+      uploads.push({
+        conversationId: pending.conversationId,
+        entryId: pending.entryId,
+        fileName: pending.file.name,
+      });
+      return Promise.resolve({ attachment: { id: "attachment-1" }, bytesUploaded: true });
     },
     isPending: false,
     error: null,
@@ -112,12 +147,14 @@ let composer: ReturnType<typeof useRiskComposer>;
 function Probe({
   can,
   retests,
+  conversationId = CONVERSATION,
 }: {
   can: (capability: string) => boolean;
   retests: RetestRun[] | undefined;
+  conversationId?: string;
 }) {
   composer = useRiskComposer({
-    conversation: { id: CONVERSATION } as never,
+    conversation: { id: conversationId } as never,
     finding,
     ticket: ticket(),
     retests,
@@ -129,8 +166,9 @@ function Probe({
 function render({
   can = () => true,
   retests = [] as RetestRun[] | undefined,
-}: { can?: (capability: string) => boolean; retests?: RetestRun[] | undefined } = {}) {
-  act(() => root.render(<Probe can={can} retests={retests} />));
+  conversationId = CONVERSATION,
+}: { can?: (capability: string) => boolean; retests?: RetestRun[] | undefined; conversationId?: string } = {}) {
+  act(() => root.render(<Probe can={can} retests={retests} conversationId={conversationId} />));
 }
 
 async function submit(submission: ComposerSubmission) {
@@ -149,6 +187,12 @@ beforeEach(() => {
   calls = [];
   uploads = [];
   uploadFails = false;
+  uploadFailureHasBytes = false;
+  attachmentInputs = [];
+  recordFails = false;
+  legacyClassification = false;
+  holdRecord = false;
+  finishRecord = null;
   definitions = [approach()];
   definitionsFailed = false;
   completedRows();
@@ -171,7 +215,7 @@ describe("routing a submission to its workflow", () => {
     render();
     await submit({ message: "A question." });
 
-    expect(calls).toEqual([{ name: "message", input: { message: "A question.", file: undefined } }]);
+    expect(calls).toEqual([{ name: "message", input: { message: "A question." } }]);
   });
 
   it("calls the classification mutation with the message as its reason", async () => {
@@ -208,15 +252,30 @@ describe("routing a submission to its workflow", () => {
 
     expect(calls.map((call) => call.name)).toEqual(["classify", "reassessment"]);
   });
+
+  it("ignores a duplicate submit while the first entry is still recording", async () => {
+    render();
+    holdRecord = true;
+    await act(async () => {
+      const first = composer.submit({ message: "A question." });
+      const duplicate = composer.submit({ message: "A question." });
+      finishRecord?.();
+      await Promise.all([first, duplicate]);
+    });
+
+    expect(calls.map((call) => call.name)).toEqual(["message"]);
+  });
 });
 
 describe("attaching a file to the entry the action created", () => {
-  it("attaches an ordinary message's file through the message itself", async () => {
+  it("attaches an ordinary message's file to the entry it created", async () => {
     render();
     await submit({ message: "See this.", file: file() });
 
     expect(calls[0].input).toMatchObject({ message: "See this." });
-    expect(uploads).toEqual([]);
+    expect(uploads).toEqual([
+      { conversationId: CONVERSATION, entryId: "entry-message", fileName: "example-evidence.png" },
+    ]);
   });
 
   it("attaches to the classification entry, not to a new message", async () => {
@@ -244,6 +303,17 @@ describe("attaching a file to the entry the action created", () => {
 });
 
 describe("when the file cannot be stored", () => {
+  it("can retry a failure before the entry was recorded", async () => {
+    render();
+    recordFails = true;
+    expect(await submit({ message: "A question." })).toMatchObject({ message: "Example entry failure." });
+    expect(composer.attachmentRetry).toBeNull();
+
+    recordFails = false;
+    expect(await submit({ message: "A question." })).toBeUndefined();
+    expect(calls.map((call) => call.name)).toEqual(["message", "message"]);
+  });
+
   it("reports an attachment failure rather than a workflow failure", async () => {
     render();
     uploadFails = true;
@@ -280,7 +350,20 @@ describe("when the file cannot be stored", () => {
     expect(composer.attachmentRetry).toBeNull();
   });
 
-  it("runs the workflow again when the reader replaces the file first", async () => {
+  it("does not upload the bytes again after only metadata persistence failed", async () => {
+    render();
+    uploadFails = true;
+    uploadFailureHasBytes = true;
+    await submit({ message: "See this.", file: file() });
+
+    uploadFails = false;
+    await submit({ message: "See this.", file: file() });
+
+    expect(attachmentInputs.map((input) => input.bytesUploaded)).toEqual([false, true]);
+    expect(calls.map((call) => call.name)).toEqual(["message"]);
+  });
+
+  it("keeps the recorded action bound to its original file until the retry is abandoned", async () => {
     render();
     uploadFails = true;
     await submit({ message: "Verified.", file: file(), action: { kind: "reassessment" } });
@@ -292,8 +375,33 @@ describe("when the file cannot be stored", () => {
       action: { kind: "reassessment" },
     });
 
-    expect(calls.map((call) => call.name)).toEqual(["reassessment", "reassessment"]);
-    expect(uploads[0].fileName).toBe("another-file.png");
+    expect(calls.map((call) => call.name)).toEqual(["reassessment"]);
+    expect(uploads[0].fileName).toBe("example-evidence.png");
+  });
+
+  it("does not carry an attachment retry into another conversation", async () => {
+    render();
+    uploadFails = true;
+    await submit({ message: "See this.", file: file() });
+    expect(composer.attachmentRetry).not.toBeNull();
+
+    render({ conversationId: "another-conversation" });
+    expect(composer.attachmentRetry).toBeNull();
+  });
+
+  it("never repeats a legacy classification just to guess an attachment entry", async () => {
+    render();
+    legacyClassification = true;
+    const submission: ComposerSubmission = {
+      message: "Verified.",
+      file: file(),
+      action: { kind: "classification", status: "reduced_risk" },
+    };
+
+    expect(await submit(submission)).toBeInstanceOf(AttachmentError);
+    expect(composer.attachmentRetry).toMatchObject({ retryable: false });
+    expect(await submit(submission)).toBeInstanceOf(AttachmentError);
+    expect(calls.map((call) => call.name)).toEqual(["classify"]);
   });
 });
 

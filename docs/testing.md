@@ -6,14 +6,40 @@ existing tests follow.
 ## Commands
 
 ```bash
+npm ci            # frozen install from package-lock.json
+npm run check:dependencies
+npm run check:docs
+npm run test:maintenance
 npm test          # vitest, single run
+npm run test:contract
 npm run typecheck # tsc -b
 npm run lint      # eslint
 npm run build     # tsc -b, then vite build
+npm run test:database # Docker-only fresh/upgrade/RLS contract
 ```
 
 `npm run build` is the strongest single check — it typechecks and then proves
 the bundle actually builds.
+
+`check:dependencies` compares the direct dependency declarations in
+`package.json` with the root metadata in `package-lock.json`. `npm ci` then
+installs the exact locked transitive graph and refuses declaration drift.
+Update dependencies with npm so both files change together; do not hand-edit
+the lockfile. Node.js 22 is the CI runtime (Vite also supports Node 20.19+), and
+the npm version bundled with that runtime reads lockfile version 3.
+
+`check:docs` is deterministic and offline. It checks local Markdown links and
+anchors, repository source paths, required documentation entry points, URL
+syntax, and accidental user-specific paths without executing examples. Exact
+backend-owned paths are listed in `docs/doc-validation-allowlist.txt`; an unused
+exception fails the check.
+
+`test:contract` runs the automation API/evidence request tests, query-key shape
+tests, and the versioned playbook transport rendering test. It requires neither
+repository counterpart because the sanitized `playbook-control-v1.json`
+artifact is committed. To prove a particular frontend/backend combination,
+run the backend's documented `contract_fixture --check` command with this
+checkout's explicit path and record both revisions.
 
 > `npx tsc --noEmit` does **not** work here. This project uses TypeScript
 > project references with `"files": []` in the root `tsconfig.json`, so that
@@ -28,8 +54,9 @@ npx vitest
 
 ## What is covered
 
-Tests run in Node with no DOM library, so they target pure logic and the API
-layer rather than rendered components.
+Most tests run in Node for pure logic and API behavior. Component tests opt into
+jsdom per file and mount React components directly; the suite does not drive a
+real browser.
 
 | Area | File |
 | --- | --- |
@@ -38,13 +65,26 @@ layer rather than rendered components.
 | Dashboard sync presentation, polling start/stop, retry gating | `src/lib/dashboard-sync.test.ts` |
 | SARIF export gating and download filename | `src/lib/sarif.test.ts` |
 | Run event stream labels | `src/lib/run-stream.test.ts` |
+| Query-key shapes, entity/prefix distinction, domain invalidation groups | `src/hooks/query-keys.test.ts` |
+| Query polling, mutation invalidation, and conversation subscription cleanup | `src/hooks/queries.test.tsx` |
+| Reassessment claim/start/publish ordering | `src/hooks/use-reassessment-run.test.tsx` |
+| Conversation persistence, attachment fallback, and entry idempotency | `src/data/services/conversations.test.ts` |
+| Message/action submission, attachment-only retry and conversation scoping | `src/hooks/conversation-composer.test.tsx` |
 | Metrics RPC fallback | `src/data/services/metrics.test.ts` |
 | Test page keying (state must not leak between tests) | `src/pages/TestDetail.test.tsx` |
 | Capability model, `/resolve` access states, post-login routing | `src/auth/permissions.test.ts` |
 | Remediation progress formulas, control seeding, workflow gates | `src/lib/resolve.test.ts` |
+| Shared approach selection, reconciliation and reassessment reason codes | `src/lib/remediation-workflow.test.ts` |
 | The whole developer lifecycle, sign-in to closure | `src/lib/resolve-workflow.test.ts` |
 | Playbook block allowlist and inline-link safety | `src/lib/playbook.test.tsx` |
 | Playbook API client — escaping, error degradation | `src/api/playbook-services.test.ts` |
+| Generated backend playbook transport, rendering identities, reconciliation | `src/components/playbook-contract.test.tsx` |
+
+`src/test-fixtures/playbook-control-v1.json` is generated from the backend's
+sanitized Markdown fixture; it is not hand-maintained test data. The canonical
+regeneration command and stable-id rules live in the backend
+`docs/developer-playbook.md`. A regeneration should produce an inspectable diff,
+then both repositories' focused playbook tests must pass.
 
 ## Conventions
 
@@ -62,11 +102,25 @@ and assert on the calls, so they exercise the real service code without a
 network. Match the real error shape — the client's interceptor always attaches
 `status`, and code paths depend on that.
 
+Query hook behavior is implemented in `src/hooks/queries/`. Tests import or
+mock the owning domain module. Tests that exercise several page domains share a
+mock registry under `src/test-support/`; it is not a production compatibility
+surface.
+
 **Use fake timers for anything that polls.** `vi.useFakeTimers()` plus
 `vi.runAllTimersAsync()`; a poll-cap test that waits in real time takes minutes
 and will be deleted by whoever hits it next.
 
 ## Database tests
+
+The authoritative safe workflow, supported `0024` upgrade baseline, fixture
+coverage, and migration procedure are in
+[Database maintenance](./database-maintenance.md). Run the complete contract as
+`npm run test:database`; do not point individual SQL files at a live project.
+
+The command requires a working Docker daemon and the PostgreSQL 15 image. It
+creates and removes uniquely named containers and reads no Supabase credentials.
+It is intentionally separate from the fast checks.
 
 Nine SQL files in `supabase/tests/` check the rules the developer workflow
 depends on at the table level, where they are actually enforced:
@@ -83,10 +137,10 @@ depends on at the table level, where they are actually enforced:
 | `0026_reassessment_from_completed_steps_rls.sql` | a reassessment requested from a remediation whose selected approach is finished rather than from a fix submission, refused while any step is outstanding, and still open to security without a checklist |
 | `0027_attachment_download_rls.sql` | a conversation attachment readable by its uploader and by every other participant but by nobody outside the application, the same for the stored object itself, a file on a workflow event behaving like one on a message, an upload defaulting to the Supabase provider, and a storage key that can be neither absolute nor walked out of its folder |
 
-None is part of `npm test` — they need a database. Paste one into the
-Supabase SQL Editor and run it. Each creates its own placeholder fixtures,
+None is part of `npm test` — they need a disposable database. The supported
+runner creates its own isolated PostgreSQL container. Each suite creates its own placeholder fixtures,
 impersonates each role by setting `request.jwt.claims`, asserts, and ends with
-`rollback`, so it leaves nothing behind and is safe against a live project. A
+`rollback`, but rollback is a safety net rather than permission to target live data. A
 failed assertion raises; a clean run prints `0017 RLS checks passed`,
 `0018 withdrawal checks passed`, `0020 risk conversation checks passed`,
 `0021 application risk conversation checks passed`, `0022 selection checks
@@ -126,8 +180,8 @@ until that was done.
 ## The end-to-end test is a logic test
 
 `src/lib/resolve-workflow.test.ts` walks a finding through the entire developer
-lifecycle — sign-in routing, control initialisation, step completion, submit
-fix, request reassessment, security verification, closure — asserting the gates
+lifecycle — sign-in routing, control initialisation, step completion, direct
+reassessment request, security verification, closure — asserting the gates
 and the labels at each stage, and that the developer never holds the capability
 for a security-owned step.
 
@@ -179,9 +233,9 @@ polls, compares and invalidates, but no test drives a real revision change
 through a mounted page — the reconciliation and rendering rules underneath it are
 covered by `resolve-workflow.test.ts` and the component tests instead.
 
-**Pages are not mounted.** The tested units are components and pure functions;
-no test renders `Resolve`, `ResolveTicket`, `FindingDetail`, `ControlDetail` or
-`ControlPreview` with a real query client, so a mis-wired hook, a wrong
+**Pages are not mounted with real data clients.** Tests mount several page and
+component units with mocked hooks, but no test renders a routed page with a real
+query client, so a mis-wired hook, a wrong
 `enabled` condition or a broken loading branch would still pass. That
 `ControlPreview` records no progress is guarded instead by a check that the page
 imports no progress mutation — cheap, and it fails the moment one is added. The consequence is real: two UI state
@@ -197,3 +251,18 @@ Supabase round trip are all stubbed or bypassed.
 The automation backend has its own suite — `python -m pytest -q` in that
 repository, needing no device, network or Supabase project. See its
 `docs/testing.md`.
+
+## Continuous integration
+
+Both repository remotes are GitHub-hosted and neither repository previously had
+a CI configuration, so `.github/workflows/verify.yml` uses GitHub Actions. The
+frontend workflow has separate jobs for documentation/dependency consistency,
+the full test/lint/build sequence, focused contracts, and the guarded disposable
+database suite. Every job has read-only repository permission; none receives
+secrets, deploys, applies a live migration, or contacts an automation host.
+
+The frontend and backend workflows validate their committed sides of the
+contract independently. GitHub Actions cannot assume credentials for the other
+private repository, so release verification still requires the explicit local
+two-checkout command described above. Remote CI execution and a clean hosted
+runner remain unverified until the workflow is pushed.

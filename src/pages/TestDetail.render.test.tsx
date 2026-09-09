@@ -104,7 +104,7 @@ vi.mock("@/auth/useAuth", () => ({
   }),
 }));
 
-vi.mock("@/hooks/queries", () => {
+vi.mock("@/test-support/query-hooks", () => {
   const idle = { data: undefined, isLoading: false, isError: false, refetch: () => {} };
   const mutation = {
     mutate: () => {},
@@ -112,8 +112,10 @@ vi.mock("@/hooks/queries", () => {
     isPending: false,
     isError: false,
     error: undefined,
+    reset: () => {},
   };
   return {
+    ConversationAttachmentFailure: class ConversationAttachmentFailure extends Error {},
     useAssessment: () => ({
       ...idle,
       isSuccess: true,
@@ -156,6 +158,7 @@ vi.mock("@/hooks/queries", () => {
     useRiskConversationEntries: () => ({ ...idle, data: entries }),
     useRiskConversationAttachments: () => ({ data: [], isError: false, refetch: () => {} }),
     useSendRiskMessage: () => mutation,
+    useSaveConversationAttachment: () => mutation,
     useFindingTickets: () => ({
       ...idle,
       data: ticketStatus
@@ -212,6 +215,13 @@ vi.mock("@/hooks/queries", () => {
     useReviewRiskAcceptance: () => mutation,
   };
 });
+
+vi.mock("@/hooks/queries/assessments", async () => await import("@/test-support/query-hooks"));
+vi.mock("@/hooks/queries/automation", async () => await import("@/test-support/query-hooks"));
+vi.mock("@/hooks/queries/conversations", async () => await import("@/test-support/query-hooks"));
+vi.mock("@/hooks/queries/evidence", async () => await import("@/test-support/query-hooks"));
+vi.mock("@/hooks/queries/reference", async () => await import("@/test-support/query-hooks"));
+vi.mock("@/hooks/queries/tickets", async () => await import("@/test-support/query-hooks"));
 
 const TestDetail = (await import("@/pages/TestDetail")).default;
 

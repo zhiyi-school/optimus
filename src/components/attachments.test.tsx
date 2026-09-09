@@ -12,7 +12,7 @@ let signed: { data: { signedUrl: string } | null; error: unknown } = {
 };
 const signRequests: string[] = [];
 
-vi.mock("@/data/services", () => ({
+vi.mock("@/data/services/conversations", () => ({
   riskConversationData: {
     getSignedUrl: (path: string) => {
       signRequests.push(path);

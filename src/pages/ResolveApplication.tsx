@@ -2,7 +2,9 @@ import { Navigate, useParams } from "react-router-dom";
 import { PageHeader, LoadingState, ErrorState, EmptyState } from "@/components/common";
 import { ApplicationIcon } from "@/components/application-icon";
 import { PlatformBadge } from "@/components/data-display";
-import { useApplications, useFindings, useTickets } from "@/hooks/queries";
+import { useApplications } from "@/hooks/queries/reference";
+import { useFindings } from "@/hooks/queries/evidence";
+import { useTickets } from "@/hooks/queries/tickets";
 import { preferredDeveloperRisk } from "@/lib/resolve";
 
 /**

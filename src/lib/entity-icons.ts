@@ -18,7 +18,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-/** Best-effort icon for an app row, guessed from its (free-text) app type. */
 export function appTypeIcon(appType: string | null | undefined): LucideIcon {
   const t = (appType ?? "").toLowerCase();
   if (t.includes("bank")) return Landmark;
@@ -41,7 +40,6 @@ const RISK_ICON_RULES: [pattern: RegExp, icon: LucideIcon][] = [
   [/overlay/, Layers],
 ];
 
-/** Best-effort icon for a security test row, guessed from its (backend-provided) name. */
 export function riskIcon(name: string): LucideIcon {
   const n = name.toLowerCase();
   for (const [pattern, icon] of RISK_ICON_RULES) {

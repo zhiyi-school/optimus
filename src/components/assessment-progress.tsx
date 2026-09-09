@@ -8,7 +8,9 @@ import {
   type AssessmentStagePresentation,
 } from "@/lib/status";
 import { cn, errorMessage, formatDate } from "@/lib/utils";
-import { useAppProvisioning, useAssessmentRunRequest, useRequestAssessmentRun, useTickets } from "@/hooks/queries";
+import { useAssessmentRunRequest, useRequestAssessmentRun } from "@/hooks/queries/assessments";
+import { useAppProvisioning } from "@/hooks/queries/automation";
+import { useTickets } from "@/hooks/queries/tickets";
 import type { ProvisioningStage } from "@/api/automation-types";
 import type { Application, Assessment } from "@/data/types";
 
@@ -30,7 +32,6 @@ const LIFECYCLE_TEXT_CLASS: Record<AssessmentStagePresentation["lifecycle"], str
   not_applicable: "text-muted-foreground",
 };
 
-/** Only the current stage's color varies by tone — its icon never does. */
 function currentToneTextClass(tone: AssessmentStagePresentation["tone"]): string {
   if (tone === "warning" || tone === "danger") return "text-warning";
   return "text-primary";
@@ -145,7 +146,6 @@ export function EnvironmentSetupStages({
   return <StageList stages={stages} />;
 }
 
-/** Execution and reporting only — the environment is already set up by this point. */
 export function TestRunStages({
   testingDescription = "Automated security testing is now in progress.",
 }: {

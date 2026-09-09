@@ -5,14 +5,13 @@ import { PageHeader, LoadingState, ErrorState, EmptyState } from "@/components/c
 import { DataTable, type DataTableColumn } from "@/components/data-display";
 import { ApplicationIcon } from "@/components/application-icon";
 import { ProgressBar, ToneBadge } from "@/components/resolve-display";
+import { useApplications, useTeams } from "@/hooks/queries/reference";
+import { useFindings } from "@/hooks/queries/evidence";
 import {
-  useApplications,
   useControlProgressForTickets,
-  useFindings,
-  useLiveControlKeys,
-  useTeams,
   useTickets,
-} from "@/hooks/queries";
+} from "@/hooks/queries/tickets";
+import { useLiveControlKeys } from "@/hooks/queries/automation";
 import { useAuth } from "@/auth/useAuth";
 import {
   remediationStatusLabels,

@@ -232,11 +232,14 @@ select pg_temp.assert(
   'a remediation recorded before this change can still be reassessed'
 );
 
+select pg_temp.act_as_owner();
+update retest_runs set status = 'completed', completed_at = now()
+where id = 'e0000000-0000-0000-0000-000000000003';
+
 -- ---------------------------------------------------------------------------
 -- Security is not held to the developer's completion rule
 -- ---------------------------------------------------------------------------
 
-select pg_temp.act_as_owner();
 insert into tickets (id, finding_id, application_id, type, status, title, created_by,
                      risk_conversation_id) values
   ('c0000000-0000-0000-0000-000000000004', 'f0000000-0000-0000-0000-00000000000a',

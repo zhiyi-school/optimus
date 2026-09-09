@@ -4,7 +4,9 @@ import { preferredAssessmentRisk } from "@/lib/assessments";
 import { LoadingState, ErrorState, EmptyState } from "@/components/common";
 import { Card, CardContent } from "@/components/ui/card";
 import { AssessmentSidebar } from "@/components/assessment-sidebar";
-import { useAssessment, useFindings, useRiskCatalogue } from "@/hooks/queries";
+import { useAssessment } from "@/hooks/queries/assessments";
+import { useFindings } from "@/hooks/queries/evidence";
+import { useRiskCatalogue } from "@/hooks/queries/automation";
 import { formatDate } from "@/lib/utils";
 import type { Application, Finding } from "@/data/types";
 

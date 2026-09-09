@@ -3,7 +3,6 @@ import { Paperclip, type LucideIcon } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
-/** Sidebar plus detail column. Security and the developer share this geometry exactly. */
 export function RiskWorkspace({
   sidebar,
   children,
@@ -19,7 +18,6 @@ export function RiskWorkspace({
   );
 }
 
-/** The finding and its actions, with the evidence rail beside them where there is room. */
 export function RiskDetailGrid({ rail, children }: { rail?: ReactNode; children: ReactNode }) {
   return (
     <div className={cn("grid grid-cols-1 gap-4", rail && "xl:grid-cols-[minmax(0,1fr)_17rem]")}>
@@ -86,7 +84,6 @@ export function EvidenceRail({
   );
 }
 
-/** A titled block that is not another card, so sections stop nesting cards inside cards. */
 export function WorkspaceSection({
   title,
   aside,

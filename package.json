@@ -9,7 +9,12 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "typecheck": "tsc -b",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:contract": "vitest run src/api/automation-services.test.ts src/components/playbook-contract.test.tsx src/hooks/query-keys.test.ts",
+    "check:dependencies": "node scripts/check-package-lock.mjs",
+    "check:docs": "python3 scripts/check_docs.py",
+    "test:maintenance": "node --test scripts/check-package-lock.node-test.mjs && python3 scripts/check_docs_test.py",
+    "test:database": "bash scripts/test-database.sh --docker"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.2",

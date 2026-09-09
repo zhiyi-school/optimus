@@ -7,25 +7,31 @@ import { PlatformBadge, SeverityBadge, StatusBadge } from "@/components/data-dis
 import { ToneBadge } from "@/components/resolve-display";
 import { RiskSidebar, type RiskSidebarEntry } from "@/components/risk-sidebar";
 import { EvidenceRail, RiskDetailGrid, RiskHeader, RiskWorkspace } from "@/components/risk-workspace";
-import { RiskConversationActions, WorkOnRiskButton } from "@/components/ticket-actions";
+import { RiskConversationActions } from "@/components/ticket-actions/composition";
+import { WorkOnRiskButton } from "@/components/ticket-actions/remediation";
 import { useRiskComposer } from "@/hooks/conversation-composer";
 import { EvidenceList } from "@/components/evidence";
 import { RiskConversationPanel } from "@/components/conversation-panel";
 import ResolveTicket from "@/pages/ResolveTicket";
 import {
-  useApplications,
   useFindingEvidenceItems,
-  useFindingRetests,
   useFindings,
-  useProfiles,
+} from "@/hooks/queries/evidence";
+import {
   useRiskCatalogue,
+  useTestRunHistory,
+  useCriticalFindings,
+} from "@/hooks/queries/automation";
+import {
   useRiskConversation,
   useRiskConversationAttachments,
   useRiskConversationEntries,
-  useTestRunHistory,
+} from "@/hooks/queries/conversations";
+import {
+  useFindingRetests,
   useTickets,
-  useCriticalFindings,
-} from "@/hooks/queries";
+} from "@/hooks/queries/tickets";
+import { useApplications, useProfiles } from "@/hooks/queries/reference";
 import { assessmentApi } from "@/api/automation-services";
 import { conversationTimeline } from "@/lib/conversation-timeline";
 import { artifactNamed, combinedEvidence, latestResult } from "@/lib/automation-evidence";
@@ -267,6 +273,8 @@ function RiskPage() {
                 composerOffers={composer.offers}
                 sending={composer.pending}
                 sendError={composer.error}
+                attachmentRetry={composer.attachmentRetry}
+                onAbandonAttachment={composer.abandonAttachment}
                 emptyStateDescription="Ask security about this risk, or record what you have changed. Automated runs, classification decisions and reassessments appear here too."
                 actions={
                   <RiskConversationActions

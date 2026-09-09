@@ -109,16 +109,15 @@ backend-side lock.
 
 ## Live progress elsewhere
 
-- **In-flight run discovery**: `useActiveRun` (`src/hooks/queries.ts`) polls
+- **In-flight run discovery**: `useActiveRun` (`src/hooks/queries/automation.ts`) polls
   `GET /runs` every 5 seconds so a page that was closed mid-run can pick the run
   back up. It does not synchronise anything — the automation host's worker is
   the only writer of dashboard rows.
 - **Focused run views**: use `GET /runs/{run_id}/events` via `EventSource`
   for live progress while the page is open, and keep their normal `GET /runs`
   polling active as the fallback if the stream is unavailable or drops.
-- **Ticket messages**: not polled — pushed instantly via a Supabase
-  Realtime subscription (`messageData.subscribeToTicket`,
-  `src/data/services.ts`).
+- **Risk conversations**: not polled — pushed instantly via the scoped Supabase
+  Realtime subscription in `src/data/services/conversations.ts`.
 
 ## TanStack Query defaults
 

@@ -3,7 +3,7 @@ import { useAuth } from "@/auth/useAuth";
 import { PageHeader } from "@/components/common";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { useTeams } from "@/hooks/queries";
+import { useTeams } from "@/hooks/queries/reference";
 import { defaultConfigPath } from "@/api/automation-services";
 
 const roleLabels: Record<string, string> = {

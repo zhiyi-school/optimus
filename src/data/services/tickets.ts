@@ -2,7 +2,7 @@ import { supabase } from "@/data/supabase";
 import type { Application, Finding, RetestRun, RiskAcceptance, RiskAcceptanceDecision, Ticket, TicketStatus, TicketType } from "@/data/types";
 import { requireUserId } from "./common";
 import { activityData } from "./activity";
-import { riskConversationData } from "./assessments";
+import { riskConversationData } from "./conversations";
 
 export interface TicketFilters {
   type?: TicketType;

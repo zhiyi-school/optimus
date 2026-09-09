@@ -62,21 +62,21 @@ describe("the conversation has exactly one home", () => {
   });
 
   it("owns the classification control, which no longer sits on the finding page", () => {
-    expect(source("src/hooks/conversation-composer.ts")).toContain("useClassifyRisk");
+    expect(source("src/hooks/conversation-submission.ts")).toContain("useClassifyRisk");
     for (const path of sourceFiles("src/pages")) {
       expect(source(path), path).not.toContain("useClassifyRisk");
     }
   });
 
   it("owns the reassessment controls, which no longer sit on a ticket page", () => {
-    expect(source("src/hooks/conversation-composer.ts")).toContain("useRequestReassessment");
+    expect(source("src/hooks/conversation-submission.ts")).toContain("useRequestReassessment");
     const page = source("src/pages/ResolveTicket.tsx");
     expect(page).not.toContain("RequestReassessment");
     expect(page).not.toContain("RunRetest");
   });
 
   it("composes classification and reassessment rather than standing them beside the thread", () => {
-    const actions = source("src/components/ticket-actions.tsx");
+    const actions = source("src/components/ticket-actions/composition.tsx");
     expect(actions).not.toContain("ClassifyRiskDialog");
     expect(actions).not.toContain("RequestReassessmentButton");
     // The operational controls stay outside the Send flow.
@@ -92,7 +92,7 @@ describe("the conversation is keyed by application, not by assessment", () => {
   });
 
   it("looks it up and creates it on the application key alone", () => {
-    const service = source("src/data/services/assessments.ts");
+    const service = source("src/data/services/conversations.ts");
     expect(service).toContain('.eq("application_id", applicationId)');
     expect(service).toContain('onConflict: "application_id,risk_id"');
     for (const path of sourceFiles()) {
@@ -103,7 +103,7 @@ describe("the conversation is keyed by application, not by assessment", () => {
   });
 
   it("reuses the application's conversation when a remediation starts", () => {
-    const actions = source("src/components/ticket-actions.tsx");
+    const actions = source("src/components/ticket-actions/remediation.tsx");
     expect(actions).toContain("applicationId: finding.application_id");
     expect(actions).toContain("originAssessmentId: finding.assessment_id");
   });
@@ -144,7 +144,7 @@ describe("the legacy conversations are gone from the dashboard", () => {
   });
 
   it("has no hook left for a legacy conversation", () => {
-    const hooks = source("src/hooks/queries.ts");
+    const hooks = sourceFiles("src/hooks/queries").map(source).join("\n");
     for (const hook of [
       "useAssessmentMessages",
       "useSendAssessmentMessage",
@@ -165,8 +165,8 @@ describe("the legacy conversations are gone from the dashboard", () => {
   });
 
   it("subscribes to one conversation at a time, scoped to that conversation", () => {
-    const services = source("src/data/services/assessments.ts");
+    const services = source("src/data/services/conversations.ts");
     expect(services).toContain("filter: `conversation_id=eq.${conversationId}`");
-    expect(source("src/hooks/queries.ts").match(/subscribeToConversation/g)).toHaveLength(1);
+    expect(source("src/hooks/queries/conversations.ts").match(/subscribeToConversation/g)).toHaveLength(1);
   });
 });

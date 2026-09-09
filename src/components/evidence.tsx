@@ -10,18 +10,9 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/common";
 import { downloadFile } from "@/lib/download";
 import { errorMessage, formatBytes } from "@/lib/utils";
+import type { EvidenceItem } from "@/lib/evidence-types";
 
-export interface EvidenceItem {
-  id: string;
-  name: string;
-  kind: string;
-  url?: string;
-  textContent?: string | null;
-  source?: string;
-  /** The name the saved file should take; without it the URL decides. */
-  downloadName?: string;
-  sizeBytes?: number;
-}
+export type { EvidenceItem } from "@/lib/evidence-types";
 
 function iconFor(kind: string) {
   if (kind === "image") return ImageIcon;

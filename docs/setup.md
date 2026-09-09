@@ -13,14 +13,14 @@ All examples use placeholders — `Example App`, `example-app`,
 
 | | Requirement |
 | --- | --- |
-| Node.js | 20 or newer (Vite 7 requirement), with npm |
+| Node.js | 22 with its bundled npm (CI runtime); Vite also supports 20.19+ |
 | Supabase | a project with `supabase/migrations/*.sql` applied |
 | Automation backend | only for automation features — the dashboard renders existing Supabase data without it |
 
 ## 1. Install and configure
 
 ```bash
-npm install
+npm ci
 cp .env.example .env
 ```
 
@@ -70,6 +70,18 @@ A local Supabase (CLI) option is documented at the bottom for development.
    database checks that every step of the selected approach is completed. Without
    it, requesting one fails with `a reassessment can only be requested once a fix
    has been submitted`.
+   `0027_attachment_storage_provider.sql` records the attachment provider and
+   byte size. Without it, Supabase-backed uploads and downloads still work with
+   unknown sizes, but server-backed attachment rows cannot be represented.
+   `0028_workflow_function_grants.sql` is required for the supported security
+   posture: it revokes anonymous workflow execution and reserves assessment
+   queue claim/recovery functions for the worker's `service_role`.
+   The full-support requirements, fallbacks, deployment order and rollback
+   limits are centralized in the
+   [compatibility matrix](./frontend-integration.md#database-and-api-compatibility).
+   Before applying a new migration to a shared environment, run the disposable
+   fresh-install and supported-upgrade workflow in
+   [Database maintenance](./database-maintenance.md).
    (Or, with the Supabase CLI linked to your project: `supabase db push`.)
    Migrations are additive — if you already applied earlier ones, just run
    whichever ones are new.
@@ -209,6 +221,20 @@ An exported shell variable of the same name takes precedence over the backend's
 `.env`.
 
 ## 4. Start and verify
+
+Before starting services, verify the checkout without credentials:
+
+```bash
+npm run check:dependencies
+npm run check:docs
+npm test
+npm run lint
+npm run build
+```
+
+`npm ci` and these basic checks do not require a Supabase project, backend,
+device, or real `.env`. The Docker-only migration/RLS suite and focused contract
+commands are in [testing.md](./testing.md).
 
 ```bash
 npm run dev

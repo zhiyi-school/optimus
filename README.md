@@ -18,9 +18,12 @@ it never writes a report feed to Supabase itself. See
 
 ## Quick start
 
+Use Node.js 22 (the CI runtime; Vite also supports Node 20.19+). The repository's
+`package-lock.json` is authoritative for the resolved dependency graph.
+
 ```bash
 cp .env.example .env   # fill in VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY
-npm install
+npm ci
 npm run dev
 ```
 
@@ -36,6 +39,11 @@ npm test            # vitest
 npm run typecheck   # tsc -b
 npm run lint        # eslint
 ```
+
+Contributor verification, focused contract checks, offline documentation
+validation, and the guarded disposable-database command are listed in
+[docs/testing.md](./docs/testing.md). None of the basic checks needs production
+credentials or an automation device.
 
 ## Stack
 

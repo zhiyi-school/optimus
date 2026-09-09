@@ -6,7 +6,6 @@ import type { Application } from "@/data/types";
 
 interface ApplicationIconProps {
   application: (ApplicationIconSource & Pick<Application, "app_type" | "name">) | null | undefined;
-  /** Tailwind sizing for the outer box, e.g. `h-9 w-9`. */
   className?: string;
   iconClassName?: string;
 }

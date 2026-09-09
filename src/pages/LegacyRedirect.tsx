@@ -2,7 +2,8 @@ import { Navigate, useParams, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/auth/useAuth";
 import { LoadingState } from "@/components/common";
 import { Card, CardContent } from "@/components/ui/card";
-import { useFinding, useFindingTickets, useTicket } from "@/hooks/queries";
+import { useFinding } from "@/hooks/queries/evidence";
+import { useFindingTickets, useTicket } from "@/hooks/queries/tickets";
 import { canonicalRiskPath, resolveRiskPath, type RiskLocation } from "@/lib/legacy-routes";
 
 /** Where a role's own list lives now that Findings and Tickets left the navigation. */

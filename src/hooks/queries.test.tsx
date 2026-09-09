@@ -19,6 +19,7 @@ let owners: Record<string, unknown>[] = [];
 let detailFetch: () => Promise<unknown> = () => Promise.resolve(null);
 let runRequestCalls = 0;
 let runRequest: unknown = null;
+let attachmentWrites = 0;
 
 function entry(id: string): RiskConversationEntry {
   return {
@@ -40,7 +41,7 @@ vi.mock("@/data/supabase", () => ({
   supabase: { from: () => ({}), auth: {}, storage: { from: () => ({}) } },
 }));
 
-vi.mock("@/data/services", () => ({
+vi.mock("@/data/services/assessments", () => ({
   assessmentData: {
     getWithApplication: () => detailFetch(),
   },
@@ -50,6 +51,9 @@ vi.mock("@/data/services", () => ({
       return Promise.resolve(runRequest);
     },
   },
+}));
+
+vi.mock("@/data/services/conversations", () => ({
   riskConversationData: {
     find: (applicationId: string, riskId: string) => {
       calls.push("find");
@@ -83,6 +87,16 @@ vi.mock("@/data/services", () => ({
   },
 }));
 
+vi.mock("@/data/services/conversation-attachments", () => ({
+  conversationAttachmentData: {
+    uploadBytes: () => Promise.resolve(),
+    saveMetadata: (pending: { entryId: string }) => {
+      attachmentWrites += 1;
+      return Promise.resolve({ id: "attachment-1", entry_id: pending.entryId });
+    },
+  },
+}));
+
 vi.mock("@/api/automation-services", () => ({
   assessmentApi: {},
   configApi: {},
@@ -93,8 +107,9 @@ vi.mock("@/api/automation-services", () => ({
 
 vi.mock("@/api/playbook-services", () => ({ playbookApi: {} }));
 
-const { useAssessment, useAssessmentRunRequest, useRiskConversation, useRiskConversationEntries } =
-  await import("@/hooks/queries");
+const { useAssessment, useAssessmentRunRequest } = await import("@/hooks/queries/assessments");
+const { useRiskConversation, useRiskConversationEntries, useSaveConversationAttachment } =
+  await import("@/hooks/queries/conversations");
 
 let container: HTMLDivElement;
 let root: Root;
@@ -149,6 +164,7 @@ beforeEach(() => {
   notify = undefined;
   calls = [];
   owners = [];
+  attachmentWrites = 0;
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -382,5 +398,42 @@ describe("useRiskConversation", () => {
       "example-app-id",
       "example-other-app-id",
     ]);
+  });
+});
+
+describe("conversation attachment invalidation", () => {
+  function AttachmentProbe() {
+    const save = useSaveConversationAttachment();
+    return (
+      <button
+        onClick={() => void save.mutateAsync({
+          pending: {
+            conversationId: CONVERSATION,
+            entryId: "entry-1",
+            file: new File(["x"], "example.png"),
+            storagePath: "conversation-example/example.png",
+          },
+          bytesUploaded: true,
+        })}
+      >
+        attach
+      </button>
+    );
+  }
+
+  it("invalidates every active attachment list after metadata is readable", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(["riskConversationAttachments", ["entry-1"]], []);
+    await act(async () => root.render(
+      <QueryClientProvider client={client}>
+        <AttachmentProbe />
+      </QueryClientProvider>,
+    ));
+
+    await act(async () => container.querySelector("button")?.click());
+    await settle();
+
+    expect(attachmentWrites).toBe(1);
+    expect(client.getQueryState(["riskConversationAttachments", ["entry-1"]])?.isInvalidated).toBe(true);
   });
 });

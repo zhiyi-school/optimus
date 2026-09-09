@@ -12,15 +12,15 @@ import {
   ControlSupportingInfo,
   type ControlStepProgress,
 } from "@/components/control-content";
+import { usePlaybookRevisionWatch } from "@/hooks/queries/automation";
 import {
   useControlDetail,
   useControlSource,
-  usePlaybookRevisionWatch,
   useSetControlStepStatus,
   useTicket,
   useTicketControlSteps,
   useTicketControls,
-} from "@/hooks/queries";
+} from "@/hooks/queries/tickets";
 import { changedSinceCompleted, contentHashes, controlSummary, liveControls } from "@/lib/resolve";
 import { resolveRiskPath } from "@/lib/legacy-routes";
 import { stepCountLabel } from "@/lib/utils";

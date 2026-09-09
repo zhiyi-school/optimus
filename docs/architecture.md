@@ -134,7 +134,12 @@ src/
 │   └── automation-types.ts
 ├── data/                 # Supabase client + grouped data services + sync
 │   ├── supabase.ts
-│   ├── services.ts
+│   ├── services/
+│   │   ├── assessments.ts
+│   │   ├── conversations.ts
+│   │   ├── conversation-attachments.ts
+│   │   └── tickets.ts
+│   ├── compatibility/    # Recognised older RPC/schema capabilities only
 │   ├── sync.ts
 │   └── types.ts
 ├── auth/
@@ -146,11 +151,18 @@ src/
 │   ├── data-display.tsx   # Badges, ProgressBar, DataTable
 │   ├── evidence.tsx
 │   ├── timeline.tsx
-│   ├── ticket-actions.tsx # Work on Risk / Accept Risk / ticket workflow actions
+│   ├── ticket-actions/    # Remediation, acceptance, reassessment, composition
 │   └── Layout.tsx
 ├── pages/                 # One file per route (see Routes below)
-├── hooks/queries.ts        # All TanStack Query hooks
-├── lib/                   # utils.ts, status.ts (centralised status/severity config)
+├── hooks/
+│   ├── query-keys.ts      # Exact entity and prefix key factories
+│   ├── queries/           # Hooks grouped by assessment, automation,
+│   │                      # conversation, evidence, reference, and ticket
+│   ├── remediation-reconciliation.ts
+│   ├── conversation-submission.ts
+│   ├── use-remediation-readiness.ts
+│   └── use-reassessment-run.ts
+├── lib/                   # Pure domain helpers and neutral presentation models
 ├── App.tsx
 └── main.tsx
 
@@ -170,8 +182,64 @@ supabase/migrations/
 ├── 0020_risk_conversations.sql
 ├── 0021_application_risk_conversations.sql
 ├── 0022_selected_remediation_control.sql
-└── 0023_assessment_run_requests.sql
+├── 0023_assessment_run_requests.sql
+├── 0024_reassessment_withdrawal.sql
+├── 0025_classification_entry.sql
+├── 0026_reassessment_from_completed_steps.sql
+├── 0027_attachment_storage_provider.sql
+└── 0028_workflow_function_grants.sql
 ```
+
+`supabase/test-support/` and `scripts/test-database.sh` own the synthetic fresh
+installation and `0024` upgrade contract. See
+[Database maintenance](./database-maintenance.md); application modules never
+invoke that explicitly disposable workflow.
+
+Query implementations and consumers import domain modules directly. Repeated
+invalidation groups live beside their domain hooks in
+`hooks/queries/invalidation-rules.ts` and retain narrow prefix-versus-entity
+semantics. Ticket action modules own their controls directly, while
+`use-reassessment-run.ts` owns the asynchronous run sequence.
+
+Conversation persistence belongs to `data/services/conversations.ts`.
+Attachment byte and metadata stages belong to
+`data/services/conversation-attachments.ts`; the submission coordinator retains
+their partial-success context. Recognised older database shapes are isolated in
+`data/compatibility/workflow.ts`, so ordinary service errors cannot accidentally
+activate a fallback.
+Assessment services contain assessment and assessment-run-request operations
+only. Shared evidence item shapes live in `lib/evidence-types.ts`, so API and
+domain mapping code does not depend on a React component.
+
+The playbook parser remains backend-owned. The frontend keeps only the generated
+`src/test-fixtures/playbook-control-v1.json` transport artifact and renders it in
+`components/playbook-contract.test.tsx`; this verifies the repository boundary
+without copying parser rules or the external playbook into application code.
+
+Remediation availability is calculated once in
+`lib/remediation-workflow.ts`; pages and the conversation composer consume the
+same selection, reconciliation, completion and reassessment result. The pure
+calculator returns reason codes and a separate module owns their text. Data
+fetching stays in `use-remediation-readiness.ts`, while
+`conversation-submission.ts` owns the record-then-attach state machine.
+
+## Maintenance and extension points
+
+| Change | Owner and required verification |
+| --- | --- |
+| Automation API field, enum or request | `src/api/automation-types.ts` and `automation-services.ts`; extend `automation-services.test.ts` and coordinate the backend contract tests |
+| Supabase read/write | One domain module under `src/data/services/`; keep recognized older-schema handling in `src/data/compatibility/` and add service tests |
+| Query behavior | The matching `src/hooks/queries/` module; query keys belong to `query-keys.ts`, narrow invalidation groups to `queries/invalidation-rules.ts` |
+| Workflow/submission behavior | Pure rules under `src/lib/`, coordination under focused hooks, database enforcement in a new migration and SQL test |
+| Migration | Next numbered `supabase/migrations/` file plus fresh, `0024` upgrade, final-schema and RLS coverage through `npm run test:database` |
+| Playbook rendering | Backend parser fixture plus `src/test-fixtures/playbook-control-v1.json` and `playbook-contract.test.tsx`; do not copy parser rules into the frontend |
+| Regression fixture | Prefer a small local factory with fresh objects; add to `src/test-fixtures/` or `src/test-support/` only for a shared stable domain contract |
+
+Pages depend on hooks and presentation helpers; hooks depend on query keys and
+domain services; Supabase services and API adapters do not import React
+components. The browser loads only `VITE_` configuration and the anon key. The
+backend sync and assessment workers own service-role credentials and remain
+outside this repository.
 
 ## Routes
 
@@ -183,12 +251,10 @@ supabase/migrations/
 /assessments/:assessmentId/tests/:testId                 Test workspace + run history
 /assessments/:assessmentId/tests/:testId/runs/:runId     One run's detail, scoped to a single test
 /runs/:runTimestamp                                      One backend run's progress + full result summary
-/findings                                                Findings
-/findings/:findingId                                     Finding detail + the risk's developer controls
-/findings/:findingId/controls/:controlId                 One control, read-only, before any ticket exists
-/tickets                                                 Tickets
-/tickets/:ticketId                                       Ticket detail
-/tickets/:ticketId/controls/:controlId                   One control, from a ticket, for anyone who may view it
+/findings, /tickets                                      Legacy list redirects
+/findings/:findingId                                     Legacy redirect to the assessment/Resolve risk workspace
+/findings/:findingId/controls/:controlId                 Legacy redirect to the current control preview
+/tickets/:ticketId[/controls/:controlId]                 Legacy redirect to the Resolve risk workspace
 /resolve                                                 Developer workspace: applications in the team's scope
 /resolve/applications/:applicationId                     One application's remediation progress
 /resolve/findings/:findingId/controls/:controlId         One control, read-only, before any ticket exists
@@ -215,14 +281,13 @@ and it degrades to the application, then to `/resolve`, when a legacy ticket
 names no risk or no application. Closing, cancelling or finishing the guided
 steps returns to the same place.
 
-The three control routes render one component pair — `ControlDetail` for a
-ticket, `ControlPreview` for a finding — over a shared `control-content`
-module, so a control's Markdown blocks, screenshots, references and archive are
-rendered in exactly one place. What differs between them is the capability
-gate: `/findings/...` is guarded by `view_findings`, `/tickets/...` by
-`view_tickets`, `/resolve/...` by `ResolveGuard`, and whether steps can be
+The two current control routes under `/resolve` render one component pair —
+`ControlDetail` for a ticket and `ControlPreview` for a finding — over a shared
+`control-content` module, so Markdown blocks, screenshots, references and the
+archive are rendered in one place. Both use `ResolveGuard`; whether steps can be
 ticked is decided separately by `update_control_progress`. A preview reads no
-progress rows and creates none.
+progress rows and creates none. The old `/findings/...` and `/tickets/...`
+variants only redirect.
 
 `/assessments/new` (Security Team only) registers the app with **both**
 systems: an `applications` row plus a placeholder ("Not Started")

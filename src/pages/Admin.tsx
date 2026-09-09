@@ -23,7 +23,7 @@ import {
   useUpdateApplication,
   useUpdateProfileRoles,
   useUpdateProfileTeam,
-} from "@/hooks/queries";
+} from "@/hooks/queries/reference";
 import { formatShortDate } from "@/lib/utils";
 import type { Application, Profile, Team, TeamType, UserRole } from "@/data/types";
 import { ApplicationIcon } from "@/components/application-icon";

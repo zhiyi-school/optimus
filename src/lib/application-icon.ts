@@ -8,7 +8,6 @@ export type ApplicationIconSource = Pick<
 > &
   Partial<Pick<Application, "artifact_sha256">>;
 
-/** The backend URL for an app icon, or `null` when there is no point asking. */
 export function applicationIconUrl(
   application: ApplicationIconSource | null | undefined,
 ): string | null {

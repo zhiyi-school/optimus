@@ -161,10 +161,10 @@ how many steps, and whether the playbook marks it `active`, `deprecated` or
 `deprioritized` — and each one opens a **preview**: the complete instructions,
 screenshots, references and implementation example, with nothing writable.
 
-```text
-/findings/:findingId                                read the finding and its controls
-/findings/:findingId/controls/:controlId            preview one control, read-only
-```
+The current read-only preview is
+`/resolve/findings/:findingId/controls/:controlId`. Legacy `/findings/...` and
+`/tickets/...` URLs are redirect shims into the assessment or Resolve risk
+workspace; they are not standalone finding or ticket pages.
 
 Preview mode creates no `ticket_controls` or `ticket_control_steps` rows.
 Steps cannot be ticked, notes cannot be added, and no fix or reassessment can be
@@ -175,10 +175,8 @@ The same page is what a security or CIO account sees, because it is guarded by
 `view_findings` rather than developer access. Whether progress can be recorded
 is decided separately, by `update_control_progress`.
 
-**Findings** is a top-level navbar item, so this route is reachable without
-going through the dashboard or the Resolve tree. Every control card — in the
-preview list and on a ticket — is a single link covering the whole card, so a
-click anywhere on it opens the control.
+Every control card — in the preview list and on a ticket — is a single link
+covering the whole card, so a click anywhere on it opens the control.
 
 ## The conversation
 
@@ -209,9 +207,9 @@ their only source. A run still going is shown separately, as live progress
 rather than history, and a link to a specific run still highlights and scrolls
 to it in the feed.
 
-Everything else links to the conversation rather than repeating it. Finding
-Detail, Ticket Detail and the Resolve ticket page each carry a link straight
-into it; none of them has a composer of its own. A ticket records the
+Everything else links or redirects to the conversation rather than repeating
+it. Legacy finding and ticket URLs resolve into the assessment or Resolve risk
+workspace; there are no standalone detail pages with separate composers. A ticket records the
 conversation *and* the assessment it was opened against, and keeps both for
 good, so a later run that moves the finding's own assessment reference on cannot
 send the ticket somewhere else.
@@ -230,9 +228,9 @@ else - a developer never gets test execution or classification.
 
 Requesting a reassessment is still gated on the remediation workflow, and not
 only in the UI: `enforce_retest_request_permissions` requires a non-security
-caller to name a remediation ticket with a fix submitted, or one security sent
-back, and refuses a ticket raised against a different risk. A developer with no
-eligible ticket can still post a message and ask a question.
+caller to name an eligible remediation whose selected approach has recorded,
+completed steps, and refuses a ticket raised against a different risk. A
+developer with no eligible ticket can still post a message and ask a question.
 
 Both actions live inside the conversation composer rather than as buttons above
 the thread, and both are *additions* to an ordinary message rather than a
@@ -252,18 +250,40 @@ action created — the `classification_changed` event, the `retest_requested`
 event, or the message itself — so a decision and its evidence are one timeline
 item. `classify_risk_entry()` returns the entry id it wrote rather than leaving
 the browser to search for it, which would race a concurrent classification of
-the same risk. If the upload fails the workflow step is *not* repeated: the
-composer keeps the draft and retries only the file against the entry that
-already exists.
+the same risk.
 
-Every attached file is listed under its timeline item with a **Download**
-action, whether it hangs off a message or a workflow event. Who may download it
-is decided by access to the conversation, never by who uploaded it: security and
-the owning developer team can both retrieve the same file. Downloading fetches
-the bytes and saves them as a Blob under the name the uploader gave the file, so
-a refusal is reported with a **Try again** rather than written to disk under the
+Submission has one coordinator for messages, classifications and reassessment
+requests. Its state is `idle → recording → attaching → complete`. A failure in
+`recording` preserves the draft and may retry the workflow operation. Once
+recording succeeds, the coordinator retains the exact conversation, entry id,
+action, message, file object and storage key. A later attachment failure cannot
+repeat the workflow operation: the composer is locked to **Retry file** or the
+explicit **Abandon file retry** action. Replacing a file with another file that
+happens to have the same name is not a retry identity.
+
+Bytes and attachment metadata are separate writes. If bytes succeeded but the
+metadata response failed, retry first looks for the same storage key and then
+persists only the missing metadata; it does not upload another object. Entry
+queries refresh as soon as recording succeeds, even if attachment work fails,
+and attachment queries refresh only after metadata is readable. Abandoning or
+leaving the conversation clears the in-memory retry and removes an uploaded
+object only after confirming that it has no metadata row. A page reload loses
+an unfinished in-memory retry; it never guesses a recent entry or attachment.
+
+Every attached file is listed under its timeline item, whether it hangs off a
+message or a workflow event. Who may read it is decided by access to the
+conversation, never by who uploaded it. Supabase-backed attachments have a
+**Download** action that fetches the bytes and saves them as a Blob under the
+name the uploader gave the file, so a refusal is reported with a **Try again**
+rather than written to disk under the
 file's name. Links are signed one download at a time and never cached, so a
 stale link cannot outlive the reader's access.
+
+`storage_provider: "server"` is metadata supported by migration `0027`, but the
+dashboard has no server attachment provider yet. Such an attachment is listed and
+its download reports that it is unsupported. This is separate from downloadable
+automation report evidence, which comes from the automation API by opaque `ref`.
+See the [compatibility matrix](./frontend-integration.md#database-and-api-compatibility).
 
 **Enter** sends the message; **Shift+Enter** starts a new line. Enter goes
 through the same form the Send button submits, so a classification chip, a
@@ -278,7 +298,7 @@ the composer.
 
 When an action cannot be used it stays visible and says why, rather than
 disappearing: a developer with no remediation ticket is told to start one, one
-who has not submitted a fix is told to do that first, and one whose
+whose selected approach still has incomplete steps is told to finish them, and one whose
 reassessment is already queued is told security has it. Security sees the same
 treatment on the classification control when no result has been published for
 the risk yet. Only one reassessment can be in flight per risk, and that is
@@ -288,11 +308,16 @@ enforced by the database, not just by hiding the button.
 
 The **classification** is the finding's status - At Risk, Reduced Risk or
 Inconclusive - and it is changed in the conversation, by security, with a
-required reason. One database function, `classify_risk()`, writes
+required reason. `classify_risk_entry()` writes
 `findings.status`, appends to `finding_history` and posts a
 `classification_changed` event into the conversation in a single statement, so
-the finding cannot change without the record of who changed it and why. Finding
-Detail shows that history but no longer offers the control.
+the finding cannot change without the record of who changed it and why. The risk
+workspace shows that history without offering a separate classification page.
+
+On a database without migration `0025`, the client falls back to legacy
+`classify_risk()`. The decision remains atomic, but no entry id is available for
+a classification attachment. See the
+[compatibility matrix](./frontend-integration.md#database-and-api-compatibility).
 
 **Severity** - Critical, High, Medium, Low, Info - is test-result data and is
 separate. Nothing in this workflow changes it.
@@ -328,6 +353,35 @@ Completing every control step **does not** resolve the finding. It only makes
 the risk ready for the reassessment the developer then asks for; the finding's
 status changes on a real reassessment result or an explicit Security Team
 override.
+
+### Authoritative transition matrix
+
+The frontend computes the same availability for the remediation section and
+the conversation composer in `src/lib/remediation-workflow.ts`. It uses stable
+reason codes; `src/lib/remediation-workflow-messages.ts` is the only mapping
+from those codes to user-facing explanations. Supabase remains authoritative
+for permissions and persisted transitions.
+
+| Current state / condition | Actor and ownership | Available action | Resulting state or event | Frontend check | Database enforcement |
+| --- | --- | --- | --- | --- | --- |
+| Finding needs work; no active remediation | developer assigned to the application's team | Start remediation | ticket `open`, `remediation_started` event, selected approach and progress rows | capability, application scope, live approach selection | ticket/application RLS and insert policies; the database does not know which controls the playbook currently offers |
+| `open`, `in_progress`, `rejected` | owning developer | Select or replace approach | `selected_control_id` changes; old progress remains history | live active/required candidates, permission and state | `enforce_ticket_update_permissions`; it validates lifecycle and ownership, not playbook membership |
+| editable remediation with a live selected approach | owning developer | Record step progress | step row status changes | live definition matched by stable control/step keys; missing/new steps are incomplete | progress RLS and ticket access |
+| every current selected-approach step completed; no active reassessment | owning developer | Request reassessment in the conversation | retest `queued`, ticket `retest_requested`, one `retest_requested` event | load/error/replacement/reconciliation/zero-step/completion and capability checks | `enforce_retest_request_permissions` rechecks ticket state, recorded selected-control rows, non-zero steps and completion; partial unique index permits one active run |
+| queued reassessment | developer who requested it | Withdraw reassessment | run `cancelled`, ticket restored to its recorded prior state, `retest_withdrawn` event | requester id, linked ticket and queued state | `withdraw_reassessment()` locks and verifies requester, access, run and ticket state |
+| queued reassessment | security | Run reassessment | run `running`, ticket `retest_in_progress`, `retest_started` event | security capability and current run | `start_reassessment()` atomically claims only a queued request |
+| automation result arrives | sync worker / security-owned processing | Reconcile result | run completes or fails; finding/ticket/events follow the result | progress display and polling only | sync idempotency keys and server-side writes |
+| `under_review` or verification result | security | Close or request changes | ticket `closed`, or `rejected` plus conversation message | security capability | ticket update trigger/RLS reserve finalisation and security states for security |
+| `open`, `in_progress`, `rejected` | owning developer | Withdraw remediation | ticket `withdrawn`, immutable reason/actor/time and event | capability and lifecycle | ticket trigger verifies type, source state, actor and reason |
+| `withdrawn` | owning developer | Resume remediation | ticket `in_progress`; progress and history retained | capability and lifecycle | ticket trigger allows only the resume transition |
+| historical `fix_submitted` | owning developer | select approach, withdraw, or request reassessment when otherwise ready | current transitions above; old event remains readable | explicit compatibility capability | migrations preserve the legal legacy state; no current UI creates it |
+
+“Current steps” means rows matching the live playbook definition. An unavailable
+or failed playbook response is unknown, not zero work. A removed stored approach
+is replaced for display but cannot be called complete until its replacement is
+reviewed and reconciled. Newly added steps start without completed rows. The
+database deliberately cannot verify these live catalogue facts; it verifies the
+persisted selection and progress while the frontend prevents misleading offers.
 
 ### Asking for a reassessment
 
@@ -407,7 +461,7 @@ The Resolve workspace renames every ticket status for a developer audience:
 | Read and post in a conversation | ✅ | ✅ |
 | Upload evidence | ✅ | ✅ |
 | Update control-step progress | ✅ | |
-| Submit a fix | ✅ | |
+| Submit a fix | Historical state only; no current action | |
 | Request a reassessment | ✅ | |
 | Withdraw or resume a remediation | ✅ | |
 | Run a reassessment or retest | | ✅ |

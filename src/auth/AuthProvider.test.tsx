@@ -63,7 +63,7 @@ vi.mock("@/data/supabase", () => ({
   },
 }));
 
-vi.mock("@/data/services", () => ({
+vi.mock("@/data/services/users", () => ({
   userData: {
     getCurrentProfile: () => {
       const userId = currentUserId;
@@ -73,7 +73,6 @@ vi.mock("@/data/services", () => ({
   },
 }));
 
-/** Mirrors what the mocked backend would return for the signed-in user. */
 let currentUserId: string | null = null;
 
 const { AuthProvider } = await import("@/auth/AuthProvider");

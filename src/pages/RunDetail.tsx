@@ -12,7 +12,7 @@ import {
   useRunResults,
   useRunSyncStatus,
   useResyncRun,
-} from "@/hooks/queries";
+} from "@/hooks/queries/automation";
 import { mapVerdictToFindingStatus } from "@/data/sync";
 import { errorMessage, formatDate, formatDuration } from "@/lib/utils";
 

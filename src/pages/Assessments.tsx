@@ -16,10 +16,14 @@ import {
 } from "@/components/ui/dialog";
 import {
   useAssessments,
-  useApplications,
+} from "@/hooks/queries/assessments";
+import {
   useAutomationReports,
+} from "@/hooks/queries/automation";
+import {
+  useApplications,
   useDeleteApplication,
-} from "@/hooks/queries";
+} from "@/hooks/queries/reference";
 import { useAuth } from "@/auth/useAuth";
 import { ApplicationIcon } from "@/components/application-icon";
 import { latestAssessmentPerApp } from "@/lib/assessments";

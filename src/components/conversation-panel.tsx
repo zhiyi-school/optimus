@@ -62,7 +62,7 @@ export interface RiskConversationPanelProps {
   /** Attachments are fetched separately, so losing them must not hide the messages. */
   attachmentsError?: boolean;
   onRetryAttachments?: () => void;
-  evidenceUrl?: (runTimestamp: string, path: string) => string;
+  evidenceUrl?: (runTimestamp: string, ref: string) => string;
   /** The run named in the URL, scrolled to and outlined on arrival. */
   highlightRunTimestamp?: string;
   currentProfileId: string | undefined;
@@ -73,6 +73,12 @@ export interface RiskConversationPanelProps {
   composerOffers?: ComposerActionOffer[];
   sending?: boolean;
   sendError?: unknown;
+  attachmentRetry?: {
+    fileName: string;
+    retryable: boolean;
+    message: string;
+  } | null;
+  onAbandonAttachment?: () => Promise<unknown> | unknown;
   emptyStateDescription?: string;
   /** Operational controls that act immediately, kept out of the Send flow. */
   actions?: ReactNode;
@@ -99,6 +105,8 @@ export function RiskConversationPanel({
   composerOffers,
   sending,
   sendError,
+  attachmentRetry,
+  onAbandonAttachment,
   emptyStateDescription,
   actions,
 }: RiskConversationPanelProps) {
@@ -149,6 +157,7 @@ export function RiskConversationPanel({
   // Classification is an audit decision, so its reason is the message and is required.
   const ready =
     action?.kind === "classification" ? !!message : action?.kind === "reassessment" || !!message;
+  const retryingAttachment = !!attachmentRetry;
 
   /** Adding or removing an action never touches the draft or the chosen file. */
   function selectOffer(offer: ComposerActionOffer) {
@@ -176,7 +185,7 @@ export function RiskConversationPanel({
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    if (!ready) return;
+    if (!ready && !retryingAttachment) return;
     try {
       await onSubmit({ message, file, action: action ?? undefined });
     } catch {
@@ -186,6 +195,13 @@ export function RiskConversationPanel({
     setFile(undefined);
     setAction(null);
     scrollToLatest();
+  }
+
+  async function abandonAttachment() {
+    await onAbandonAttachment?.();
+    setDraft("");
+    setFile(undefined);
+    setAction(null);
   }
 
   return (
@@ -302,6 +318,7 @@ export function RiskConversationPanel({
                 <ComposerActionChip
                   action={action}
                   offer={(composerOffers ?? []).find((offer) => offer.kind === action.kind)}
+                  disabled={retryingAttachment}
                   onStatus={(status) => setAction({ kind: "classification", status })}
                   onRemove={() => setAction(null)}
                 />
@@ -312,6 +329,7 @@ export function RiskConversationPanel({
                   value={draft}
                   onChange={(event) => setDraft(event.target.value)}
                   onKeyDown={handleKeyDown}
+                  disabled={retryingAttachment}
                   placeholder="Write a message..."
                   aria-label="Write a message"
                   className="flex-1 resize-none border-0 p-1 shadow-none focus:ring-0"
@@ -322,11 +340,22 @@ export function RiskConversationPanel({
                   <input
                     type="file"
                     className="hidden"
+                    disabled={retryingAttachment}
                     onChange={(event) => setFile(event.target.files?.[0])}
                   />
                 </label>
-                <Button type="submit" size="sm" disabled={sending || !ready}>
-                  {sending ? "Sending…" : "Send"}
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={sending || (retryingAttachment ? !attachmentRetry.retryable : !ready)}
+                >
+                  {sending
+                    ? retryingAttachment
+                      ? "Attaching…"
+                      : "Sending…"
+                    : retryingAttachment
+                      ? "Retry file"
+                      : "Send"}
                 </Button>
               </div>
               {file && (
@@ -335,6 +364,7 @@ export function RiskConversationPanel({
                   {file.name}
                   <button
                     type="button"
+                    disabled={retryingAttachment}
                     onClick={() => setFile(undefined)}
                     aria-label={`Remove ${file.name}`}
                     className="rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
@@ -346,9 +376,26 @@ export function RiskConversationPanel({
               <ComposerOfferBar
                 offers={composerOffers}
                 selected={action?.kind ?? null}
+                disabled={retryingAttachment}
                 onSelect={selectOffer}
               />
-              {sendError ? (
+              {attachmentRetry && (
+                <div className="mt-2 rounded-lg border border-warning/40 bg-warning/5 p-2 text-xs text-foreground">
+                  <p>
+                    The entry was recorded. {attachmentRetry.retryable
+                      ? `${attachmentRetry.message} Retry ${attachmentRetry.fileName} without recording it again.`
+                      : attachmentRetry.message}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void abandonAttachment()}
+                    className="mt-1 font-medium text-primary underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                  >
+                    Abandon file retry
+                  </button>
+                </div>
+              )}
+              {sendError && !attachmentRetry ? (
                 <p className="mt-1 text-xs text-danger">
                   {errorMessage(sendError, "Could not post that message.")}
                 </p>
@@ -367,10 +414,12 @@ export function RiskConversationPanel({
 function ComposerOfferBar({
   offers,
   selected,
+  disabled,
   onSelect,
 }: {
   offers: ComposerActionOffer[] | undefined;
   selected: ComposerActionKind | null;
+  disabled?: boolean;
   onSelect: (offer: ComposerActionOffer) => void;
 }) {
   const available = (offers ?? []).filter((offer) => offer.kind !== selected);
@@ -384,7 +433,7 @@ function ComposerOfferBar({
           <div key={offer.kind} className="min-w-0">
             <button
               type="button"
-              disabled={!!offer.blockedReason}
+              disabled={disabled || !!offer.blockedReason}
               aria-describedby={noteId}
               onClick={() => onSelect(offer)}
               className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-60"
@@ -411,11 +460,13 @@ function ComposerOfferBar({
 function ComposerActionChip({
   action,
   offer,
+  disabled,
   onStatus,
   onRemove,
 }: {
   action: ComposerAction;
   offer: ComposerActionOffer | undefined;
+  disabled?: boolean;
   onStatus: (status: FindingStatus) => void;
   onRemove: () => void;
 }) {
@@ -431,6 +482,7 @@ function ComposerActionChip({
           <select
             id="composer-classification"
             value={action.status}
+            disabled={disabled}
             onChange={(event) => onStatus(event.target.value as FindingStatus)}
             className="h-7 rounded-md border border-border bg-card px-1.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
           >
@@ -447,6 +499,7 @@ function ComposerActionChip({
       )}
       <button
         type="button"
+        disabled={disabled}
         onClick={onRemove}
         aria-label={`Remove ${ACTION_LABEL[action.kind].toLowerCase()}`}
         className="ml-auto rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
@@ -535,7 +588,7 @@ const TestRunEntry = forwardRef<
   HTMLLIElement,
   {
     run: AutomationResultRow;
-    evidenceUrl?: (runTimestamp: string, path: string) => string;
+    evidenceUrl?: (runTimestamp: string, ref: string) => string;
     highlighted: boolean;
   }
 >(function TestRunEntry({ run, evidenceUrl, highlighted }, ref) {
@@ -571,7 +624,9 @@ const TestRunEntry = forwardRef<
                     id: `${run.run_timestamp}-${index}`,
                     name: item.label,
                     kind: item.kind,
-                    url: evidenceUrl(run.run_timestamp, item.path),
+                    url: evidenceUrl(run.run_timestamp, item.ref),
+                    downloadName: item.path.split("/").pop() || item.path,
+                    sizeBytes: item.size_bytes,
                     source: "Automation backend",
                   }),
                 )}

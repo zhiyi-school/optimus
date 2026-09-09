@@ -1,7 +1,10 @@
 import { configApi, conflictingAppId, describeAutomationError, isBackendUnavailable, provisioningApi, testApi } from "@/api/automation-services";
 import type { AppProvisioning, AutomationPlatform, RegisterAppRequest, RiskDefinition } from "@/api/automation-types";
 import type { Application, Assessment, Ticket } from "@/data/types";
-import { activityData, applicationData, assessmentData, ticketData } from "@/data/services";
+import { activityData } from "@/data/services/activity";
+import { applicationData } from "@/data/services/applications";
+import { assessmentData } from "@/data/services/assessments";
+import { ticketData } from "@/data/services/tickets";
 import { UserFacingError } from "@/lib/utils";
 
 function provisioningTicketCopy(

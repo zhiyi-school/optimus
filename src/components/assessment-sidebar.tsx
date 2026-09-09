@@ -8,7 +8,6 @@ interface AssessmentSidebarProps {
   assessment: Assessment;
   risks: RiskDefinition[] | undefined;
   findingByTestId: Map<string, Finding & { application: Application | null }>;
-  /** Highlights the currently-open test's row — passed by TestDetail, omitted on AssessmentDetail. */
   activeTestId?: string;
 }
 

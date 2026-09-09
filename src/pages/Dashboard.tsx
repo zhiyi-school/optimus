@@ -4,7 +4,7 @@ import { useAuth } from "@/auth/useAuth";
 import { primaryRole } from "@/auth/permissions";
 import { PageHeader, StatCard, LoadingState, ErrorState } from "@/components/common";
 import { CtaCard } from "@/components/cta-card";
-import { useDashboardMetrics } from "@/hooks/queries";
+import { useDashboardMetrics } from "@/hooks/queries/tickets";
 import { findingStatusConfig } from "@/lib/status";
 import type { UserRole } from "@/data/types";
 
@@ -20,7 +20,6 @@ export default function Dashboard() {
   const { data: metrics, isLoading, isError, refetch } = useDashboardMetrics();
   const role = primaryRole(profile?.roles);
 
-  // Security's home is the Assess flow now — no separate Dashboard tab in nav.
   if (role === "security") return <Navigate to="/assessments" replace />;
 
   return (

@@ -75,7 +75,14 @@ vi.mock("@/data/sync", () => ({
   },
 }));
 
-vi.mock("@/hooks/queries", () => ({
+vi.mock("@/hooks/queries/assessments", async () => await import("@/test-support/query-hooks"));
+vi.mock("@/hooks/queries/automation", async () => await import("@/test-support/query-hooks"));
+vi.mock("@/hooks/queries/conversations", async () => await import("@/test-support/query-hooks"));
+vi.mock("@/hooks/queries/evidence", async () => await import("@/test-support/query-hooks"));
+vi.mock("@/hooks/queries/reference", async () => await import("@/test-support/query-hooks"));
+vi.mock("@/hooks/queries/tickets", async () => await import("@/test-support/query-hooks"));
+
+vi.mock("@/test-support/query-hooks", () => ({
   useAssessments: () => ({ data: rows, isLoading: false, isError: false }),
 }));
 

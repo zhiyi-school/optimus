@@ -14,9 +14,7 @@ import { toneClasses } from "@/lib/status";
 export interface RiskSidebarEntry {
   riskId: string;
   name: string;
-  /** Finding classification when one exists; the row falls back to "Not Tested". */
   status?: "at_risk" | "reduced_risk" | "inconclusive";
-  /** Role-specific second badge, e.g. the developer's remediation state. */
   note?: { label: string; tone: Tone };
 }
 

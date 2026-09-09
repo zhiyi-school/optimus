@@ -138,6 +138,14 @@ describe("SARIF export", () => {
   });
 });
 
+describe("evidence URL", () => {
+  it("sends the opaque ref and never the display path", () => {
+    expect(assessmentApi.evidenceFileUrl("run one", "opaque/ref?value")).toBe(
+      "http://127.0.0.1:8080/reports/run%20one/evidence-file?ref=opaque%2Fref%3Fvalue",
+    );
+  });
+});
+
 describe("iconApi", () => {
   it("builds the icon URL from the platform and backend app id", () => {
     expect(iconApi.url("ios", "example_app")).toBe(

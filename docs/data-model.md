@@ -16,6 +16,10 @@ The schema itself lives in `supabase/migrations/` (`0001_schema.sql` /
 this doc covers the *why* behind a few decisions that aren't obvious from
 reading the SQL alone.
 
+Migration ordering, the supported `0024` upgrade baseline, preservation
+fixtures, and rollback limitations are documented in
+[Database maintenance](./database-maintenance.md).
+
 ## Row Level Security
 
 Frontend capability checks (`src/auth/permissions.ts`) are UX only. The
@@ -43,7 +47,7 @@ authorization boundary.
   change `type`, `finding_id`, `application_id`, `created_by` or either
   assignment column. It is a guardrail on the security-owned transitions, not
   a full state machine — which step is *sensible* next is still the
-  application's business (`src/lib/resolve.ts`, `src/components/ticket-actions.tsx`).
+  application's business (`src/lib/resolve.ts`, `src/components/ticket-actions/`).
   Like `prevent_role_escalation`, it only applies when
   `auth.role() = 'authenticated'`, so the automation sync worker — which holds
   the service-role key and moves a ticket to `under_review` when a retest lands
@@ -119,8 +123,10 @@ events in one feed.
   before fetching it. A check constraint keeps `storage_path` a relative key
   inside its provider: never absolute, never containing a `..` segment. Reading
   an attachment is decided by `can_access_risk_conversation` on its entry, not by
-  `uploaded_by`, so any participant in a conversation can download any file in
-  it. The dashboard resolves the provider before downloading; a row with no
+  `uploaded_by`, so any participant in a conversation can read the attachment
+  row. The dashboard downloads Supabase-backed objects; server-backed attachment
+  downloads are currently unsupported and report that limitation instead of
+  treating the key as a URL. A row with no
   provider column at all — a database behind on this migration — is treated as
   Supabase-backed, and an upload against such a database falls back to writing
   only the original columns rather than failing.
@@ -140,13 +146,15 @@ events in one feed.
   `/apps/{app}/risks/{risk}/history` endpoint and are merged with the stored
   entries by `src/lib/conversation-timeline.ts` at render time. The automation
   host stays their only source of truth, so nothing has to be kept in step.
-- **Classification is one server-side operation.** `classify_risk()` writes the
+- **Classification is one server-side operation.** `classify_risk_entry()` writes the
   finding's status, its `finding_history` row, the `classification_changed`
   entry and the activity-log row in a single statement, and refuses a caller
   without `has_role('security')`, an empty reason, or a finding belonging to a
   different application risk than the conversation it was called from. Driving
   those writes from the browser left a window in which the finding could change
-  without the conversation ever recording who changed it or why.
+  without the conversation ever recording who changed it or why. If migration
+  `0025` is absent, the frontend falls back to legacy `classify_risk()`; the
+  decision remains atomic but a file cannot attach to that decision entry.
 - **A ticket records the conversation it was opened against, once.**
   `tickets.risk_conversation_id` is immutable for everyone once set — the
   trigger refuses to repoint it even for security.
@@ -161,8 +169,10 @@ events in one feed.
   same reassessment twice.
 - **Opening a conversation is not a way around the remediation workflow.**
   `enforce_retest_request_permissions` requires a caller without
-  `has_role('security')` to name a remediation ticket in `fix_submitted` or
-  `rejected`, and refuses anyone a ticket raised against a different risk. A
+  `has_role('security')` to name a remediation ticket in `open`, `in_progress`,
+  `rejected` or historical `fix_submitted`, and migration `0026` verifies every
+  step of its selected approach is complete. It refuses anyone a ticket raised
+  against a different risk. A
   developer with no eligible ticket can still post a message and ask a question;
   they cannot create a retest run.
 - **Legacy message tables are archived, not dropped.** `assessment_messages`,
@@ -287,7 +297,8 @@ through a finding's remediation. They hold **workflow state only**.
 
 `supabase/tests/0017_ticket_controls_rls.sql` exercises all of this against a
 live database. It builds its own fixtures, impersonates each role, and ends in
-`rollback`, so it is safe to run against a real project from the SQL Editor.
+`rollback`. Run it only against a disposable local/test database, never a live
+project.
 
 ## Developer withdrawal
 
@@ -350,7 +361,7 @@ roles itself.
 ## Storage path conventions
 
 Both buckets are private; the frontend reads files via short-lived signed
-URLs (`src/data/services.ts`), never public URLs. The storage RLS policies
+URLs (`src/data/services/conversation-attachments.ts`), never public URLs. The storage RLS policies
 in `0003_storage.sql` parse access from the object path, so upload code and
 policy must agree on these conventions:
 

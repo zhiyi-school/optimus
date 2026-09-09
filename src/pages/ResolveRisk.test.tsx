@@ -137,15 +137,24 @@ vi.mock("@/pages/ResolveTicket", () => ({
   default: ({ ticketId }: { ticketId: string }) => <p>{`remediation:${ticketId}`}</p>,
 }));
 
-vi.mock("@/hooks/queries", () => {
+vi.mock("@/hooks/queries/assessments", async () => await import("@/test-support/query-hooks"));
+vi.mock("@/hooks/queries/automation", async () => await import("@/test-support/query-hooks"));
+vi.mock("@/hooks/queries/conversations", async () => await import("@/test-support/query-hooks"));
+vi.mock("@/hooks/queries/evidence", async () => await import("@/test-support/query-hooks"));
+vi.mock("@/hooks/queries/reference", async () => await import("@/test-support/query-hooks"));
+vi.mock("@/hooks/queries/tickets", async () => await import("@/test-support/query-hooks"));
+
+vi.mock("@/test-support/query-hooks", () => {
   const idle = { data: undefined, isLoading: false, isError: false, refetch: () => {} };
   const mutation = {
     mutateAsync: () => Promise.resolve(),
     isPending: false,
     isError: false,
     error: undefined,
+    reset: () => {},
   };
   return {
+    ConversationAttachmentFailure: class ConversationAttachmentFailure extends Error {},
     useClassifyRisk: () => mutation,
     useApplications: () => ({ ...idle, data: [application] }),
     useFindings: () => ({ ...idle, data: findings }),
@@ -170,6 +179,7 @@ vi.mock("@/hooks/queries", () => {
     useRiskConversationEntries: () => ({ ...idle, data: [] }),
     useRiskConversationAttachments: () => ({ data: [], isError: false, refetch: () => {} }),
     useSendRiskMessage: () => mutation,
+    useSaveConversationAttachment: () => mutation,
     useFindingTickets: () => ({ ...idle, data: tickets }),
     useRiskControls: () => ({ ...idle, data: definitions }),
     useTicketControls: () => ({ ...idle, data: controlRows }),
@@ -429,7 +439,7 @@ describe("the automated evidence a developer is shown", () => {
     expect(text()).toContain("Critical findings");
     expect(text()).toContain("Home screen");
     expect(
-      container.querySelector("button[aria-label='Download Critical findings']"),
+      container.querySelector("button[aria-label='Download critical_findings.json']"),
     ).not.toBeNull();
   });
 });

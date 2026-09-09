@@ -14,26 +14,31 @@ import { TestRunStages } from "@/components/assessment-progress";
 import { RunEventTimeline } from "@/components/run-events";
 import { CtaCard } from "@/components/cta-card";
 import { RiskConversationPanel } from "@/components/conversation-panel";
-import { RiskConversationActions } from "@/components/ticket-actions";
+import { RiskConversationActions } from "@/components/ticket-actions/composition";
 import { useRiskComposer } from "@/hooks/conversation-composer";
 import {
   useAssessment,
+} from "@/hooks/queries/assessments";
+import {
   useFindingEvidenceItems,
-  useFindingRetests,
-  useFindingTickets,
   useFindings,
-  useProfiles,
+} from "@/hooks/queries/evidence";
+import {
   useRiskCatalogue,
-  useRiskConversation,
-  useRiskConversationAttachments,
-  useRiskConversationEntries,
   useActiveRun,
   useResyncRun,
   useRunEvents,
   useRunSyncStatus,
   useTestRunHistory,
   useCriticalFindings,
-} from "@/hooks/queries";
+} from "@/hooks/queries/automation";
+import {
+  useRiskConversation,
+  useRiskConversationAttachments,
+  useRiskConversationEntries,
+} from "@/hooks/queries/conversations";
+import { useFindingRetests, useFindingTickets } from "@/hooks/queries/tickets";
+import { useProfiles } from "@/hooks/queries/reference";
 import { DashboardSyncNotice } from "@/components/dashboard-sync-notice";
 import { assessmentApi, defaultConfigPath } from "@/api/automation-services";
 import {
@@ -57,6 +62,7 @@ import { CriticalFindingsTable } from "@/components/critical-findings";
 import { activeRemediationTicket, resumableRemediationTicket } from "@/lib/resolve";
 import { cn, errorMessage, formatDate } from "@/lib/utils";
 import type { Application, Finding } from "@/data/types";
+import { assessmentKeys, automationKeys, evidenceKeys } from "@/hooks/query-keys";
 
 export default function TestDetail() {
   // Both routes share this element, so :testId changes without remounting.
@@ -174,8 +180,8 @@ function TestPage() {
     observedPhaseRef.current = progress?.phase;
     if (previous !== "running" || progress?.phase === "running") return;
     void refetch();
-    void queryClient.invalidateQueries({ queryKey: ["assessment", assessmentId] });
-    void queryClient.invalidateQueries({ queryKey: ["findings"] });
+    void queryClient.invalidateQueries({ queryKey: assessmentKeys.detail(assessmentId) });
+    void queryClient.invalidateQueries({ queryKey: evidenceKeys.findings() });
   }, [progress?.phase, refetch, queryClient, assessmentId]);
 
   async function runTest() {
@@ -191,7 +197,7 @@ function TestPage() {
         { platform, config_path: defaultConfigPath(platform), apps: appExternalId, risks: testId },
         (started) => {
           setStartedRunId(started.run_id);
-          return queryClient.invalidateQueries({ queryKey: ["automationRuns"] });
+          return queryClient.invalidateQueries({ queryKey: automationKeys.runs() });
         },
         cancelRef.current,
       );
@@ -210,8 +216,8 @@ function TestPage() {
 
       await Promise.all([
         refetch(),
-        queryClient.invalidateQueries({ queryKey: ["assessment", assessmentId] }),
-        queryClient.invalidateQueries({ queryKey: ["findings"] }),
+        queryClient.invalidateQueries({ queryKey: assessmentKeys.detail(assessmentId) }),
+        queryClient.invalidateQueries({ queryKey: evidenceKeys.findings() }),
       ]);
     } catch (err) {
       setRunError(errorMessage(err, "Unable to run this test."));
@@ -465,6 +471,8 @@ function TestPage() {
             composerOffers={composer.offers}
             sending={composer.pending}
             sendError={composer.error}
+            attachmentRetry={composer.attachmentRetry}
+            onAbandonAttachment={composer.abandonAttachment}
             emptyStateDescription={
               automated
                 ? "Every automated run of this risk appears here, alongside the discussion, classification decisions and reassessments."

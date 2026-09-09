@@ -23,6 +23,7 @@ let rpcResult: Record<string, unknown> | null = null;
 let rpcMissing: string[] = [];
 let raceOn: string | null = null;
 let missingColumns: string[] = [];
+let loseAttachmentInsertResponse = false;
 
 // An update returns the whole row, not just the columns it changed, so a
 // service reading a field it did not write behaves the same here as in Postgres.
@@ -80,6 +81,12 @@ function table(name: string) {
           error: { code: "PGRST204", message: `Could not find the '${absent}' column` },
         });
       }
+      if (op === "insert" && name === "risk_conversation_attachments" && loseAttachmentInsertResponse) {
+        loseAttachmentInsertResponse = false;
+        const stored = { id: `${name}-response-lost`, ...payload };
+        rows[name] = [...(rows[name] ?? []), stored];
+        return Promise.resolve({ data: null, error: { message: "response was lost" } });
+      }
       if (op === "update") {
         const existing = match();
         if (existing) {
@@ -127,7 +134,7 @@ vi.mock("@/data/supabase", () => ({
   },
 }));
 
-const { riskConversationData } = await import("./assessments");
+const { riskConversationData } = await import("./conversations");
 const { findingData } = await import("./findings");
 const { retestData, ticketData } = await import("./tickets");
 
@@ -144,6 +151,7 @@ beforeEach(() => {
   rpcMissing = [];
   raceOn = null;
   missingColumns = [];
+  loseAttachmentInsertResponse = false;
   rows = {
     risk_conversations: [],
     findings: [{ id: FINDING, status: "at_risk" }],
@@ -354,6 +362,31 @@ describe("entries", () => {
     const payloads = written("risk_conversation_attachments").map((write) => write.payload);
     expect(payloads[1]).not.toHaveProperty("storage_provider");
     expect(payloads[1]).toMatchObject({ storage_path: uploads[0] });
+  });
+
+  it("recovers the metadata row when the insert succeeded but its response was lost", async () => {
+    loseAttachmentInsertResponse = true;
+    const attachment = await riskConversationData.uploadAttachment(
+      CONVERSATION,
+      "entry-1",
+      new File(["example"], "example-evidence.png", { type: "image/png" }),
+    );
+
+    expect(attachment.storage_path).toBe(uploads[0]);
+    expect(rows.risk_conversation_attachments).toHaveLength(1);
+    expect(uploads).toHaveLength(1);
+  });
+
+  it("does not use the 0027 fallback for an unrelated metadata refusal", async () => {
+    missingColumns = ["entry_id"];
+    await expect(
+      riskConversationData.uploadAttachment(
+        CONVERSATION,
+        "entry-1",
+        new File(["example"], "example-evidence.png", { type: "image/png" }),
+      ),
+    ).rejects.toMatchObject({ code: "PGRST204" });
+    expect(written("risk_conversation_attachments")).toHaveLength(1);
   });
 
   it("keeps a space-and-Unicode name on the row but not in the storage key", async () => {

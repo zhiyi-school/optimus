@@ -26,7 +26,11 @@ refuses traversal, absolute paths, symlinks leaving the root and missing files
 with a structured JSON error carrying no host path. A served file comes back with
 its sanitized filename in `Content-Disposition: attachment`, its media type and
 its length — `Content-Disposition` is CORS-exposed so the browser can read it.
-The `path` field is for display and SARIF only; it is never used to fetch.
+The `path` field is for display and SARIF only; it is never used to fetch. The
+opaque ref is an identifier, not an authorization credential; access still
+depends on the automation API's network/proxy boundary. Mixed-version behavior
+and deployment order are documented in
+[frontend-integration.md](./frontend-integration.md#database-and-api-compatibility).
 
 The backend is designed for localhost or a trusted lab network. If
 `VITE_API_BASE_URL` points anywhere else, that URL should be an
@@ -44,6 +48,9 @@ Apps and risks are multi-selects: apps come from `GET /config/{platform}/apps`
 (the `risk_id` field, matched verbatim). Both are sent as comma-separated
 strings on `POST /runs`, and leaving a multi-select empty means "all" (the
 backend runs every configured app / every risk for that platform).
+
+The browser omits `out_dir`. The backend uses its single configured report root
+for creation, lookup, history, evidence, registry state and synchronization.
 
 ## App provisioning
 

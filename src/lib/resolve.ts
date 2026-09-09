@@ -15,6 +15,9 @@ import type {
   TicketStatus,
 } from "@/data/types";
 import type { Tone } from "@/lib/status";
+import { isHistoricalFixSubmitted } from "@/data/compatibility/capabilities";
+import { remediationBlockMessage } from "@/lib/remediation-workflow-messages";
+import type { RemediationBlock } from "@/lib/remediation-workflow";
 
 export const developerTicketLabels: Record<TicketStatus, { label: string; tone: Tone }> = {
   open: { label: "Action required", tone: "danger" },
@@ -59,7 +62,6 @@ export const SECURITY_FINALISED: TicketStatus[] = ["closed", "accepted"];
 export const WITHDRAWABLE_FROM: TicketStatus[] = [
   "open",
   "in_progress",
-  "fix_submitted",
   "rejected",
 ];
 
@@ -67,7 +69,6 @@ export const WITHDRAWABLE_FROM: TicketStatus[] = [
 export const APPROACH_SELECTABLE_FROM: TicketStatus[] = [
   "open",
   "in_progress",
-  "fix_submitted",
   "rejected",
 ];
 
@@ -82,7 +83,6 @@ export const REASSESSMENT_REQUESTABLE_FROM: TicketStatus[] = [
   "open",
   "in_progress",
   "rejected",
-  "fix_submitted",
 ];
 
 export interface Progress {
@@ -108,14 +108,12 @@ export interface LiveControl {
   progress: Progress;
 }
 
-/** The alternatives a developer may pick between, in the backend's own order. */
 export function selectableControls(
   definitions: ControlDetail[] | undefined,
 ): ControlDetail[] {
   return (definitions ?? []).filter(isRemediationControl);
 }
 
-/** The stored choice when it is still on offer, otherwise the first alternative. */
 export function effectiveSelectedControlId(
   storedControlId: string | null | undefined,
   candidates: ControlDetail[],
@@ -132,7 +130,6 @@ export function selectedControl(
   return candidates.find((control) => control.control_id === selectedControlId);
 }
 
-/** A stored selection the playbook no longer offers: its progress stops counting. */
 export function selectionWasReplaced(
   storedControlId: string | null | undefined,
   candidates: ControlDetail[],
@@ -142,7 +139,6 @@ export function selectionWasReplaced(
   return !candidates.some((control) => control.control_id === stored);
 }
 
-/** The playbook decides what exists and in what order; stored rows only say how far the developer got. */
 export function liveControls(
   definitions: ControlDetail[] | undefined,
   controls: TicketControl[],
@@ -174,7 +170,6 @@ export function liveControls(
   });
 }
 
-/** Completing every step readies the control for submission; it never closes the finding. */
 export function liveControlStatus(
   row: TicketControl | undefined,
   steps: (TicketControlStep | undefined)[],
@@ -186,14 +181,12 @@ export function liveControlStatus(
   return "not_started";
 }
 
-/** Completed steps over total steps, across the controls the caller is showing. */
 export function controlProgress(live: LiveControl[]): Progress {
   const total = live.reduce((sum, control) => sum + control.progress.total, 0);
   const completed = live.reduce((sum, control) => sum + control.progress.completed, 0);
   return progress(completed, total);
 }
 
-/** Only the selected approach counts; alternatives and replaced approaches never do. */
 export function selectedControlProgress(
   definitions: ControlDetail[] | undefined,
   selectedControlId: string | null,
@@ -206,7 +199,6 @@ export function selectedControlProgress(
   return liveControls([chosen], controls, steps)[0];
 }
 
-/** Resolved findings over total actionable findings. */
 export function findingProgress(findings: Finding[]): Progress {
   const actionable = findings.filter(
     (finding) => finding.status === "at_risk" || finding.status === "reduced_risk",
@@ -324,12 +316,10 @@ function remediationStatus(findings: Finding[], openTickets: Ticket[]): Remediat
   return "action_required";
 }
 
-/** A live remediation approach: deprecated, deprioritised and non-remediation controls are not on offer. */
 export function isRemediationControl(control: ControlSummary | ControlDetail): boolean {
   return control.status === "active" && control.required;
 }
 
-/** What a ticket's progress rows should cover: the selected approach's current steps, and nothing else. */
 export function selectedControlReconciliationPlan(
   control: ControlDetail | undefined,
 ): ControlReconciliation[] {
@@ -339,7 +329,6 @@ export function selectedControlReconciliationPlan(
   ];
 }
 
-/** True once the ticket holds a row for every control and step the playbook currently lists. */
 export function isReconciled(
   plan: ControlReconciliation[],
   controls: TicketControl[],
@@ -356,13 +345,11 @@ export function isReconciled(
   });
 }
 
-/** Whether the developer may still record progress against this remediation. */
 export function canEditRemediation(ticket: Ticket | null | undefined): boolean {
   if (!ticket || ticket.type !== "remediation") return false;
   return REMEDIATION_EDITABLE_FROM.includes(ticket.status);
 }
 
-/** True once every step the playbook currently lists for the approach is done. */
 export function selectedApproachComplete(control: LiveControl | undefined): boolean {
   if (!control) return false;
   const { completed, total } = control.progress;
@@ -375,32 +362,25 @@ export function selectedApproachComplete(control: LiveControl | undefined): bool
  */
 export function canSelectApproach(ticket: Ticket | null | undefined): boolean {
   if (!ticket || ticket.type !== "remediation") return false;
-  return APPROACH_SELECTABLE_FROM.includes(ticket.status);
+  return APPROACH_SELECTABLE_FROM.includes(ticket.status) || isHistoricalFixSubmitted(ticket.status);
 }
 
-/** Why the approach cannot be changed, or null when it can. */
 export function approachChangeBlockedReason(
   ticket: Ticket | null | undefined,
   mayEdit: boolean,
 ): string | null {
-  if (!mayEdit) {
-    return "Only the developers assigned to this application can change the remediation approach.";
-  }
-  if (!ticket || ticket.type !== "remediation") return "This is not a remediation ticket.";
-  if (canSelectApproach(ticket)) return null;
-  if (ticket.status === "withdrawn") {
-    return "This remediation was withdrawn. Resume it to change the approach.";
-  }
-  if (SECURITY_FINALISED.includes(ticket.status)) {
-    return "Security has finished with this remediation, so the approach is fixed.";
-  }
-  return "Security is verifying this remediation, so the approach cannot be changed until that finishes.";
+  let block: RemediationBlock | null = null;
+  if (!mayEdit) block = { code: "approach_permission" };
+  else if (!ticket || ticket.type !== "remediation") block = { code: "approach_not_remediation" };
+  else if (ticket.status === "withdrawn") block = { code: "approach_withdrawn" };
+  else if (SECURITY_FINALISED.includes(ticket.status)) block = { code: "approach_security_finalised" };
+  else if (!canSelectApproach(ticket)) block = { code: "approach_security_owned" };
+  return remediationBlockMessage(block);
 }
 
-/** The ticket lifecycle alone; completion is checked by `reassessmentBlockedReason`. */
 export function canRequestReassessment(ticket: Ticket | null | undefined): boolean {
   if (!ticket || ticket.type !== "remediation") return false;
-  return REASSESSMENT_REQUESTABLE_FROM.includes(ticket.status);
+  return REASSESSMENT_REQUESTABLE_FROM.includes(ticket.status) || isHistoricalFixSubmitted(ticket.status);
 }
 
 export interface ReassessmentReadiness {
@@ -423,48 +403,31 @@ export interface ReassessmentReadiness {
  */
 export function reassessmentBlockedReason(readiness: ReassessmentReadiness): string | null {
   const { ticket, control, activeRetest } = readiness;
-
-  if (!readiness.mayRequest) {
-    return "Only the developers assigned to this application can ask for a reassessment.";
+  let block: RemediationBlock | null = null;
+  if (!readiness.mayRequest) block = { code: "reassessment_permission" };
+  else if (activeRetest?.status === "running") block = { code: "reassessment_active_running" };
+  else if (activeRetest) block = { code: "reassessment_active_queued" };
+  else if (!ticket || ticket.type !== "remediation") block = { code: "reassessment_no_remediation" };
+  else if (ticket.status === "withdrawn") block = { code: "reassessment_withdrawn" };
+  else if (SECURITY_FINALISED.includes(ticket.status)) block = { code: "reassessment_security_finalised" };
+  else if (AWAITING_SECURITY.includes(ticket.status)) block = { code: "reassessment_security_owned" };
+  else if (!canRequestReassessment(ticket)) block = { code: "reassessment_wrong_state" };
+  else if (readiness.loading) block = { code: "reassessment_loading" };
+  else if (readiness.failed) block = { code: "reassessment_load_failed" };
+  else if (readiness.replaced) block = { code: "reassessment_replaced" };
+  else if (!control) block = { code: "reassessment_no_approach" };
+  else if (!readiness.reconciled) block = { code: "reassessment_reconciling" };
+  else if (control.progress.total === 0) block = { code: "reassessment_no_steps" };
+  else if (control.progress.completed < control.progress.total) {
+    block = {
+      code: "reassessment_incomplete",
+      completed: control.progress.completed,
+      total: control.progress.total,
+    };
   }
-  if (activeRetest) {
-    return activeRetest.status === "running"
-      ? "Security has already started verifying this remediation."
-      : "A reassessment has been requested. Security runs it from this conversation.";
-  }
-  if (!ticket || ticket.type !== "remediation") {
-    return "Start a remediation for this risk and complete its steps, then ask for a reassessment here.";
-  }
-  if (ticket.status === "withdrawn") {
-    return "This remediation was withdrawn. Resume it to work on the risk again.";
-  }
-  if (SECURITY_FINALISED.includes(ticket.status)) {
-    return "Security has finished with this remediation.";
-  }
-  if (AWAITING_SECURITY.includes(ticket.status)) {
-    return "Security is already verifying this remediation.";
-  }
-  if (!canRequestReassessment(ticket)) {
-    return "This remediation is not in a state a reassessment can be asked for.";
-  }
-  if (readiness.loading) return "Loading the remediation approach…";
-  if (readiness.failed) {
-    return "The remediation approach could not be loaded, so completion cannot be checked.";
-  }
-  if (readiness.replaced) {
-    return "The approach this remediation was following is no longer in the playbook. Review the replacement first.";
-  }
-  if (!control) return "Choose a remediation approach and complete its steps first.";
-  if (!readiness.reconciled) return "Preparing this approach's steps…";
-  const { completed, total } = control.progress;
-  if (total === 0) return "This approach has no steps to complete yet.";
-  if (completed < total) {
-    return `Complete all ${total} steps of the selected approach first — ${completed} done.`;
-  }
-  return null;
+  return remediationBlockMessage(block);
 }
 
-/** The reassessment a risk is waiting on: cancelled requests are history, not work. */
 export function activeReassessment(retests: RetestRun[] | undefined): RetestRun | undefined {
   return (retests ?? []).find(
     (retest) => retest.status === "queued" || retest.status === "running",
@@ -489,7 +452,7 @@ export function canWithdrawReassessment(
 
 export function canWithdrawTicket(ticket: Ticket | null | undefined): boolean {
   if (!ticket || ticket.type !== "remediation") return false;
-  return WITHDRAWABLE_FROM.includes(ticket.status);
+  return WITHDRAWABLE_FROM.includes(ticket.status) || isHistoricalFixSubmitted(ticket.status);
 }
 
 export function canResumeTicket(ticket: Ticket | null | undefined): boolean {
@@ -560,7 +523,6 @@ export function preferredDeveloperRisk(
   return (needsAction ?? inProgress ?? linked[0])?.test_id ?? null;
 }
 
-/** Session memory only — no playbook state is stored to derive this. */
 export function changedSinceCompleted(
   live: LiveStep[],
   hashesAtLoad: Map<string, string> | undefined,
@@ -581,7 +543,6 @@ export function contentHashes(steps: ControlStep[]): Map<string, string> {
   return new Map(steps.map((step) => [step.step_key, step.content_hash]));
 }
 
-/** The Description supplies both the title and the summary; show the summary only when it adds something. */
 export function controlSummary(control: ControlDetail): string | undefined {
   const summary = (control.summary ?? "").trim();
   return summary && summary !== control.title.trim() ? summary : undefined;

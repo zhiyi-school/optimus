@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { riskConversationData } from "@/data/services";
+import { riskConversationData } from "@/data/services/conversations";
 import { attachmentSource } from "@/lib/attachments";
 import { downloadFile } from "@/lib/download";
 import { UserFacingError, errorMessage } from "@/lib/utils";

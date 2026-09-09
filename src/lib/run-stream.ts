@@ -1,4 +1,4 @@
-import type { RunEventStreamState } from "@/hooks/queries";
+import type { RunEventStreamState } from "@/lib/run-event-types";
 
 /** Describes only what the stream is doing; it makes no claim about any caller's polling. */
 export function streamStateLabel(streamState: RunEventStreamState) {

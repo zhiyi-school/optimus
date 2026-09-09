@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/auth/useAuth";
 import { LoadingState, ErrorState } from "@/components/common";
@@ -17,37 +17,31 @@ import {
   ResumeRemediationButton,
   WithdrawRemediationDialog,
   WithdrawalNotice,
-} from "@/components/ticket-actions";
+} from "@/components/ticket-actions/remediation";
 import { PlaybookUpdatedNotice, ToneBadge } from "@/components/resolve-display";
 import {
   usePlaybookRevisionWatch,
+} from "@/hooks/queries/automation";
+import {
   useReconcileTicketControls,
   useSelectRemediationControl,
-  useProfiles,
   useRiskControls,
   useTicket,
   useTicketControlSteps,
   useTicketControls,
-} from "@/hooks/queries";
+} from "@/hooks/queries/tickets";
+import { useProfiles } from "@/hooks/queries/reference";
 import {
-  approachChangeBlockedReason,
   canResumeTicket,
-  canSelectApproach,
   canWithdrawTicket,
   controlProgress,
-  effectiveSelectedControlId,
-  isReconciled,
-  liveControls,
-  selectableControls,
-  selectedControl,
-  selectedControlReconciliationPlan,
-  selectionWasReplaced,
-  selectedApproachComplete,
 } from "@/lib/resolve";
+import { remediationWorkflow } from "@/lib/remediation-workflow";
+import { remediationBlockMessage } from "@/lib/remediation-workflow-messages";
+import { useRemediationReconciliation } from "@/hooks/remediation-reconciliation";
 import { cn, errorMessage } from "@/lib/utils";
 import type { ControlDetail } from "@/api/playbook-types";
 
-/** The remediation area of the application-risk page; it has no page of its own. */
 export default function ResolveTicket({ ticketId }: { ticketId: string }) {
   const { can } = useAuth();
   const ticket = useTicket(ticketId);
@@ -66,47 +60,48 @@ export default function ResolveTicket({ ticketId }: { ticketId: string }) {
 
   const selectControl = useSelectRemediationControl(ticketId, finding?.id);
 
-  const candidates = useMemo(() => selectableControls(definitions.data), [definitions.data]);
-  const storedSelection = ticket.data?.selected_control_id ?? null;
-  const activeControlId = effectiveSelectedControlId(storedSelection, candidates);
-  const chosen = selectedControl(candidates, activeControlId);
-  const replaced = selectionWasReplaced(storedSelection, candidates);
-
   const mayEdit = can("update_control_progress");
-  const mayChangeApproach = mayEdit && canSelectApproach(ticket.data);
-  const plan = useMemo(() => selectedControlReconciliationPlan(chosen), [chosen]);
+  const workflow = useMemo(
+    () => remediationWorkflow({
+      ticket: ticket.data,
+      definitions: definitions.data,
+      definitionsState: definitions.isLoading ? "loading" : definitions.isError ? "error" : "ready",
+      controls: controls.data,
+      steps: steps.data,
+      controlsLoading: controls.isLoading,
+      stepsLoading: steps.isLoading,
+      retests: undefined,
+      mayEdit,
+      mayRequest: false,
+    }),
+    [ticket.data, definitions.data, definitions.isLoading, definitions.isError, controls.data, controls.isLoading, steps.data, steps.isLoading, mayEdit],
+  );
+  const {
+    candidates,
+    storedControlId: storedSelection,
+    selectedControlId: activeControlId,
+    selected: chosen,
+    replaced,
+    reconciliationPlan: plan,
+  } = workflow;
+  const mayChangeApproach = !workflow.approachChangeBlock;
 
-  const persisting = useRef(false);
-  useEffect(() => {
-    if (!ticketId || !mayChangeApproach || !activeControlId) return;
-    if (storedSelection === activeControlId || persisting.current) return;
-    persisting.current = true;
-    selectControl.mutate(activeControlId, { onSettled: () => (persisting.current = false) });
-  }, [ticketId, mayChangeApproach, activeControlId, storedSelection, selectControl]);
-
-  const reconciling = useRef(false);
-  useEffect(() => {
-    if (!ticketId || !mayChangeApproach || plan.length === 0) return;
-    if (controls.isLoading || steps.isLoading || reconciling.current) return;
-    if (isReconciled(plan, controls.data ?? [], steps.data ?? [])) return;
-    reconciling.current = true;
-    reconcile.mutate(plan, { onSettled: () => (reconciling.current = false) });
-  }, [
+  useRemediationReconciliation({
     ticketId,
     mayChangeApproach,
+    activeControlId,
+    storedSelection,
     plan,
-    controls.data,
-    controls.isLoading,
-    steps.data,
-    steps.isLoading,
+    controls: controls.data,
+    steps: steps.data,
+    controlsLoading: controls.isLoading,
+    stepsLoading: steps.isLoading,
+    selectControl,
     reconcile,
-  ]);
+  });
 
   const playbook = usePlaybookRevisionWatch(finding?.platform, !!ticketId);
-  const live = useMemo(
-    () => (chosen ? liveControls([chosen], controls.data ?? [], steps.data ?? []) : []),
-    [chosen, controls.data, steps.data],
-  );
+  const live = workflow.liveControl ? [workflow.liveControl] : [];
 
   if (ticket.isLoading) return <LoadingState label="Loading remediation…" />;
   if (ticket.isError || !ticket.data) {
@@ -116,7 +111,7 @@ export default function ResolveTicket({ ticketId }: { ticketId: string }) {
   const progress = controlProgress(live);
   const showWithdraw = can("withdraw_ticket") && canWithdrawTicket(ticket.data);
   const showResume = can("withdraw_ticket") && canResumeTicket(ticket.data);
-  const complete = selectedApproachComplete(live[0]);
+  const complete = workflow.complete;
 
   return (
     <div>
@@ -163,7 +158,7 @@ export default function ResolveTicket({ ticketId }: { ticketId: string }) {
                   selectedControlId={activeControlId}
                   hasProgress={progress.completed > 0}
                   findingId={finding?.id}
-                  blockedReason={approachChangeBlockedReason(ticket.data, mayEdit)}
+                  blockedReason={remediationBlockMessage(workflow.approachChangeBlock)}
                   onSelect={(controlId) => selectControl.mutateAsync(controlId)}
                 />
               )}

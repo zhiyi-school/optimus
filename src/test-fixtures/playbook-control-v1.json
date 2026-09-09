@@ -1,0 +1,82 @@
+{
+  "control_id": "ios-feature-01-risk-01-control-01",
+  "declared_risk_id": null,
+  "file_id": "platform-feature-01-risk-01-control-01",
+  "has_source_archive": true,
+  "heading_id": "platform-feature-01-risk-01-control-01",
+  "intro": [
+    {
+      "text": "Use the synthetic control to verify stable progress identifiers.",
+      "type": "paragraph"
+    }
+  ],
+  "platform": "ios",
+  "playbook_revision": "sha256:dc88e2730741e7f8573af85ca2c3d037c6c3f9d1df8c3c288a864ae8b39fab15",
+  "references": [],
+  "required": true,
+  "risk_id": "ios-feature-01-risk-01",
+  "source_archives": [
+    {
+      "exists": true,
+      "file_name": "platform-feature-01-risk-01-control-01.zip",
+      "label": "Synthetic source archive",
+      "path": "implemented_controls/platform-feature-01-risk-01-control-01.zip",
+      "sha256": "sha256:773e231428374b85b64b6758369da5a04586fa6ab7a2966db433f3d48bc8dd66",
+      "size_bytes": 81,
+      "url": "/platforms/ios/controls/ios-feature-01-risk-01-control-01/source"
+    }
+  ],
+  "source_download_url": "/platforms/ios/controls/ios-feature-01-risk-01-control-01/source",
+  "source_file": "platform-feature-01-risk-01-control-01.md",
+  "status": "active",
+  "status_source": "front_matter",
+  "step_count": 2,
+  "steps": [
+    {
+      "content": [
+        {
+          "language": "text",
+          "text": "example --check",
+          "type": "code"
+        },
+        {
+          "alt": "Example diagram",
+          "exists": true,
+          "path": "attachments/example.svg",
+          "type": "image",
+          "url": "/platforms/ios/controls/ios-feature-01-risk-01-control-01/assets/attachments/example.svg?v=a30cc8c97e98",
+          "width": ""
+        }
+      ],
+      "content_hash": "sha256:859566a674fcabdb9cb2d6e4aa8f098f",
+      "number": 1,
+      "step_id_source": "declared",
+      "step_index": 0,
+      "step_key": "keep-stable-setting",
+      "step_title": "Keep the stable setting",
+      "text": "Apply the harmless placeholder configuration."
+    },
+    {
+      "content": [
+        {
+          "level": 5,
+          "text": "Expected result",
+          "type": "heading"
+        },
+        {
+          "text": "The example reports success.",
+          "type": "paragraph"
+        }
+      ],
+      "content_hash": "sha256:8cbcddf02a90f1851f292379865462ac",
+      "number": 2,
+      "step_id_source": "auto",
+      "step_index": 1,
+      "step_key": "auto-cda458c3a785",
+      "step_title": "Verify the generated step",
+      "text": "Confirm the placeholder output and record the result."
+    }
+  ],
+  "summary": "Use the synthetic control to verify stable progress identifiers.",
+  "title": "Use the synthetic control to verify stable progress identifiers"
+}

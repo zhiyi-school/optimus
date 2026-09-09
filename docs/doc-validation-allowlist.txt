@@ -1,0 +1,8 @@
+# Exact backend-owned paths intentionally referenced by frontend documentation.
+docs/automation-api.md|mobile_playbook/api/app.py
+docs/automation-api.md|docs/api.md
+docs/automation-api.md|configs/split/ios/templates.yaml
+docs/automation-api.md|mobile_playbook/dashboard_sync.py
+docs/data-model.md|mobile_playbook/assessment_worker.py
+docs/frontend-integration.md|docs/developer-playbook.md
+docs/testing.md|docs/developer-playbook.md

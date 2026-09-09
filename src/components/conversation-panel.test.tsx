@@ -341,6 +341,9 @@ describe("automated test history inside the conversation", () => {
   });
 
   it("offers a run's evidence through the caller's own URL builder", () => {
+    const evidenceUrl = vi.fn((timestamp: string, ref: string) =>
+      `/example/${timestamp}/${ref}`,
+    );
     render({
       runs: [
         run({
@@ -355,10 +358,11 @@ describe("automated test history inside the conversation", () => {
           ],
         }),
       ],
-      evidenceUrl: (timestamp, path) => `/example/${timestamp}/${path}`,
+      evidenceUrl,
     });
 
     expect(text()).toContain("Example screenshot");
+    expect(evidenceUrl).toHaveBeenCalledWith("2026-01-02_00-00-00", "ref-shot");
   });
 
   it("tells an automated run apart from a message and from a workflow event", () => {
@@ -442,6 +446,29 @@ describe("states", () => {
 
     expect(text()).toContain("Sending…");
     expect(text()).toContain("You cannot post in this conversation.");
+  });
+
+  it("locks a recorded submission to its file until retry or explicit abandon", async () => {
+    const abandon = vi.fn(() => Promise.resolve());
+    render({
+      attachmentRetry: {
+        fileName: "example-evidence.png",
+        retryable: true,
+        message: "The file could not be attached.",
+      },
+      onAbandonAttachment: abandon,
+    });
+
+    expect(composer()?.disabled).toBe(true);
+    expect(container.querySelector<HTMLInputElement>("input[type='file']")?.disabled).toBe(true);
+    expect(text()).toContain("Retry example-evidence.png without recording it again.");
+    expect(container.querySelector("button[type='submit']")?.textContent).toContain("Retry file");
+
+    const button = [...container.querySelectorAll("button")].find(
+      (candidate) => candidate.textContent === "Abandon file retry",
+    );
+    await act(async () => button?.click());
+    expect(abandon).toHaveBeenCalledOnce();
   });
 });
 
@@ -1173,4 +1200,3 @@ describe("where the feed sits when things change", () => {
     expect(feed().scrollTop).toBe(120);
   });
 });
-
