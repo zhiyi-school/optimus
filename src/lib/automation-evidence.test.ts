@@ -116,26 +116,28 @@ describe("the latest result, presented in full", () => {
   });
 });
 
-describe("the run's artefacts", () => {
+describe("the run's artifacts", () => {
   it("lists one entry per file, in the order the backend offered them", () => {
-    const artifacts = artifactsOf(row({ evidence: [artifact("report.json"), artifact("logs.txt")] }));
+    const artifacts = artifactsOf(
+      row({ evidence: [artifact("report.json"), artifact("logs.txt")] }),
+    );
     expect(artifacts.map((item) => item.path.split("/").pop())).toEqual([
       "report.json",
       "logs.txt",
     ]);
   });
 
-  it("drops an artefact the run listed twice", () => {
+  it("drops an artifact the run listed twice", () => {
     expect(artifactsOf(row({ evidence: [artifact("report.json"), artifact("report.json")] })))
       .toHaveLength(1);
   });
 
-  it("drops an artefact with no handle to fetch it by", () => {
+  it("drops an artifact with no handle to fetch it by", () => {
     const orphan = { ...artifact("report.json"), ref: "" };
     expect(artifactsOf(row({ evidence: [orphan] }))).toEqual([]);
   });
 
-  it("finds a named artefact by its file name", () => {
+  it("finds a named artifact by its file name", () => {
     const found = artifactNamed(
       row({ evidence: [artifact("logs.txt"), artifact("critical_findings.json")] }),
       "critical_findings.json",
@@ -145,8 +147,8 @@ describe("the run's artefacts", () => {
   });
 });
 
-describe("the artefacts as rail items", () => {
-  it("offers each artefact by its label, fetched through the opaque handle", () => {
+describe("the artifacts as rail items", () => {
+  it("offers each artifact by its label, fetched through the opaque handle", () => {
     const items = automationEvidence(row({ evidence: [artifact("report.json")] }), url);
 
     expect(items).toHaveLength(1);
@@ -169,7 +171,7 @@ describe("the artefacts as rail items", () => {
     expect(items[0].downloadName).toBe("logs.txt");
   });
 
-  it("shows an artefact with no label by its file name", () => {
+  it("shows an artifact with no label by its file name", () => {
     const items = automationEvidence(
       row({
         evidence: [
@@ -212,7 +214,7 @@ describe("the artefacts as rail items", () => {
     expect(items[1].kind).toBe("text");
   });
 
-  it.each([5, 7, 17])("turns all %i of the run's artefacts into real items", (count) => {
+  it.each([5, 7, 17])("turns all %i of the run's artifacts into real items", (count) => {
     const many = Array.from({ length: count }, (_, index) => artifact(`file-${index}.json`));
     const items = automationEvidence(row({ evidence: many }), url);
 
@@ -220,7 +222,7 @@ describe("the artefacts as rail items", () => {
     expect(items.map((item) => item.name)).toEqual(many.map((entry) => entry.label));
   });
 
-  it("keeps an artefact beyond the sixth whole, rather than summarising it away", () => {
+  it("keeps an artifact beyond the sixth whole, rather than summarising it away", () => {
     const many = Array.from({ length: 17 }, (_, index) => artifact(`file-${index}.json`));
     const items = automationEvidence(row({ evidence: many }), url);
 
@@ -239,12 +241,12 @@ describe("the artefacts as rail items", () => {
     const many = Array.from({ length: 17 }, (_, index) => artifact(`file-${index}.json`));
     const items = automationEvidence(row({ evidence: many }), url);
 
-    expect(items.some((item) => /more artefacts? in this run/.test(item.name))).toBe(false);
+    expect(items.some((item) => /more artifacts? in this run/.test(item.name))).toBe(false);
     expect(items.some((item) => item.id.endsWith(":more"))).toBe(false);
     expect(items.every((item) => !!item.url)).toBe(true);
   });
 
-  it("still drops duplicates and handle-less artefacts however many there are", () => {
+  it("still drops duplicates and handle-less artifacts however many there are", () => {
     const many = Array.from({ length: 17 }, (_, index) => artifact(`file-${index}.json`));
     const items = automationEvidence(
       row({
@@ -257,7 +259,7 @@ describe("the artefacts as rail items", () => {
     expect(items.some((item) => item.name === "orphan.json")).toBe(false);
   });
 
-  it("fetches every artefact by its handle, never by the path on disk", () => {
+  it("fetches every artifact by its handle, never by the path on disk", () => {
     const many = Array.from({ length: 17 }, (_, index) => ({
       ...artifact(`file-${index}.json`),
       path: `/Users/example/work/run/file-${index}.json`,
@@ -286,7 +288,7 @@ describe("automated and manual evidence together", () => {
     expect(items[items.length - 1].source).toBe("Security team");
   });
 
-  it("keeps the automated artefacts first", () => {
+  it("keeps the automated artifacts first", () => {
     const items = combinedEvidence(row({ evidence: [artifact("report.json")] }), manual, url);
     expect(items.map((item) => item.id)).toEqual([
       "2026-01-02_00-00-00:ref-report.json",

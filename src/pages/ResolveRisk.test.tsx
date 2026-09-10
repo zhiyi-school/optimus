@@ -459,7 +459,7 @@ describe("the automated evidence a developer is shown", () => {
     expect(text()).not.toContain("Download Markdown");
   });
 
-  it("still lists the run's artefacts in the evidence rail", () => {
+  it("still lists the run's artifacts in the evidence rail", () => {
     completedRun();
     render();
 
@@ -476,7 +476,7 @@ describe("the automated evidence a developer is shown", () => {
       { length: 8 },
       (_, index) => ({
         kind: "json",
-        label: `Artefact ${index}`,
+        label: `Artifact ${index}`,
         path: `reports/example/file-${index}.json`,
         ref: `example-ref-${index}`,
         size_bytes: 128,
@@ -487,7 +487,7 @@ describe("the automated evidence a developer is shown", () => {
   /** The rail is the list the expansion control owns; the thread renders runs separately. */
   function railToggle() {
     return [...container.querySelectorAll("button")].find((button) =>
-      /^Show (\d+ more artefacts?|fewer artefacts)$/.test(button.textContent?.trim() ?? ""),
+      /^Show (\d+ more artifacts?|fewer artifacts)$/.test(button.textContent?.trim() ?? ""),
     );
   }
 
@@ -497,15 +497,15 @@ describe("the automated evidence a developer is shown", () => {
     return [...(list?.querySelectorAll("li") ?? [])].map((row) => row.textContent ?? "");
   }
 
-  it("counts every artefact but shows the first five", () => {
+  it("counts every artifact but shows the first five", () => {
     runOfEight();
     render();
 
     expect(text()).toContain("8 items");
     expect(railNames()).toHaveLength(5);
-    expect(railNames()[4]).toContain("Artefact 4");
-    expect(railNames().join()).not.toContain("Artefact 5");
-    expect(railToggle()?.textContent?.trim()).toBe("Show 3 more artefacts");
+    expect(railNames()[4]).toContain("Artifact 4");
+    expect(railNames().join()).not.toContain("Artifact 5");
+    expect(railToggle()?.textContent?.trim()).toBe("Show 3 more artifacts");
   });
 
   it("reveals the rest on request, each with its own download", () => {
@@ -514,7 +514,7 @@ describe("the automated evidence a developer is shown", () => {
     act(() => railToggle()?.click());
 
     expect(railNames()).toHaveLength(8);
-    expect(railNames()[7]).toContain("Artefact 7");
+    expect(railNames()[7]).toContain("Artifact 7");
     expect(text()).toContain("8 items");
     for (const index of [5, 6, 7]) {
       expect(
@@ -527,10 +527,10 @@ describe("the automated evidence a developer is shown", () => {
     expect(text()).toContain("8 items");
   });
 
-  it("keeps no dead 'more artefacts in this run' row", () => {
+  it("keeps no dead 'more artifacts in this run' row", () => {
     runOfEight();
     render();
-    expect(text()).not.toContain("more artefacts in this run");
+    expect(text()).not.toContain("more artifacts in this run");
   });
 });
 

@@ -131,7 +131,6 @@ vi.mock("@/test-support/query-hooks", () => {
         {
           risk_id: RISK,
           name: "Example Risk",
-          goal: "Show that the risk is present.",
           demonstration: [
             {
               type: "steps",

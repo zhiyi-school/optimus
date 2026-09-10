@@ -18,7 +18,7 @@ function provisioningTicketCopy(
       description:
         `1. Install "${appName}" from the App Store onto the test device, under the test Apple ID.\n` +
         "2. Extract the IPA from the device.\n" +
-        "3. Drop the .ipa file into intake/ios/ipas/ on the automation host.\n\n" +
+        "3. Drop the .ipa file into artifacts/intake/ios/ipas/ on the automation host.\n\n" +
         "The backend matches the build to this app by name and marks setup complete on its own — " +
         "no config change needed, now or for future versions.",
     };

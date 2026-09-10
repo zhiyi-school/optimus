@@ -126,7 +126,15 @@ vi.mock("@/test-support/query-hooks", () => {
     }),
     useRiskCatalogue: () => ({
       ...idle,
-      data: [{ risk_id: RISK, name: "Example Risk", description: "Example risk description.", test_cases: [{ id: "example_case" }] }],
+      data: [
+        {
+          risk_id: RISK,
+          name: "Example Risk",
+          description:
+            "Example risk description. (MITRE ATT&CK: ***Discovery*** - TA0032).",
+          test_cases: [{ id: "example_case" }],
+        },
+      ],
     }),
     useFindings: () => ({ ...idle, data: findingFound ? [finding] : [] }),
     useProfiles: () => ({ ...idle, data: [{ id: DEVELOPER, display_name: "Example Person", email: "person@example.test", roles }] }),
@@ -335,6 +343,13 @@ describe("the risk page is the one conversation location", () => {
     expect(text()).toContain("High");
   });
 
+  it("reads the description as a sentence, not as markdown source", () => {
+    render();
+    expect(text()).toContain("(MITRE ATT&CK: Discovery - TA0032)");
+    expect(text()).not.toContain("***");
+    expect(text()).not.toContain("***Discovery***");
+  });
+
   it("points at the developer's workspace for the same risk, not a tickets page", () => {
     roles = ["security", "developer"];
     render();
@@ -449,7 +464,7 @@ describe("the risk page is the one conversation location", () => {
   /** The rail is the list the expansion control owns; the thread renders runs separately. */
   function railToggle() {
     return [...container.querySelectorAll("button")].find((button) =>
-      /^Show (\d+ more artefacts?|fewer artefacts)$/.test(button.textContent?.trim() ?? ""),
+      /^Show (\d+ more artifacts?|fewer artifacts)$/.test(button.textContent?.trim() ?? ""),
     );
   }
 
@@ -459,12 +474,12 @@ describe("the risk page is the one conversation location", () => {
     return [...(list?.querySelectorAll("li") ?? [])].map((row) => row.textContent ?? "");
   }
 
-  it("shows five of a run's eight artefacts, counting all of them", () => {
+  it("shows five of a run's eight artifacts, counting all of them", () => {
     history = [
       historyRun({
         evidence: Array.from({ length: 8 }, (_, index) => ({
           kind: "json",
-          label: `Artefact ${index}`,
+          label: `Artifact ${index}`,
           path: `reports/example/file-${index}.json`,
           ref: `example-ref-${index}`,
           size_bytes: 128,
@@ -475,13 +490,13 @@ describe("the risk page is the one conversation location", () => {
 
     expect(text()).toContain("8 items");
     expect(railRows()).toHaveLength(5);
-    expect(railToggle()?.textContent?.trim()).toBe("Show 3 more artefacts");
+    expect(railToggle()?.textContent?.trim()).toBe("Show 3 more artifacts");
     expect(railToggle()?.getAttribute("aria-expanded")).toBe("false");
-    expect(text()).not.toContain("more artefacts in this run");
+    expect(text()).not.toContain("more artifacts in this run");
 
     act(() => railToggle()?.click());
     expect(railRows()).toHaveLength(8);
-    expect(railRows()[7]).toContain("Artefact 7");
+    expect(railRows()[7]).toContain("Artifact 7");
     expect(text()).toContain("8 items");
     expect(
       container.querySelector("button[aria-label='Download file-7.json']"),
@@ -491,12 +506,12 @@ describe("the risk page is the one conversation location", () => {
     expect(railRows()).toHaveLength(5);
   });
 
-  it("offers nothing to expand when a run has five artefacts", () => {
+  it("offers nothing to expand when a run has five artifacts", () => {
     history = [
       historyRun({
         evidence: Array.from({ length: 5 }, (_, index) => ({
           kind: "json",
-          label: `Artefact ${index}`,
+          label: `Artifact ${index}`,
           path: `reports/example/file-${index}.json`,
           ref: `example-ref-${index}`,
           size_bytes: 128,

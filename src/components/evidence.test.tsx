@@ -7,7 +7,7 @@ import type { EvidenceItem } from "@/lib/evidence-types";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-function artefacts(count: number, prefix = "file"): EvidenceItem[] {
+function artifacts(count: number, prefix = "file"): EvidenceItem[] {
   return Array.from({ length: count }, (_, index) => ({
     id: `run:ref-${prefix}-${index}`,
     name: `${prefix}-${index}.json`,
@@ -81,17 +81,17 @@ describe("the evidence rail", () => {
     expect(toggle()).toBeUndefined();
   });
 
-  it("shows five artefacts outright, with nothing to expand", () => {
-    render(artefacts(5));
+  it("shows five artifacts outright, with nothing to expand", () => {
+    render(artifacts(5));
     expect(names()).toHaveLength(5);
     expect(toggle()).toBeUndefined();
   });
 
   it.each([
-    [6, "Show 1 more artefact"],
-    [8, "Show 3 more artefacts"],
+    [6, "Show 1 more artifact"],
+    [8, "Show 3 more artifacts"],
   ])("shows five of %i and offers the rest as '%s'", (count, label) => {
-    render(artefacts(count));
+    render(artifacts(count));
 
     expect(names()).toHaveLength(5);
     expect(toggle()?.textContent?.trim()).toBe(label);
@@ -99,15 +99,15 @@ describe("the evidence rail", () => {
   });
 
   it("points the control at the list it opens", () => {
-    render(artefacts(8));
+    render(artifacts(8));
     const listId = toggle()?.getAttribute("aria-controls");
 
     expect(listId).toBeTruthy();
     expect(document.getElementById(listId as string)?.tagName).toBe("UL");
   });
 
-  it("reveals every remaining artefact, in the order the run gave them", () => {
-    render(artefacts(8));
+  it("reveals every remaining artifact, in the order the run gave them", () => {
+    render(artifacts(8));
     const collapsed = names();
     act(() => toggle()?.click());
 
@@ -117,22 +117,22 @@ describe("the evidence rail", () => {
   });
 
   it("turns into a way back once it is open", () => {
-    render(artefacts(8));
+    render(artifacts(8));
     act(() => toggle()?.click());
 
     const collapse = [...container.querySelectorAll("button")].find(
-      (button) => button.textContent?.trim() === "Show fewer artefacts",
+      (button) => button.textContent?.trim() === "Show fewer artifacts",
     );
     expect(collapse?.getAttribute("aria-expanded")).toBe("true");
 
     act(() => collapse?.click());
     expect(names()).toHaveLength(5);
-    expect(names()).toEqual(artefacts(8).slice(0, 5).map((item) => item.name));
-    expect(toggle()?.textContent?.trim()).toBe("Show 3 more artefacts");
+    expect(names()).toEqual(artifacts(8).slice(0, 5).map((item) => item.name));
+    expect(toggle()?.textContent?.trim()).toBe("Show 3 more artifacts");
   });
 
   it("is a real button a keyboard reaches, not an evidence row", () => {
-    render(artefacts(8));
+    render(artifacts(8));
     const control = toggle()!;
 
     expect(control.tagName).toBe("BUTTON");
@@ -141,8 +141,8 @@ describe("the evidence rail", () => {
     expect(container.querySelectorAll("li")).toHaveLength(5);
   });
 
-  it("gives a revealed artefact its own download, by handle and original name", async () => {
-    render(artefacts(8));
+  it("gives a revealed artifact its own download, by handle and original name", async () => {
+    render(artifacts(8));
     act(() => toggle()?.click());
 
     expect(downloads()).toHaveLength(8);
@@ -155,14 +155,14 @@ describe("the evidence rail", () => {
     expect(saved).toEqual([{ name: "file-5.json", href: "blob:example/1" }]);
   });
 
-  it("keeps a failed download to the artefact it belongs to, saving nothing", async () => {
+  it("keeps a failed download to the artifact it belongs to, saving nothing", async () => {
     fetchMock.mockResolvedValue(
       response(JSON.stringify({ detail: "Evidence file not found" }), {
         status: 404,
         headers: { "content-type": "application/json" },
       }),
     );
-    render(artefacts(8));
+    render(artifacts(8));
     act(() => toggle()?.click());
 
     const seventh = container.querySelector<HTMLButtonElement>(
@@ -184,10 +184,10 @@ describe("the evidence rail", () => {
       { id: "manual-1", name: "Reviewer note", kind: "text", source: "Security team" },
       { id: "manual-2", name: "Signed approval", kind: "text", source: "Security team" },
     ];
-    render([...artefacts(7), ...manual]);
+    render([...artifacts(7), ...manual]);
 
     expect(names()).toHaveLength(5);
-    expect(toggle()?.textContent?.trim()).toBe("Show 4 more artefacts");
+    expect(toggle()?.textContent?.trim()).toBe("Show 4 more artifacts");
 
     act(() => toggle()?.click());
     expect(names()).toHaveLength(9);

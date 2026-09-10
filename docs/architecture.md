@@ -324,3 +324,11 @@ across `GET /reports` (see [AUTOMATION_API.md](./automation-api.md)) instead of
 reading a single run. Those runs are merged with the risk's stored conversation
 entries into one timeline, so every assessment of the application contributes to
 the same page; `:runId` highlights one of them.
+
+## Spelling and compatibility identifiers
+
+Human-facing prose uses the spelling “artifact”. Existing wire, database and
+configuration identifiers retain `artifact` where it is part of a compatibility
+contract, such as the provisioning request field, `/artifacts` route and
+`artifact_sha256` column. Those names change only through a coordinated,
+versioned frontend/backend or database migration.

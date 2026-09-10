@@ -153,8 +153,8 @@ export function EvidenceList({ items }: { items: EvidenceItem[] }) {
           className="mt-2 rounded text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
         >
           {expanded
-            ? "Show fewer artefacts"
-            : `Show ${hidden} more artefact${hidden === 1 ? "" : "s"}`}
+            ? "Show fewer artifacts"
+            : `Show ${hidden} more artifact${hidden === 1 ? "" : "s"}`}
         </button>
       )}
     </>

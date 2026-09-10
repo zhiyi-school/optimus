@@ -17,6 +17,24 @@ function link(href: string, label: string, key: number): ReactNode {
   );
 }
 
+const LINK = /!?\[([^\]]*)\]\([^)]*\)/g;
+const CODE_SPAN = /`([^`]+)`/g;
+const ASTERISK_EMPHASIS = /(\*{1,3})(\S(?:[\s\S]*?\S)?)\1/g;
+const UNDERSCORE_EMPHASIS = /(^|[^\w])(_{1,3})(\S(?:[\s\S]*?\S)?)\2(?!\w)/g;
+
+/** Authored markdown as the plain sentence it reads as, for places that render text rather than nodes. */
+export function plainText(text: string | undefined | null): string {
+  if (!text) return "";
+  let result = text.replace(LINK, "$1").replace(CODE_SPAN, "$1");
+  // Nested emphasis such as _**Tactic**_ needs a second pass to unwrap both layers.
+  for (let pass = 0; pass < 3; pass += 1) {
+    const next = result.replace(ASTERISK_EMPHASIS, "$2").replace(UNDERSCORE_EMPHASIS, "$1$3");
+    if (next === result) break;
+    result = next;
+  }
+  return result.trim();
+}
+
 /** The subset of markdown the playbook uses inline: code spans, bold, links. */
 export function renderInline(text: string | undefined | null): ReactNode {
   if (!text) return null;

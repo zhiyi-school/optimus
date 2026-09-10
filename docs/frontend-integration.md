@@ -189,7 +189,7 @@ The dashboard's expectations are encoded in `src/api/automation-types.ts` and
 | Endpoint | Method | Request | Response | Codes |
 | --- | --- | --- | --- | --- |
 | `/health` | GET | — | `{"status":"ok"}` | 200 |
-| `/platforms/{platform}/risks` | GET | — | array of risk definitions with `risk_id`, `name`, `description`, `goal`, `automation_available`, `demonstration` | 200 |
+| `/platforms/{platform}/risks` | GET | — | array of risk definitions with `risk_id`, `name`, `description`, `tactic`, `tactic_id`, `automation_available`, `demonstration` | 200 |
 | `/platforms/{platform}/features` | GET | — | array of `{feature_id, name, description}` | 200 |
 | `/config/{platform}/apps` | GET | — | array of `{id, name, bundle_id?, package_name?}` | 200 |
 | `/config/{platform}/apps` | POST | `{name, version?, bundle_id?, package_name?, artifact?, risks?}` | `{id}` | 201, 409 with `{detail:{app_id}}` on duplicate |

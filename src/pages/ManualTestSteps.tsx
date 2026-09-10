@@ -3,15 +3,16 @@ import { useParams } from "react-router-dom";
 import { FileText } from "lucide-react";
 import type {
   DemonstrationBlock,
+  DemonstrationContentBlock,
   DemonstrationImage,
   DemonstrationStep,
   DemonstrationTableBlock,
+  RiskDefinition,
 } from "@/api/automation-types";
 import { EmptyState, LoadingState } from "@/components/common";
 import { CodeBlock } from "@/components/code-block";
 import { PlaybookFigure, PlaybookGallery } from "@/components/playbook-content";
 import { EstimatedTime, GuidedSteps, type GuidedStep } from "@/components/guided-steps";
-import { RiskGoal } from "@/components/risk-goal";
 import { renderInline } from "@/lib/inline-markdown";
 import { stepCountLabel } from "@/lib/utils";
 import { useAssessment } from "@/hooks/queries/assessments";
@@ -73,24 +74,72 @@ function StepImage({ image }: { image: DemonstrationImage }) {
   );
 }
 
+function StepContent({ block }: { block: DemonstrationContentBlock }) {
+  switch (block.type) {
+    case "paragraph":
+      return <p className="text-sm leading-relaxed text-foreground">{renderInline(block.text)}</p>;
+    case "caption":
+      return <p className="text-xs italic text-muted-foreground">{renderInline(block.text)}</p>;
+    case "heading":
+      return <h3 className="text-sm font-semibold text-foreground">{renderInline(block.text)}</h3>;
+    case "code":
+      return <CodeBlock code={block.text} language={block.language ?? undefined} />;
+    case "image":
+      return (
+        <PlaybookGallery>
+          <StepImage image={block} />
+        </PlaybookGallery>
+      );
+    case "list":
+      return (
+        <ul className="list-disc space-y-1 pl-5 text-sm leading-relaxed text-foreground">
+          {block.items.map((item, index) => (
+            <li key={index}>{renderInline(item.text)}</li>
+          ))}
+        </ul>
+      );
+    case "table":
+      return <SetupTable block={{ id: "", type: "table", rows: block.rows ?? [] }} />;
+    default:
+      return null;
+  }
+}
+
 function StepBody({ step, number }: { step: DemonstrationStep; number: number }) {
+  const ordered = step.content ?? [];
   return (
     <div className="space-y-4">
       <h2 className="text-base font-semibold text-foreground">
         {step.title?.trim() ? `${number}. ${step.title.trim()}` : `Step ${number}`}
       </h2>
       <p className="text-sm leading-relaxed text-foreground">{renderInline(step.text)}</p>
-      {step.commands?.map((command, commandIndex) => (
-        <CodeBlock key={commandIndex} code={command} language="shell" />
-      ))}
-      {step.images && step.images.length > 0 && (
-        <PlaybookGallery>
-          {step.images.map((image, imageIndex) => (
-            <StepImage key={image.path || imageIndex} image={image} />
+      {ordered.length > 0 ? (
+        ordered.map((block, index) => <StepContent key={index} block={block} />)
+      ) : (
+        <>
+          {step.commands?.map((command, commandIndex) => (
+            <CodeBlock key={commandIndex} code={command} language="shell" />
           ))}
-        </PlaybookGallery>
+          {step.images && step.images.length > 0 && (
+            <PlaybookGallery>
+              {step.images.map((image, imageIndex) => (
+                <StepImage key={image.path || imageIndex} image={image} />
+              ))}
+            </PlaybookGallery>
+          )}
+        </>
       )}
     </div>
+  );
+}
+
+function RiskTactic({ risk }: { risk: RiskDefinition | undefined }) {
+  if (!risk?.tactic) return null;
+  return (
+    <p className="text-sm text-foreground">
+      <span className="font-semibold">MITRE ATT&amp;CK Tactic:</span> {risk.tactic}
+      {risk.tactic_id ? ` (${risk.tactic_id})` : ""}
+    </p>
   );
 }
 
@@ -148,7 +197,7 @@ export default function ManualTestSteps() {
       icon={FileText}
       title={`Manual Testing Steps${risk ? ` — ${risk.name}` : ""}`}
       description={steps.length > 0 ? "Follow these steps to manually verify this risk." : undefined}
-      tip={steps.length > 0 && risk?.goal ? <RiskGoal risk={risk} /> : undefined}
+      tip={steps.length > 0 && risk?.tactic ? <RiskTactic risk={risk} /> : undefined}
       steps={navSteps}
       activeId={activeId}
       onSelect={setChosenId}

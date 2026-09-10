@@ -219,9 +219,9 @@ to it in the feed.
 
 Neither risk workspace renders a broad static-analysis findings table. The run's
 structured reports are still produced, stored and served unchanged: they reach a
-reader as ordinary artefacts in the evidence rail, where each one has its own
+reader as ordinary artifacts in the evidence rail, where each one has its own
 View and Download. Removing the table changed presentation only — no finding,
-report or artefact reference was dropped.
+report or artifact reference was dropped.
 
 In its place both workspaces show one focused **Exposed plaintext literals**
 card, the same for security and for the owning developer. It reads the run's

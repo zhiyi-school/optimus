@@ -111,16 +111,29 @@ export interface StartRunRequest {
 
 export interface DemonstrationImage {
   path: string;
+  alt?: string;
   caption?: string;
+  width?: string;
   url?: string;
   exists?: boolean;
 }
+
+export type DemonstrationContentBlock =
+  | { type: "paragraph"; text: string }
+  | { type: "caption"; text: string }
+  | { type: "heading"; level: number; text: string }
+  | { type: "code"; language?: string | null; text: string }
+  | ({ type: "image" } & DemonstrationImage)
+  | { type: "list"; ordered?: boolean; items: { text: string }[] }
+  | { type: "table"; columns?: string[]; rows: Record<string, string>[] };
 
 export interface DemonstrationStep {
   id: string;
   /** Present when the playbook names the step with a numbered heading. */
   title?: string;
   text: string;
+  /** The authored blocks in document order; `images` and `commands` are the flattened view. */
+  content?: DemonstrationContentBlock[];
   images?: DemonstrationImage[];
   commands?: string[];
 }
@@ -145,9 +158,9 @@ export interface RiskDefinition {
   risk_id: string;
   name: string;
   description: string;
-  goal: string;
   is_blocking: boolean;
   tactic: string | null;
+  tactic_id?: string | null;
   automation_available?: boolean;
   demonstration: DemonstrationBlock[];
   controls?: ControlSummary[];

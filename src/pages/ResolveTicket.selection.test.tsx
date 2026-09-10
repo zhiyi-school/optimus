@@ -622,6 +622,15 @@ describe("the simplified remediation view", () => {
     expect(text()).not.toContain("Every step is done.");
   });
 
+  it("says nothing about waiting on security when there is no action to offer", () => {
+    render();
+
+    expect(buttonNamed("Withdraw remediation")).toBeUndefined();
+    expect(buttonNamed("Resume remediation")).toBeUndefined();
+    expect(text()).not.toContain("Nothing to do right now");
+    expect(text()).not.toContain("security owns the next step");
+  });
+
   it("keeps Withdraw remediation reachable", () => {
     capabilities = [...capabilities, "withdraw_ticket"];
     render();

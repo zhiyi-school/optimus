@@ -49,7 +49,7 @@ describe("naming the saved file", () => {
   });
 });
 
-describe("downloading an artefact", () => {
+describe("downloading an artifact", () => {
   it("saves the body under the server's own filename", async () => {
     const fetchImpl = vi.fn(async () =>
       response("PKexample", {

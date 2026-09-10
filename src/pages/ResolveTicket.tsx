@@ -173,15 +173,12 @@ export default function ResolveTicket({ ticketId }: { ticketId: string }) {
                   : null
               }
             />
-            <div className="flex flex-wrap items-center gap-2">
-              {showResume && <ResumeRemediationButton ticket={ticket.data} />}
-              {showWithdraw && <WithdrawRemediationDialog ticket={ticket.data} />}
-              {!showResume && !showWithdraw && (
-                <p className="text-xs text-muted-foreground">
-                  Nothing to do right now — security owns the next step on this finding.
-                </p>
-              )}
-            </div>
+            {(showResume || showWithdraw) && (
+              <div className="flex flex-wrap items-center gap-2">
+                {showResume && <ResumeRemediationButton ticket={ticket.data} />}
+                {showWithdraw && <WithdrawRemediationDialog ticket={ticket.data} />}
+              </div>
+            )}
             <p className="text-xs text-muted-foreground">
               Track your remediation progress here. Request reassessment from the conversation.
             </p>

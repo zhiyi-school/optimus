@@ -40,7 +40,8 @@ vi.mock("@/test-support/query-hooks", () => ({
       {
         risk_id: RISK,
         name: "Example Risk",
-        goal: "Example goal.",
+        tactic: "Discovery",
+        tactic_id: "TA0032",
         demonstration: blocks ?? [
           {
             id: "example-block",
@@ -272,5 +273,108 @@ describe("manual-test step navigation", () => {
     render();
     expect(container.querySelector("nav[aria-label='Manual testing steps']")).toBeNull();
     expect(container.textContent).toContain("haven't been written yet");
+  });
+});
+
+describe("authored demonstration content", () => {
+  it("renders the blocks in the order the playbook wrote them", () => {
+    blocks = [
+      {
+        id: "example-block",
+        type: "steps",
+        items: [
+          {
+            id: "example-step",
+            text: "Lead-in instruction.",
+            content: [
+              { type: "code", language: "shell", text: "example --prepare" },
+              { type: "image", path: "example/one.png", url: "/assets/one.png", caption: "First." },
+              { type: "caption", text: "Trailing note." },
+            ],
+          },
+        ],
+      },
+    ];
+    render();
+
+    const rendered = [...container.querySelectorAll("pre, img")].map((node) => node.tagName);
+    expect(rendered).toEqual(["PRE", "IMG"]);
+    expect(container.textContent).toContain("Trailing note.");
+  });
+
+  it("labels a code block with the language the playbook declared", () => {
+    blocks = [
+      {
+        id: "example-block",
+        type: "steps",
+        items: [
+          {
+            id: "example-step",
+            text: "Run it.",
+            content: [{ type: "code", language: "python", text: "print('example')" }],
+          },
+        ],
+      },
+    ];
+    render();
+
+    expect(container.textContent).toContain("python");
+    expect(container.textContent).not.toContain("shell");
+  });
+
+  it("keeps a caption with the image it follows", () => {
+    blocks = [
+      {
+        id: "example-block",
+        type: "steps",
+        items: [
+          {
+            id: "example-step",
+            text: "Look.",
+            content: [
+              {
+                type: "image",
+                path: "example/one.png",
+                url: "/assets/one.png",
+                caption: "Example caption.",
+              },
+            ],
+          },
+        ],
+      },
+    ];
+    render();
+
+    expect(image().getAttribute("src")).toContain("/assets/one.png");
+    expect(container.textContent).toContain("Example caption.");
+  });
+
+  it("falls back to the flat command and image lists when there is no ordered content", () => {
+    blocks = [
+      {
+        id: "example-block",
+        type: "steps",
+        items: [
+          {
+            id: "example-step",
+            text: "Legacy step.",
+            commands: ["example --legacy"],
+            images: [{ path: "example/one.png", url: "/assets/one.png" }],
+          },
+        ],
+      },
+    ];
+    render();
+
+    expect(container.textContent).toContain("example --legacy");
+    expect(image().getAttribute("src")).toContain("/assets/one.png");
+  });
+
+  it("names the MITRE tactic instead of a goal", () => {
+    render();
+    expect(container.textContent).toContain("MITRE ATT&CK Tactic:");
+    expect(container.textContent).toContain("Discovery");
+    expect(container.textContent).toContain("TA0032");
+    expect(container.textContent).not.toContain("Goal:");
   });
 });

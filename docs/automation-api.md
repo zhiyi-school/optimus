@@ -415,11 +415,14 @@ touches no backend credential.
 ## Risk text comes from the playbook
 
 Everything the dashboard *displays* about a risk — `name`, `description`,
-`goal`, `tactic`, `demonstration` — is authored in the backend's
-`configs/split/{platform}/risks.yaml` and transcribed from that risk's page in
-the security playbook. The backend's Python risk classes carry none of it;
+`tactic`, `tactic_id`, `demonstration` — comes from that risk's page in the
+security playbook, parsed by the backend from its `### Title`, `### Description`
+and `### Demonstration` sections. The `tactic` and `tactic_id` are read from the
+MITRE annotation written inside the description; there is no longer a `### Goal`
+section. `configs/split/{platform}/risks.yaml` is the fallback, used for risks
+with no playbook document. The backend's Python risk classes carry none of it;
 they hold only the flags that change what a run does. So correcting what a
-tester reads is a YAML edit on the backend, never a dashboard change.
+tester reads is a playbook edit, never a dashboard change.
 
 This matters because the two used to disagree: the playbook said one thing,
 the risk class said another, and the dashboard was showing the class's

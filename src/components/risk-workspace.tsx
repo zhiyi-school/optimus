@@ -1,6 +1,7 @@
 import { type ReactNode } from "react";
 import { Paperclip, type LucideIcon } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { plainText } from "@/lib/inline-markdown";
 import { cn } from "@/lib/utils";
 
 export function RiskWorkspace({
@@ -47,10 +48,12 @@ export function RiskHeader({
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-base font-semibold text-foreground">{name}</h1>
+          <h1 className="text-base font-semibold text-foreground">{plainText(name)}</h1>
           {badges}
         </div>
-        {description && <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>}
+        {description && (
+          <p className="mt-0.5 text-sm text-muted-foreground">{plainText(description)}</p>
+        )}
         {meta && <div className="mt-1 text-xs text-muted-foreground">{meta}</div>}
       </div>
     </div>

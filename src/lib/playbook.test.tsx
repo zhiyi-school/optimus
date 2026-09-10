@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { isValidElement, type ReactElement } from "react";
 import type { PlaybookBlock } from "@/api/playbook-types";
-import { renderInline } from "./inline-markdown";
+import { plainText, renderInline } from "./inline-markdown";
 import { RENDERABLE_BLOCKS, isRenderable, renderableBlocks } from "./playbook";
 
 function anchors(node: unknown, found: ReactElement[] = []): ReactElement[] {
@@ -78,5 +78,43 @@ describe("inline markdown safety", () => {
   it("renders nothing for empty text", () => {
     expect(renderInline("")).toBeNull();
     expect(renderInline(undefined)).toBeNull();
+  });
+});
+
+describe("markdown stripped to plain text", () => {
+  it("drops the emphasis around a MITRE tactic without touching the sentence", () => {
+    expect(
+      plainText(
+        "Analyse the IPA using static analysis tools. (MITRE ATT&CK: ***Discovery*** - TA0032).",
+      ),
+    ).toBe("Analyse the IPA using static analysis tools. (MITRE ATT&CK: Discovery - TA0032).");
+  });
+
+  it("unwraps emphasis nested inside other emphasis", () => {
+    expect(plainText("leads to _**Discovery**_ next")).toBe("leads to Discovery next");
+    expect(plainText("__**both**__ layers")).toBe("both layers");
+  });
+
+  it.each([
+    ["**bold**", "bold"],
+    ["*italic*", "italic"],
+    ["_italic_", "italic"],
+    ["`example --flag`", "example --flag"],
+    ["[the docs](https://example.test/guide)", "the docs"],
+    ["![shot](attachments/example.png)", "shot"],
+  ])("strips %s", (input, expected) => {
+    expect(plainText(input)).toBe(expected);
+  });
+
+  it("leaves prose that only looks like markdown alone", () => {
+    expect(plainText("a snake_case_name stays")).toBe("a snake_case_name stays");
+    expect(plainText("2 * 3 * 4 is arithmetic")).toBe("2 * 3 * 4 is arithmetic");
+    expect(plainText("An unremarkable sentence.")).toBe("An unremarkable sentence.");
+  });
+
+  it("has nothing to say about absent text", () => {
+    expect(plainText(undefined)).toBe("");
+    expect(plainText(null)).toBe("");
+    expect(plainText("")).toBe("");
   });
 });
