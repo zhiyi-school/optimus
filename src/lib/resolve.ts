@@ -83,6 +83,12 @@ export const REASSESSMENT_REQUESTABLE_FROM: TicketStatus[] = [
   "open",
   "in_progress",
   "rejected",
+  // Another request may be submitted while earlier ones are outstanding or a
+  // run has just finished. This set gates reassessment only — progress editing,
+  // approach changes and withdrawal keep their own narrower sets.
+  "retest_requested",
+  "retest_in_progress",
+  "under_review",
 ];
 
 export interface Progress {
@@ -399,7 +405,7 @@ export interface ReassessmentReadiness {
 
 /**
  * Why a reassessment cannot be asked for, or null when every condition holds.
- * The database enforces the same completion rule; this only says so first.
+ * The database enforces the same rules; this only says so first.
  */
 export function reassessmentBlockedReason(readiness: ReassessmentReadiness): string | null {
   const { ticket, control, activeRetest } = readiness;
@@ -410,22 +416,38 @@ export function reassessmentBlockedReason(readiness: ReassessmentReadiness): str
   else if (!ticket || ticket.type !== "remediation") block = { code: "reassessment_no_remediation" };
   else if (ticket.status === "withdrawn") block = { code: "reassessment_withdrawn" };
   else if (SECURITY_FINALISED.includes(ticket.status)) block = { code: "reassessment_security_finalised" };
-  else if (AWAITING_SECURITY.includes(ticket.status)) block = { code: "reassessment_security_owned" };
   else if (!canRequestReassessment(ticket)) block = { code: "reassessment_wrong_state" };
   else if (readiness.loading) block = { code: "reassessment_loading" };
   else if (readiness.failed) block = { code: "reassessment_load_failed" };
   else if (readiness.replaced) block = { code: "reassessment_replaced" };
   else if (!control) block = { code: "reassessment_no_approach" };
-  else if (!readiness.reconciled) block = { code: "reassessment_reconciling" };
-  else if (control.progress.total === 0) block = { code: "reassessment_no_steps" };
-  else if (control.progress.completed < control.progress.total) {
-    block = {
-      code: "reassessment_incomplete",
-      completed: control.progress.completed,
-      total: control.progress.total,
-    };
-  }
   return remediationBlockMessage(block);
+}
+
+/** Deterministic queue order: oldest first, id breaking a tie. */
+function byQueueOrder(a: RetestRun, b: RetestRun): number {
+  const left = a.created_at ?? "";
+  const right = b.created_at ?? "";
+  return left === right ? a.id.localeCompare(b.id) : left.localeCompare(right);
+}
+
+export function runningReassessment(retests: RetestRun[] | undefined): RetestRun | undefined {
+  return (retests ?? []).find((retest) => retest.status === "running");
+}
+
+export function queuedReassessments(retests: RetestRun[] | undefined): RetestRun[] {
+  return (retests ?? []).filter((retest) => retest.status === "queued").sort(byQueueOrder);
+}
+
+/** The one security may start next: nothing may be running, and order decides which. */
+export function nextReassessment(retests: RetestRun[] | undefined): RetestRun | undefined {
+  return runningReassessment(retests) ? undefined : queuedReassessments(retests)[0];
+}
+
+export function outstandingReassessments(retests: RetestRun[] | undefined): RetestRun[] {
+  return (retests ?? [])
+    .filter((retest) => retest.status === "queued" || retest.status === "running")
+    .sort(byQueueOrder);
 }
 
 export function activeReassessment(retests: RetestRun[] | undefined): RetestRun | undefined {

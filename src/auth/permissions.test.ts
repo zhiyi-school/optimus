@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Profile, UserRole } from "@/data/types";
 import {
   defaultRouteFor,
+  hasRole,
   primaryRole,
   resolveAccess,
   roleCan,
@@ -116,6 +117,30 @@ describe("resolveAccess", () => {
 
   it("checks the role before the team, so a non-developer never sees a setup prompt", () => {
     expect(resolveAccess(profile({ roles: ["security"], team_id: null }))).toBe("unauthorized");
+  });
+});
+
+describe("hasRole", () => {
+  it("finds a role a profile holds on its own", () => {
+    expect(hasRole(["security"], "security")).toBe(true);
+  });
+
+  it.each([
+    [["security", "developer"]],
+    [["security", "admin"]],
+    [["admin", "security"]],
+    [["developer", "security", "cio"]],
+  ])("finds it in the mixed-role profile %s", (roles) => {
+    expect(hasRole(roles as UserRole[], "security")).toBe(true);
+  });
+
+  it("does not report a role the profile lacks, whatever else it holds", () => {
+    expect(hasRole(["developer", "admin"], "security")).toBe(false);
+  });
+
+  it("answers no rather than throwing for a profile with no roles yet", () => {
+    expect(hasRole(undefined, "security")).toBe(false);
+    expect(hasRole([], "security")).toBe(false);
   });
 });
 

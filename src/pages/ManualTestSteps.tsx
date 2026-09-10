@@ -8,6 +8,7 @@ import type {
   DemonstrationTableBlock,
 } from "@/api/automation-types";
 import { EmptyState, LoadingState } from "@/components/common";
+import { CodeBlock } from "@/components/code-block";
 import { PlaybookFigure, PlaybookGallery } from "@/components/playbook-content";
 import { EstimatedTime, GuidedSteps, type GuidedStep } from "@/components/guided-steps";
 import { RiskGoal } from "@/components/risk-goal";
@@ -80,12 +81,7 @@ function StepBody({ step, number }: { step: DemonstrationStep; number: number })
       </h2>
       <p className="text-sm leading-relaxed text-foreground">{renderInline(step.text)}</p>
       {step.commands?.map((command, commandIndex) => (
-        <pre
-          key={commandIndex}
-          className="overflow-x-auto rounded-md bg-muted px-3 py-2 text-xs text-foreground"
-        >
-          <code>{command}</code>
-        </pre>
+        <CodeBlock key={commandIndex} code={command} language="shell" />
       ))}
       {step.images && step.images.length > 0 && (
         <PlaybookGallery>

@@ -6,7 +6,6 @@ import {
   combinedEvidence,
   latestResult,
   latestResultDetail,
-  RAIL_ARTIFACT_LIMIT,
 } from "@/lib/automation-evidence";
 import type { AutomationResultRow, EvidenceRef } from "@/api/automation-types";
 import type { EvidenceItem } from "@/components/evidence";
@@ -213,13 +212,63 @@ describe("the artefacts as rail items", () => {
     expect(items[1].kind).toBe("text");
   });
 
-  it("caps the narrow rail and says how much is left in the run", () => {
+  it.each([5, 7, 17])("turns all %i of the run's artefacts into real items", (count) => {
+    const many = Array.from({ length: count }, (_, index) => artifact(`file-${index}.json`));
+    const items = automationEvidence(row({ evidence: many }), url);
+
+    expect(items).toHaveLength(count);
+    expect(items.map((item) => item.name)).toEqual(many.map((entry) => entry.label));
+  });
+
+  it("keeps an artefact beyond the sixth whole, rather than summarising it away", () => {
     const many = Array.from({ length: 17 }, (_, index) => artifact(`file-${index}.json`));
     const items = automationEvidence(row({ evidence: many }), url);
 
-    expect(items.length).toBe(RAIL_ARTIFACT_LIMIT + 1);
-    expect(items[items.length - 1].name).toBe("11 more artefacts in this run");
-    expect(items[items.length - 1].url).toBeUndefined();
+    for (const index of [5, 6, 16]) {
+      expect(items[index]).toMatchObject({
+        name: `file-${index}.json`,
+        downloadName: `file-${index}.json`,
+        url: `/example/2026-01-02_00-00-00?path=ref-file-${index}.json`,
+        sizeBytes: 128,
+        source: "Automated test",
+      });
+    }
+  });
+
+  it("never stands a count in for the files themselves", () => {
+    const many = Array.from({ length: 17 }, (_, index) => artifact(`file-${index}.json`));
+    const items = automationEvidence(row({ evidence: many }), url);
+
+    expect(items.some((item) => /more artefacts? in this run/.test(item.name))).toBe(false);
+    expect(items.some((item) => item.id.endsWith(":more"))).toBe(false);
+    expect(items.every((item) => !!item.url)).toBe(true);
+  });
+
+  it("still drops duplicates and handle-less artefacts however many there are", () => {
+    const many = Array.from({ length: 17 }, (_, index) => artifact(`file-${index}.json`));
+    const items = automationEvidence(
+      row({
+        evidence: [...many, artifact("file-0.json"), { ...artifact("orphan.json"), ref: "" }],
+      }),
+      url,
+    );
+
+    expect(items).toHaveLength(17);
+    expect(items.some((item) => item.name === "orphan.json")).toBe(false);
+  });
+
+  it("fetches every artefact by its handle, never by the path on disk", () => {
+    const many = Array.from({ length: 17 }, (_, index) => ({
+      ...artifact(`file-${index}.json`),
+      path: `/Users/example/work/run/file-${index}.json`,
+    }));
+    const items = automationEvidence(row({ evidence: many }), url);
+
+    for (const item of items) {
+      expect(item.url).toContain("path=ref-file-");
+      expect(item.url).not.toContain("/Users/");
+      expect(item.id).not.toContain("/Users/");
+    }
   });
 
   it("says nothing at all when there is no result yet", () => {
@@ -247,6 +296,15 @@ describe("automated and manual evidence together", () => {
 
   it("still shows what security recorded when there is no automated result", () => {
     expect(combinedEvidence(undefined, manual, url)).toHaveLength(1);
+  });
+
+  it("hands the rail every automated and manual item, leaving the limit to the view", () => {
+    const many = Array.from({ length: 7 }, (_, index) => artifact(`file-${index}.json`));
+    const items = combinedEvidence(row({ evidence: many }), [...manual, manual[0]], url);
+
+    expect(items).toHaveLength(9);
+    expect(items.slice(0, 7).every((item) => item.source === "Automated test")).toBe(true);
+    expect(items.slice(7).every((item) => item.source === "Security team")).toBe(true);
   });
 
   it("leaves a source the caller already set alone", () => {

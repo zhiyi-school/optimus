@@ -313,7 +313,13 @@ export function RiskConversationPanel({
                   : "?"}
               </AvatarFallback>
             </Avatar>
-            <div className="flex-1">
+            <div className="min-w-0 flex-1">
+              <ComposerOfferBar
+                offers={composerOffers}
+                selected={action?.kind ?? null}
+                disabled={retryingAttachment}
+                onSelect={selectOffer}
+              />
               {action && (
                 <ComposerActionChip
                   action={action}
@@ -373,12 +379,6 @@ export function RiskConversationPanel({
                   </button>
                 </p>
               )}
-              <ComposerOfferBar
-                offers={composerOffers}
-                selected={action?.kind ?? null}
-                disabled={retryingAttachment}
-                onSelect={selectOffer}
-              />
               {attachmentRetry && (
                 <div className="mt-2 rounded-lg border border-warning/40 bg-warning/5 p-2 text-xs text-foreground">
                   <p>
@@ -426,7 +426,7 @@ function ComposerOfferBar({
   if (available.length === 0) return null;
 
   return (
-    <div className="mt-2 flex flex-wrap items-start gap-x-3 gap-y-1">
+    <div className="mb-2 flex flex-wrap items-start gap-x-3 gap-y-1">
       {available.map((offer) => {
         const noteId = offer.blockedReason ? `composer-${offer.kind}-blocked` : undefined;
         return (
@@ -446,7 +446,10 @@ function ComposerOfferBar({
               {ACTION_LABEL[offer.kind]}
             </button>
             {offer.blockedReason && (
-              <p id={noteId} className="mt-1 max-w-xs text-xs text-muted-foreground">
+              <p
+                id={noteId}
+                className="mt-1 max-w-full break-words text-xs text-muted-foreground sm:max-w-xs"
+              >
                 {offer.blockedReason}
               </p>
             )}

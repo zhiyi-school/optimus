@@ -2,6 +2,7 @@ import { supabase } from "@/data/supabase";
 import type {
   Finding,
   FindingStatus,
+  RetestRun,
   RiskConversationAttachment,
 } from "@/data/types";
 
@@ -102,4 +103,41 @@ function isMissingAttachmentMetadataColumn(error: unknown): boolean {
     (code === "PGRST204" || code === "42703") &&
     /(storage_provider|size_bytes)/i.test(message)
   );
+}
+
+export type ReassessmentCapability = "queue_rpc" | "legacy_single_active";
+
+export interface ReassessmentRequestResult {
+  run: RetestRun;
+  entryId: string | null;
+  capability: ReassessmentCapability;
+}
+
+/**
+ * One submission, one request. The RPC is atomic and deduplicates on the
+ * submission id, so a retry after a lost response resolves to the request that
+ * write already made rather than queueing another.
+ */
+export async function requestReassessmentWithCompatibility(input: {
+  conversationId: string;
+  findingId: string;
+  ticketId: string | null;
+  message: string | null;
+  submissionId: string;
+}): Promise<ReassessmentRequestResult | null> {
+  const { data, error } = await supabase.rpc("request_reassessment_entry", {
+    p_conversation_id: input.conversationId,
+    p_finding_id: input.findingId,
+    p_ticket_id: input.ticketId,
+    p_message: input.message,
+    p_submission_id: input.submissionId,
+  });
+  // Only a database without migration 0030 falls back; a permission, validation
+  // or network failure keeps its own meaning.
+  if (error) {
+    if (isMissingFunction(error)) return null;
+    throw error;
+  }
+  const payload = data as { run: RetestRun; entry_id: string | null };
+  return { run: payload.run, entryId: payload.entry_id ?? null, capability: "queue_rpc" };
 }

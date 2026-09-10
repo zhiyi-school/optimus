@@ -140,12 +140,18 @@ export function useSaveConversationAttachment() {
 export function useRequestReassessment(conversationId: string | undefined) {
   const invalidate = useInvalidateQueries();
   return useMutation({
-    mutationFn: (input: { findingId: string; ticketId?: string | null; message?: string }) =>
+    mutationFn: (input: {
+      findingId: string;
+      ticketId?: string | null;
+      message?: string;
+      submissionId: string;
+    }) =>
       retestData.requestRetest({
         conversationId: conversationId as string,
         findingId: input.findingId,
         ticketId: input.ticketId,
         message: input.message,
+        submissionId: input.submissionId,
       }),
     onSuccess: (_data, variables) =>
       invalidate([

@@ -30,7 +30,7 @@ import {
   useRunEvents,
   useRunSyncStatus,
   useTestRunHistory,
-  useCriticalFindings,
+  useIpaAnalysis,
 } from "@/hooks/queries/automation";
 import {
   useRiskConversation,
@@ -48,17 +48,14 @@ import {
   type RunCancelToken,
 } from "@/data/sync";
 import { useAuth } from "@/auth/useAuth";
+import { hasRole } from "@/auth/permissions";
 import { riskIcon } from "@/lib/entity-icons";
 import { hasAutomation } from "@/lib/risk-automation";
 import { conversationTimeline } from "@/lib/conversation-timeline";
-import {
-  artifactNamed,
-  combinedEvidence,
-  latestResult,
-  latestResultDetail,
-} from "@/lib/automation-evidence";
+import { combinedEvidence, latestResult, latestResultDetail } from "@/lib/automation-evidence";
+import { PlaintextLiteralsCard } from "@/components/plaintext-literals";
+import { analysisArtifact, plaintextLiterals } from "@/lib/plaintext-literals";
 import { LatestResultPanel } from "@/components/latest-result";
-import { CriticalFindingsTable } from "@/components/critical-findings";
 import { activeRemediationTicket, resumableRemediationTicket } from "@/lib/resolve";
 import { cn, errorMessage, formatDate } from "@/lib/utils";
 import type { Application, Finding } from "@/data/types";
@@ -78,6 +75,8 @@ function TestPage() {
   }>();
   const queryClient = useQueryClient();
   const { profile, can } = useAuth();
+  // Security reads the outcome from the conversation's run history instead.
+  const isSecurity = hasRole(profile?.roles, "security");
 
   const assessmentQuery = useAssessment(assessmentId);
   const assessment = assessmentQuery.data;
@@ -142,8 +141,12 @@ function TestPage() {
     () => combinedEvidence(newest, evidence.data, assessmentApi.evidenceFileUrl),
     [newest, evidence.data],
   );
-  const findingsRef = artifactNamed(newest, "critical_findings.json");
-  const staticAnalysis = useCriticalFindings(newest?.run_timestamp, findingsRef?.ref);
+  const analysisRef = analysisArtifact(newest);
+  const analysis = useIpaAnalysis(newest?.run_timestamp, analysisRef?.ref);
+  const literals = useMemo(
+    () => (analysis.data ? plaintextLiterals(analysis.data, newest?.run_timestamp ?? "") : undefined),
+    [analysis.data, newest?.run_timestamp],
+  );
 
   const [watching, setWatching] = useState(false);
   const [startedRunId, setStartedRunId] = useState<string | undefined>();
@@ -242,12 +245,6 @@ function TestPage() {
     return <LoadingState label="Loading test…" />;
   }
 
-  const markdownRef = () => {
-    const artifact = artifactNamed(newest, "critical_findings.md");
-    return artifact && newest
-      ? assessmentApi.evidenceFileUrl(newest.run_timestamp, artifact.ref)
-      : undefined;
-  };
   const RiskIcon = riskIcon(risk.name);
   const automated = hasAutomation(risk);
 
@@ -376,19 +373,18 @@ function TestPage() {
         </div>
         {runError && <p className="text-xs text-danger">{runError}</p>}
 
-        <LatestResultPanel result={latestResultDetail(newest)} />
+        {!isSecurity && <LatestResultPanel result={latestResultDetail(newest)} />}
 
-        <CriticalFindingsTable
-          findings={staticAnalysis.data}
-          isLoading={staticAnalysis.isLoading}
-          isError={staticAnalysis.isError}
-          onRetry={() => void staticAnalysis.refetch()}
-          jsonUrl={
-            findingsRef && newest
-              ? assessmentApi.evidenceFileUrl(newest.run_timestamp, findingsRef.ref)
-              : undefined
+        <PlaintextLiteralsCard
+          analysis={literals}
+          isLoading={analysis.isLoading}
+          isError={analysis.isError}
+          onRetry={() => void analysis.refetch()}
+          controlHref={(controlId) =>
+            currentFinding
+              ? `/resolve/findings/${currentFinding.id}/controls/${encodeURIComponent(controlId)}`
+              : "#"
           }
-          markdownUrl={markdownRef()}
         />
 
         {(executing || queued) && (

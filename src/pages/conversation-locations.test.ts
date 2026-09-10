@@ -80,8 +80,12 @@ describe("the conversation has exactly one home", () => {
     expect(actions).not.toContain("ClassifyRiskDialog");
     expect(actions).not.toContain("RequestReassessmentButton");
     // The operational controls stay outside the Send flow.
-    expect(actions).toContain("WithdrawReassessmentDialog");
     expect(actions).toContain("RunRetestButton");
+    // Developers no longer withdraw a reassessment from the dashboard.
+    expect(actions).not.toContain("WithdrawReassessmentDialog");
+    expect(source("src/components/ticket-actions/reassessment.tsx")).not.toContain(
+      "Withdraw reassessment",
+    );
   });
 });
 

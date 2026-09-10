@@ -598,7 +598,7 @@ describe("the simplified remediation view", () => {
     expect(text()).not.toContain("Submit");
   });
 
-  it("says the risk is ready for a reassessment once every step is done", () => {
+  it("says what progress is for without tying it to completion", () => {
     storedSelection = FIRST;
     controlRows = [controlRow(FIRST, "tc-1")];
     stepRows = [
@@ -607,17 +607,19 @@ describe("the simplified remediation view", () => {
     ];
     render();
 
-    expect(text()).toContain("Every step is done.");
-    expect(text()).toContain("Ask for a reassessment in the conversation");
+    expect(text()).toContain("Track your remediation progress here.");
+    expect(text()).toContain("Request reassessment from the conversation.");
   });
 
-  it("says completing the steps is what readies the risk while work is outstanding", () => {
+  it("says the same thing while work is still outstanding", () => {
     storedSelection = FIRST;
     controlRows = [controlRow(FIRST, "tc-1")];
     stepRows = [stepRow("tc-1", "rotate-example-key", "completed"), stepRow("tc-1", "revoke-example-key")];
     render();
 
-    expect(text()).toContain("makes this risk ready for the reassessment");
+    expect(text()).toContain("Track your remediation progress here.");
+    expect(text()).not.toContain("makes this risk ready for the reassessment");
+    expect(text()).not.toContain("Every step is done.");
   });
 
   it("keeps Withdraw remediation reachable", () => {

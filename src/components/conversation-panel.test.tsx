@@ -576,6 +576,11 @@ describe("the optional composer actions", () => {
     });
   }
 
+  /** DOM order decides tab order, so the offer must really precede the textbox. */
+  function precedesComposer(node: Element) {
+    return !!(node.compareDocumentPosition(composer()!) & Node.DOCUMENT_POSITION_FOLLOWING);
+  }
+
   function statusSelect() {
     return container.querySelector<HTMLSelectElement>("#composer-classification");
   }
@@ -596,6 +601,69 @@ describe("the optional composer actions", () => {
     render();
     expect(buttonNamed("Change classification")).toBeUndefined();
     expect(buttonNamed("Request reassessment")).toBeUndefined();
+  });
+
+  it("puts every offered action above the message box, in the tab order", () => {
+    render({
+      composerOffers: [{ kind: "classification", currentStatus: "at_risk" }, { kind: "reassessment" }],
+    });
+
+    expect(precedesComposer(buttonNamed("Change classification")!)).toBe(true);
+    expect(precedesComposer(buttonNamed("Request reassessment")!)).toBe(true);
+  });
+
+  it("keeps the selected action's chip above the message box too", () => {
+    render({ composerOffers: [{ kind: "classification", currentStatus: "at_risk" }] });
+    act(() => buttonNamed("Change classification")!.click());
+
+    expect(precedesComposer(statusSelect()!)).toBe(true);
+    expect(
+      precedesComposer(
+        container.querySelector("button[aria-label='Remove change classification']")!,
+      ),
+    ).toBe(true);
+  });
+
+  it("leaves no action row at all when nothing is on offer", () => {
+    render();
+    const form = container.querySelector("form")!;
+    expect(form.querySelector("select")).toBeNull();
+    // Only the composer row itself sits above the textbox.
+    expect([...form.querySelectorAll("button")].some(precedesComposer)).toBe(false);
+  });
+
+  it("does not submit the form when an action is chosen", () => {
+    render({ composerOffers: [{ kind: "reassessment" }] });
+    act(() => buttonNamed("Request reassessment")!.click());
+
+    expect(sent).toEqual([]);
+    expect(buttonNamed("Request reassessment")).toBeUndefined();
+  });
+
+  it("keeps every action button a plain button, never a submit", () => {
+    render({
+      composerOffers: [{ kind: "classification", currentStatus: "at_risk" }, { kind: "reassessment" }],
+    });
+
+    for (const label of ["Change classification", "Request reassessment"]) {
+      expect(buttonNamed(label)!.getAttribute("type")).toBe("button");
+    }
+  });
+
+  it("keeps a disabled action's explanation tied to its button", () => {
+    render({
+      composerOffers: [
+        { kind: "reassessment", blockedReason: "Finish every step of the approach first." },
+      ],
+    });
+    const button = buttonNamed("Request reassessment")!;
+
+    expect(button.disabled).toBe(true);
+    const noteId = button.getAttribute("aria-describedby")!;
+    expect(document.getElementById(noteId)?.textContent).toContain(
+      "Finish every step of the approach first.",
+    );
+    expect(precedesComposer(button)).toBe(true);
   });
 
   it("sends an ordinary message with no action attached", async () => {

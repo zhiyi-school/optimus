@@ -20,7 +20,7 @@ export function remediationBlockMessage(block: RemediationBlock | null): string 
     case "reassessment_active_queued":
       return "A reassessment has been requested. Security runs it from this conversation.";
     case "reassessment_no_remediation":
-      return "Start a remediation for this risk and complete its steps, then ask for a reassessment here.";
+      return "Start a remediation for this risk, then ask for a reassessment here.";
     case "reassessment_withdrawn":
       return "This remediation was withdrawn. Resume it to work on the risk again.";
     case "reassessment_security_finalised":
@@ -36,12 +36,6 @@ export function remediationBlockMessage(block: RemediationBlock | null): string 
     case "reassessment_replaced":
       return "The approach this remediation was following is no longer in the playbook. Review the replacement first.";
     case "reassessment_no_approach":
-      return "Choose a remediation approach and complete its steps first.";
-    case "reassessment_reconciling":
-      return "Preparing this approach's steps…";
-    case "reassessment_no_steps":
-      return "This approach has no steps to complete yet.";
-    case "reassessment_incomplete":
-      return `Complete all ${block.total} steps of the selected approach first — ${block.completed} done.`;
+      return "Choose a remediation approach first.";
   }
 }

@@ -22,6 +22,7 @@ let uploadFails = false;
 let uploadFailureHasBytes = false;
 let attachmentInputs: { bytesUploaded: boolean; fileName: string }[] = [];
 let recordFails = false;
+let reassessmentFails = false;
 let legacyClassification = false;
 let holdRecord = false;
 let finishRecord: (() => void) | null = null;
@@ -99,6 +100,7 @@ vi.mock("@/test-support/query-hooks", () => ({
   useRequestReassessment: () => ({
     mutateAsync: (input: unknown) => {
       calls.push({ name: "reassessment", input });
+      if (reassessmentFails) return Promise.reject(new Error("Example request failure."));
       return Promise.resolve({ run: { id: "retest-1" }, entryId: "entry-reassessment" });
     },
     isPending: false,
@@ -190,6 +192,7 @@ beforeEach(() => {
   uploadFailureHasBytes = false;
   attachmentInputs = [];
   recordFails = false;
+  reassessmentFails = false;
   legacyClassification = false;
   holdRecord = false;
   finishRecord = null;
@@ -237,12 +240,34 @@ describe("routing a submission to its workflow", () => {
     render();
     await submit({ message: "Fixed in build 2.1.", action: { kind: "reassessment" } });
 
-    expect(calls).toEqual([
-      {
-        name: "reassessment",
-        input: { findingId: FINDING, ticketId: TICKET, message: "Fixed in build 2.1." },
-      },
-    ]);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
+      name: "reassessment",
+      input: { findingId: FINDING, ticketId: TICKET, message: "Fixed in build 2.1." },
+    });
+    expect((calls[0].input as { submissionId: string }).submissionId).toEqual(expect.any(String));
+  });
+
+  it("gives each intentional submission its own identity, and a retry the same one", async () => {
+    render();
+    await submit({ message: "Fixed in build 2.1.", action: { kind: "reassessment" } });
+    await submit({ message: "Fixed in build 2.1.", action: { kind: "reassessment" } });
+
+    const ids = calls.map((call) => (call.input as { submissionId: string }).submissionId);
+    expect(ids).toHaveLength(2);
+    expect(ids[0]).not.toBe(ids[1]);
+  });
+
+  it("reuses the identity when the record itself failed, so a lost response cannot double up", async () => {
+    reassessmentFails = true;
+    render();
+    await submit({ message: "Fixed in build 2.1.", action: { kind: "reassessment" } });
+    reassessmentFails = false;
+    await submit({ message: "Fixed in build 2.1.", action: { kind: "reassessment" } });
+
+    const ids = calls.map((call) => (call.input as { submissionId: string }).submissionId);
+    expect(ids).toHaveLength(2);
+    expect(ids[0]).toBe(ids[1]);
   });
 
   it("never posts a second ordinary message alongside an action", async () => {
@@ -421,12 +446,20 @@ describe("what each reader is offered", () => {
     expect(composer.offers).toEqual([]);
   });
 
+  it("offers a reader holding both roles each of their actions", () => {
+    render({ can: (capability) => capability === "update_finding" || capability === "request_retest" });
+    expect(composer.offers.map((offer) => offer.kind)).toEqual([
+      "classification",
+      "reassessment",
+    ]);
+  });
+
   it("offers the request once every step of the selected approach is done", () => {
     render({ can: (capability) => capability === "request_retest" });
     expect(composer.offers[0].blockedReason).toBeNull();
   });
 
-  it("blocks the request until every step is completed", () => {
+  it("offers the request with only some of the steps marked done", () => {
     definitions = [approach(["step-one", "step-two"])];
     completedRows(["step-one", "step-two"]);
     stepRows = [
@@ -435,27 +468,32 @@ describe("what each reader is offered", () => {
     ];
     render({ can: (capability) => capability === "request_retest" });
 
-    expect(composer.offers[0].blockedReason).toBe(
-      "Complete all 2 steps of the selected approach first — 1 done.",
-    );
+    expect(composer.offers[0].blockedReason).toBeNull();
   });
 
-  it("blocks the request when the approach has no steps at all", () => {
+  it("offers the request with no step marked done at all", () => {
+    definitions = [approach(["step-one", "step-two"])];
+    controlRows = [{ id: "tc-1", ticket_id: TICKET, control_id: CONTROL, status: "not_started" }];
+    stepRows = [];
+    render({ can: (capability) => capability === "request_retest" });
+
+    expect(composer.offers[0].blockedReason).toBeNull();
+  });
+
+  it("offers the request when the approach records no steps at all", () => {
     definitions = [approach([])];
     controlRows = [{ id: "tc-1", ticket_id: TICKET, control_id: CONTROL, status: "not_started" }];
     stepRows = [];
     render({ can: (capability) => capability === "request_retest" });
 
-    expect(composer.offers[0].blockedReason).toBe("This approach has no steps to complete yet.");
+    expect(composer.offers[0].blockedReason).toBeNull();
   });
 
   it("blocks the request when the risk has no approach to follow", () => {
     definitions = [];
     selectedControlId = null;
     render({ can: (capability) => capability === "request_retest" });
-    expect(composer.offers[0].blockedReason).toBe(
-      "Choose a remediation approach and complete its steps first.",
-    );
+    expect(composer.offers[0].blockedReason).toBe("Choose a remediation approach first.");
   });
 
   it("blocks the request once security has finished with the remediation", () => {
@@ -488,30 +526,38 @@ describe("what each reader is offered", () => {
     expect(composer.offers[0].blockedReason).toContain("no longer in the playbook");
   });
 
-  it("blocks the request until the approach's rows are reconciled", () => {
+  it("offers the request while the approach's progress rows are still being reconciled", () => {
     definitions = [approach(["step-one", "step-two"])];
     completedRows(["step-one"]);
     render({ can: (capability) => capability === "request_retest" });
-    expect(composer.offers[0].blockedReason).toBe("Preparing this approach's steps…");
+    expect(composer.offers[0].blockedReason).toBeNull();
   });
 
-  it("blocks a second request while one is already queued", () => {
+  it("offers another request while one is already queued", () => {
+    ticketStatus = "retest_requested";
     render({
       can: (capability) => capability === "request_retest",
       retests: [{ id: "retest-1", status: "queued" } as RetestRun],
     });
 
-    const offer = composer.offers[0];
-    expect(offer.blockedReason).toContain("A reassessment has been requested");
+    expect(composer.offers[0].blockedReason).toBeNull();
   });
 
-  it("blocks the request once security has started running it", () => {
+  it("offers another request while security is running one", () => {
+    ticketStatus = "retest_in_progress";
     render({
       can: (capability) => capability === "request_retest",
       retests: [{ id: "retest-1", status: "running" } as RetestRun],
     });
 
-    expect(composer.offers[0].blockedReason).toContain("already started verifying");
+    expect(composer.offers[0].blockedReason).toBeNull();
+  });
+
+  it("offers another request once a run has left the remediation under review", () => {
+    ticketStatus = "under_review";
+    render({ can: (capability) => capability === "request_retest" });
+
+    expect(composer.offers[0].blockedReason).toBeNull();
   });
 
   it("names the risk's current classification so it cannot be offered again", () => {

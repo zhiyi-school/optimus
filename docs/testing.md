@@ -122,7 +122,7 @@ The command requires a working Docker daemon and the PostgreSQL 15 image. It
 creates and removes uniquely named containers and reads no Supabase credentials.
 It is intentionally separate from the fast checks.
 
-Nine SQL files in `supabase/tests/` check the rules the developer workflow
+Eleven SQL files in `supabase/tests/` check the rules the developer workflow
 depends on at the table level, where they are actually enforced:
 
 | File | What it proves |
@@ -136,6 +136,8 @@ depends on at the table level, where they are actually enforced:
 | `0024_reassessment_withdrawal_rls.sql` | only the requester may withdraw a queued reassessment, a withdrawal must carry a reason, one that security has already started is refused, and two concurrent withdrawals cannot both win |
 | `0026_reassessment_from_completed_steps_rls.sql` | a reassessment requested from a remediation whose selected approach is finished rather than from a fix submission, refused while any step is outstanding, and still open to security without a checklist |
 | `0027_attachment_download_rls.sql` | a conversation attachment readable by its uploader and by every other participant but by nobody outside the application, the same for the stored object itself, a file on a workflow event behaving like one on a message, an upload defaulting to the Supabase provider, and a storage key that can be neither absolute nor walked out of its folder |
+| `0029_reassessment_without_completion_rls.sql` | a reassessment requested with no recorded progress and with only some steps done, progress left untouched by the request, and the surviving conditions — a remediation ticket, an allowed state, a selected approach, application access — still refusing |
+| `0030_reassessment_queue_rls.sql` | two intentional submissions creating two requests where a retried submission creates none, oldest-first starts, one running reassessment per risk across two reviewers, a queued request never downgrading a running remediation, completing one leaving the others queued, and ownership, access and finalised-ticket rules still refusing |
 
 None is part of `npm test` — they need a disposable database. The supported
 runner creates its own isolated PostgreSQL container. Each suite creates its own placeholder fixtures,
@@ -147,7 +149,9 @@ failed assertion raises; a clean run prints `0017 RLS checks passed`,
 passed`, `0023 assessment run request checks passed`,
 `0024 reassessment withdrawal checks passed`,
 `0026 reassessment readiness checks passed` or
-`0027 attachment download checks passed`.
+`0027 attachment download checks passed` or
+`0029 reassessment eligibility checks passed` or
+`0030 reassessment queue checks passed`.
 
 **A migration that replaces a shared trigger has to carry forward what earlier
 ones added.** `0022` rewrote `enforce_ticket_update_permissions` with

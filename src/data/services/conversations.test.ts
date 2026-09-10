@@ -512,11 +512,17 @@ describe("classification", () => {
 });
 
 describe("the retest lifecycle", () => {
+  // These document the pre-0030 fallback; the queue RPC has its own block below.
+  beforeEach(() => {
+    rpcMissing = [...rpcMissing, "request_reassessment_entry"];
+  });
+
   it("records the request, links it to the conversation and moves the ticket", async () => {
     await retestData.requestRetest({
       conversationId: CONVERSATION,
       findingId: FINDING,
       ticketId: TICKET,
+      submissionId: "submission-1",
     });
 
     expect(written("retest_runs")[0].payload).toMatchObject({
@@ -533,7 +539,11 @@ describe("the retest lifecycle", () => {
   });
 
   it("leaves tickets alone for a retest security runs on its own", async () => {
-    await retestData.requestRetest({ conversationId: CONVERSATION, findingId: FINDING });
+    await retestData.requestRetest({
+      conversationId: CONVERSATION,
+      findingId: FINDING,
+      submissionId: "submission-1",
+    });
 
     expect(written("retest_runs")[0].payload).toMatchObject({ ticket_id: null });
     expect(written("tickets")).toHaveLength(0);
@@ -548,6 +558,7 @@ describe("the retest lifecycle", () => {
       conversationId: CONVERSATION,
       findingId: FINDING,
       ticketId: TICKET,
+      submissionId: "submission-1",
     });
 
     expect(written("risk_conversation_entries")[0].payload).toMatchObject({
@@ -561,6 +572,7 @@ describe("the retest lifecycle", () => {
       findingId: FINDING,
       ticketId: TICKET,
       message: "  Fixed in build 2.1.  ",
+      submissionId: "submission-1",
     });
 
     const entries = written("risk_conversation_entries");
@@ -577,6 +589,7 @@ describe("the retest lifecycle", () => {
       findingId: FINDING,
       ticketId: TICKET,
       message: "   ",
+      submissionId: "submission-1",
     });
 
     expect(written("risk_conversation_entries")[0].payload).toMatchObject({ message: null });
@@ -589,6 +602,7 @@ describe("the retest lifecycle", () => {
         findingId: FINDING,
         ticketId: TICKET,
         message: "Fixed in build 2.1.",
+      submissionId: "submission-1",
       });
     }
 
@@ -601,6 +615,7 @@ describe("the retest lifecycle", () => {
       conversationId: CONVERSATION,
       findingId: FINDING,
       ticketId: TICKET,
+      submissionId: "submission-1",
     });
 
     const entries = written("risk_conversation_entries");
@@ -613,11 +628,13 @@ describe("the retest lifecycle", () => {
       conversationId: CONVERSATION,
       findingId: FINDING,
       ticketId: TICKET,
+      submissionId: "submission-1",
     });
     const second = await retestData.requestRetest({
       conversationId: CONVERSATION,
       findingId: FINDING,
       ticketId: TICKET,
+      submissionId: "submission-1",
     });
 
     expect(second.entryId).toBe(first.entryId);
@@ -633,6 +650,7 @@ describe("the retest lifecycle", () => {
       conversationId: CONVERSATION,
       findingId: FINDING,
       ticketId: TICKET,
+      submissionId: "submission-1",
     });
 
     expect(run.id).toBe("retest-1");
@@ -648,6 +666,7 @@ describe("the retest lifecycle", () => {
       conversationId: CONVERSATION,
       findingId: FINDING,
       ticketId: TICKET,
+      submissionId: "submission-1",
     });
 
     expect(written("retest_runs")[0].payload).toMatchObject({ status: "queued" });
@@ -662,6 +681,7 @@ describe("the retest lifecycle", () => {
       conversationId: CONVERSATION,
       findingId: FINDING,
       ticketId: TICKET,
+      submissionId: "submission-1",
     });
 
     expect(written("tickets")).toHaveLength(0);
@@ -672,6 +692,7 @@ describe("the retest lifecycle", () => {
       conversationId: CONVERSATION,
       findingId: FINDING,
       ticketId: TICKET,
+      submissionId: "submission-1",
     });
 
     expect(written("retest_runs")[0].payload).not.toHaveProperty("previous_ticket_status");
@@ -809,6 +830,7 @@ describe("the legacy conversation tables", () => {
       conversationId: CONVERSATION,
       findingId: FINDING,
       ticketId: TICKET,
+      submissionId: "submission-1",
     });
     await findingData.classify({
       findingId: FINDING,

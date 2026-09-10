@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { ImageOff } from "lucide-react";
 import { automationAssetUrl } from "@/api/automation-client";
+import { CodeBlock } from "@/components/code-block";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import type { PlaybookBlock, PlaybookTableBlock } from "@/api/playbook-types";
 import { renderInline } from "@/lib/inline-markdown";
@@ -114,11 +115,7 @@ export function PlaybookBlockView({ block }: { block: PlaybookBlock }) {
     case "caption":
       return <p className="text-xs italic text-muted-foreground">{renderInline(block.text)}</p>;
     case "code":
-      return (
-        <pre className="overflow-x-auto rounded-md bg-muted px-3 py-2 text-xs text-foreground">
-          <code>{block.text}</code>
-        </pre>
-      );
+      return <CodeBlock code={block.text} language={block.language} />;
     case "list": {
       const ListTag = block.ordered ? "ol" : "ul";
       return (

@@ -111,7 +111,6 @@ export default function ResolveTicket({ ticketId }: { ticketId: string }) {
   const progress = controlProgress(live);
   const showWithdraw = can("withdraw_ticket") && canWithdrawTicket(ticket.data);
   const showResume = can("withdraw_ticket") && canResumeTicket(ticket.data);
-  const complete = workflow.complete;
 
   return (
     <div>
@@ -184,9 +183,7 @@ export default function ResolveTicket({ ticketId }: { ticketId: string }) {
               )}
             </div>
             <p className="text-xs text-muted-foreground">
-              {complete
-                ? "Every step is done. Ask for a reassessment in the conversation, where security runs it and decides whether the risk is reduced."
-                : "Completing every control step does not close the finding — it makes this risk ready for the reassessment you ask for in the conversation."}
+              Track your remediation progress here. Request reassessment from the conversation.
             </p>
           </div>
         </Section>

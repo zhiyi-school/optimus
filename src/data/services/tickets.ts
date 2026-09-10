@@ -3,6 +3,7 @@ import type { Application, Finding, RetestRun, RiskAcceptance, RiskAcceptanceDec
 import { requireUserId } from "./common";
 import { activityData } from "./activity";
 import { riskConversationData } from "./conversations";
+import { requestReassessmentWithCompatibility } from "@/data/compatibility/workflow";
 
 export interface TicketFilters {
   type?: TicketType;
@@ -342,11 +343,10 @@ export const retestData = {
   },
 
   /**
-   * A ticket-originated request keeps its ticket, so the linked remediation
-   * still transitions. Every step is safe to repeat: the database allows one
-   * active reassessment per risk, the conversation event is keyed to the run,
-   * and a ticket already in `retest_requested` is left alone. A retry after a
-   * half-finished attempt therefore completes it instead of duplicating it.
+   * With migration 0030 the whole request is one atomic call keyed on the
+   * submission. The path below is the pre-0030 fallback, where the database
+   * still allows only one active reassessment per risk and a retry therefore
+   * completes the half-finished attempt instead of duplicating it.
    */
   async requestRetest(input: {
     conversationId: string;
@@ -354,7 +354,20 @@ export const retestData = {
     ticketId?: string | null;
     /** Optional context, carried on the request event rather than posted twice. */
     message?: string | null;
+    /** One intentional Send. A retry of it resolves to the request it already made. */
+    submissionId: string;
   }): Promise<{ run: RetestRun; entryId: string }> {
+    const queued = await requestReassessmentWithCompatibility({
+      conversationId: input.conversationId,
+      findingId: input.findingId,
+      ticketId: input.ticketId ?? null,
+      message: input.message?.trim() || null,
+      submissionId: input.submissionId,
+    });
+    if (queued) {
+      return { run: queued.run, entryId: queued.entryId as string };
+    }
+
     const userId = await requireUserId();
     let run = await retestData.findActiveForConversation(input.conversationId);
     if (!run) {

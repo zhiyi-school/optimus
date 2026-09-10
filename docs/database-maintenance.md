@@ -55,6 +55,64 @@ backfills, and irreversible data changes. Production rollback therefore means
 a reviewed forward correction or a tested restore plan, not assuming every
 migration can be run backward.
 
+## Reassessment queue (0030)
+
+Migration `0030_reassessment_queue.sql` lets several reassessment requests be
+outstanding for one risk. It adds `retest_runs.submission_id`, drops
+`retest_runs_one_active_per_conversation`, and replaces it with
+`retest_runs_one_running_per_conversation` (at most one running request per
+risk) and `retest_runs_submission_identity` (one request per
+conversation + requester + submission). `request_reassessment_entry()` creates
+the request and its conversation event in one call and returns the existing pair
+when a submission is retried. `start_reassessment()` now refuses a start while
+another request for the risk is running and refuses to skip an older queued
+request, so the queue runs oldest-first.
+`reconcile_reassessment_ticket_state()` derives the remediation's state from its
+outstanding requests, and `withdraw_reassessment()` restores the ticket only
+when nothing else is outstanding.
+
+**Rollout order.** Apply `0030`, then deploy the backend worker, then the
+frontend:
+
+1. **Database first.** Until `0030` is applied, a second request is rejected by
+   the old unique index and the frontend falls back to the pre-0030 path, which
+   reuses the existing active request.
+2. **Worker second.** An older worker sets the ticket to `under_review` as soon
+   as any run completes. With several requests outstanding that is wrong, so the
+   worker must be updated before multiple queued requests are encouraged.
+3. **Frontend last.** It only starts creating distinct requests once the RPC is
+   present; without it, `requestReassessmentWithCompatibility` returns null and
+   the legacy single-request path is used unchanged.
+
+**Rollback is not symmetric.** Re-creating the old
+`retest_runs_one_active_per_conversation` index fails while more than one
+queued-or-running row exists for a conversation. Rolling the application back
+alone does **not** restore the old constraint; the outstanding rows must be
+resolved or cancelled explicitly first. Plan a forward correction rather than a
+schema rollback.
+
+## Reassessment eligibility (0029)
+
+Migration `0029_reassessment_without_completion.sql` replaces
+`enforce_retest_request_permissions()` so a reassessment request no longer
+requires a progress row for the selected approach, at least one step, or every
+step completed. Role and application access, the remediation ticket's type and
+allowed states (including the historical `fix_submitted`), ticket/conversation
+consistency, the required approach selection, the security-role exception,
+active-request uniqueness and previous-status bookkeeping all stay as they were.
+It rewrites no stored completion rows and no historical requests, and
+`create or replace` keeps the function identity, so its privileges and trigger
+binding are untouched.
+
+**Deploy `0029` before the frontend that offers a reassessment with incomplete
+progress.** Against a database still on `0028` or earlier, the older trigger
+refuses such a request with "complete every step of the selected remediation
+approach first" — the request fails cleanly and nothing is written. The
+dashboard surfaces that refusal rather than working around it; there is
+deliberately no fallback that marks steps complete to satisfy an older schema.
+Rolling the migration back restores the completion requirement and makes those
+requests fail again.
+
 ## Current permission correction
 
 Migration `0028_workflow_function_grants.sql` removes direct `anon` execution

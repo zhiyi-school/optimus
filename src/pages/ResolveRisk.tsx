@@ -18,9 +18,9 @@ import {
   useFindings,
 } from "@/hooks/queries/evidence";
 import {
+  useIpaAnalysis,
   useRiskCatalogue,
   useTestRunHistory,
-  useCriticalFindings,
 } from "@/hooks/queries/automation";
 import {
   useRiskConversation,
@@ -34,8 +34,9 @@ import {
 import { useApplications, useProfiles } from "@/hooks/queries/reference";
 import { assessmentApi } from "@/api/automation-services";
 import { conversationTimeline } from "@/lib/conversation-timeline";
-import { artifactNamed, combinedEvidence, latestResult } from "@/lib/automation-evidence";
-import { CriticalFindingsTable } from "@/components/critical-findings";
+import { combinedEvidence, latestResult } from "@/lib/automation-evidence";
+import { PlaintextLiteralsCard } from "@/components/plaintext-literals";
+import { analysisArtifact, plaintextLiterals } from "@/lib/plaintext-literals";
 import {
   activeRemediationTicket,
   developerRiskOrder,
@@ -104,9 +105,12 @@ function RiskPage() {
     () => combinedEvidence(newest, securityEvidence.data, assessmentApi.evidenceFileUrl),
     [newest, securityEvidence.data],
   );
-  const findingsRef = artifactNamed(newest, "critical_findings.json");
-  const markdownArtifact = artifactNamed(newest, "critical_findings.md");
-  const staticAnalysis = useCriticalFindings(newest?.run_timestamp, findingsRef?.ref);
+  const analysisRef = analysisArtifact(newest);
+  const analysis = useIpaAnalysis(newest?.run_timestamp, analysisRef?.ref);
+  const literals = useMemo(
+    () => (analysis.data ? plaintextLiterals(analysis.data, newest?.run_timestamp ?? "") : undefined),
+    [analysis.data, newest?.run_timestamp],
+  );
   const retests = useFindingRetests(finding?.id);
   const composer = useRiskComposer({
     conversation: conversation.data,
@@ -218,20 +222,13 @@ function RiskPage() {
               </EvidenceRail>
             }
           >
-            <CriticalFindingsTable
-              findings={staticAnalysis.data}
-              isLoading={staticAnalysis.isLoading}
-              isError={staticAnalysis.isError}
-              onRetry={() => void staticAnalysis.refetch()}
-              jsonUrl={
-                findingsRef && newest
-                  ? assessmentApi.evidenceFileUrl(newest.run_timestamp, findingsRef.ref)
-                  : undefined
-              }
-              markdownUrl={
-                markdownArtifact && newest
-                  ? assessmentApi.evidenceFileUrl(newest.run_timestamp, markdownArtifact.ref)
-                  : undefined
+            <PlaintextLiteralsCard
+              analysis={literals}
+              isLoading={analysis.isLoading}
+              isError={analysis.isError}
+              onRetry={() => void analysis.refetch()}
+              controlHref={(controlId) =>
+                `/resolve/findings/${finding.id}/controls/${encodeURIComponent(controlId)}`
               }
             />
 

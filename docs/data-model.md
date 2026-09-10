@@ -163,16 +163,23 @@ events in one feed.
   `check (conversation_id is not null or ticket_id is not null)`. Security can
   run a retest with no remediation behind it; a ticket-originated request keeps
   its ticket so the linked remediation still transitions.
-- **One reassessment is in flight per risk.** A partial unique index on
-  `retest_runs (conversation_id) where status in ('queued', 'running')` makes
-  that the database's rule rather than the UI's, so two people cannot queue the
-  same reassessment twice.
+- **Several requests may be outstanding; only one runs.** `0021`'s partial
+  unique index over `('queued', 'running')` was replaced by `0030` with
+  `retest_runs (conversation_id) where status = 'running'`, so requests queue
+  freely and security executes them one at a time.
+- **A submission identifies itself.** `retest_runs.submission_id` records one
+  intentional Send, and a unique index on
+  `(conversation_id, requested_by, submission_id)` makes a retry of that Send
+  resolve to the request it already created. Scoping the index to the requester
+  means one developer's identifier can never reach another's request. The column
+  is null on rows created before `0030`.
 - **Opening a conversation is not a way around the remediation workflow.**
   `enforce_retest_request_permissions` requires a caller without
   `has_role('security')` to name a remediation ticket in `open`, `in_progress`,
-  `rejected` or historical `fix_submitted`, and migration `0026` verifies every
-  step of its selected approach is complete. It refuses anyone a ticket raised
-  against a different risk. A
+  `rejected`, historical `fix_submitted`, or — since `0030` — a state an
+  outstanding reassessment has already left it in (`retest_requested`,
+  `retest_in_progress`, `under_review`). `0029` removed the step-completion
+  requirement. It refuses anyone a ticket raised against a different risk. A
   developer with no eligible ticket can still post a message and ask a question;
   they cannot create a retest run.
 - **Legacy message tables are archived, not dropped.** `assessment_messages`,

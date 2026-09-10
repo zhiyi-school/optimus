@@ -490,7 +490,8 @@ describe("the three guided pages render one shell", () => {
       const pre = container.querySelector("pre") as HTMLElement;
       expect(pre, page).not.toBeNull();
       expect(pre.className, page).toContain("overflow-x-auto");
-      expect(pre.className, page).toContain("rounded-md");
+      // The code scrolls inside the block's own bordered box, which does not move with it.
+      expect((pre.parentElement as HTMLElement).className, page).toContain("rounded-md");
     }
   });
 
@@ -594,6 +595,12 @@ describe("the active remediation step body", () => {
     return [...panel().querySelectorAll("p,h2,figure,pre,button")]
       // A figure's own expand control belongs to the image, not to the step's actions.
       .filter((node) => node.tagName === "FIGURE" || !node.closest("figure"))
+      // A code block's own Copy control likewise belongs to the code, not to the step.
+      .filter(
+        (node) =>
+          node.tagName !== "BUTTON" ||
+          !(node.getAttribute("aria-label") ?? "").startsWith("Copy "),
+      )
       .map((node) => {
         if (node.tagName === "H2") return "title";
         if (node.tagName === "FIGURE") return "figure";

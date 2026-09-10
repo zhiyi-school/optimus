@@ -79,11 +79,11 @@ describe("remediation workflow calculation", () => {
     expect(failed.reassessmentBlock?.code).toBe("reassessment_load_failed");
   });
 
-  it("requires a newly added step to have its own completed row", () => {
+  it("still reports a newly added step as unreconciled progress, without blocking the request", () => {
     const state = calculate({ definitions: [definition(["one", "two"])] });
     expect(state.complete).toBe(false);
     expect(state.reconciled).toBe(false);
-    expect(state.reassessmentBlock?.code).toBe("reassessment_reconciling");
+    expect(state.reassessmentBlock).toBeNull();
   });
 
   it("keeps historical fix_submitted tickets eligible", () => {

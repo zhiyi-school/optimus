@@ -5,8 +5,6 @@ import { formatDate, formatDuration } from "@/lib/utils";
 export const AUTOMATION_SOURCE = "Automated test";
 export const MANUAL_SOURCE = "Security team";
 
-export const RAIL_ARTIFACT_LIMIT = 6;
-
 export function latestResult(
   history: AutomationResultRow[] | undefined,
   appExternalId: string | null | undefined,
@@ -78,44 +76,30 @@ export function artifactNamed(
 export function automationEvidence(
   row: AutomationResultRow | undefined,
   evidenceUrl: (runTimestamp: string, ref: string) => string,
-  limit: number = RAIL_ARTIFACT_LIMIT,
 ): EvidenceItem[] {
   if (!row) return [];
-  const artifacts = artifactsOf(row);
-  const items: EvidenceItem[] = artifacts.slice(0, limit).map((artifact) => {
+  return artifactsOf(row).map((artifact) => {
     const fileName = artifact.path.split("/").pop() || artifact.path;
-    const label = artifact.label?.trim() || fileName;
     return {
       id: `${row.run_timestamp}:${artifact.ref}`,
-      name: label,
+      name: artifact.label?.trim() || fileName,
       kind: displayKind(artifact.kind ?? "file", fileName),
+      // The opaque ref is the download contract; `path` is display metadata only.
       url: evidenceUrl(row.run_timestamp, artifact.ref),
       downloadName: fileName,
       sizeBytes: artifact.size_bytes,
       source: AUTOMATION_SOURCE,
     };
   });
-
-  const remaining = artifacts.length - Math.min(artifacts.length, limit);
-  if (remaining > 0) {
-    items.push({
-      id: `${row.run_timestamp}:more`,
-      name: `${remaining} more artefact${remaining === 1 ? "" : "s"} in this run`,
-      kind: "text",
-      source: AUTOMATION_SOURCE,
-    });
-  }
-  return items;
 }
 
 export function combinedEvidence(
   row: AutomationResultRow | undefined,
   manual: EvidenceItem[] | undefined,
   evidenceUrl: (runTimestamp: string, ref: string) => string,
-  limit: number = RAIL_ARTIFACT_LIMIT,
 ): EvidenceItem[] {
   return [
-    ...automationEvidence(row, evidenceUrl, limit),
+    ...automationEvidence(row, evidenceUrl),
     ...(manual ?? []).map((item) => ({ ...item, source: item.source ?? MANUAL_SOURCE })),
   ];
 }

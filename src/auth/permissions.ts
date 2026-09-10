@@ -65,6 +65,11 @@ export function roleCan(roles: UserRole[] | undefined, capability: Capability): 
   return roles.some((role) => roleCapabilities[role]?.includes(capability) ?? false);
 }
 
+/** Membership, not precedence: a mixed-role profile holds every role it lists. */
+export function hasRole(roles: UserRole[] | undefined, role: UserRole): boolean {
+  return roles?.includes(role) ?? false;
+}
+
 const rolePrecedence: UserRole[] = ["security", "cio", "developer", "admin"];
 
 export function primaryRole(roles: UserRole[] | undefined): UserRole | undefined {

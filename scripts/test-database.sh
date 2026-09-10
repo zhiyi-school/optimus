@@ -98,4 +98,4 @@ apply_migrations optimus_fresh_test
 after="$(docker exec "$container" psql -At -U postgres -d optimus_fresh_test -c 'select count(*) from schema_migrations')"
 [[ "$before" == "$after" ]] || { echo "second migration pass applied unexpected work" >&2; exit 1; }
 
-echo "Database checks passed: fresh 0001-0028, upgrade 0024->0028, degraded grant compatibility, RLS, preservation, and no pending migrations."
+echo "Database checks passed: fresh 0001-0030, upgrade 0024->0030, degraded grant compatibility, RLS, preservation, and no pending migrations."

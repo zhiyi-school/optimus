@@ -1,15 +1,21 @@
 import { Button } from "@/components/ui/button";
 import type { RiskConversationContext } from "@/hooks/conversation-composer";
 import { useUpdateTicketStatus } from "@/hooks/queries/tickets";
-import { activeReassessment, canResumeTicket, canWithdrawReassessment, canWithdrawTicket } from "@/lib/resolve";
+import {
+  canResumeTicket,
+  canWithdrawTicket,
+  nextReassessment,
+  outstandingReassessments,
+  runningReassessment,
+} from "@/lib/resolve";
+import { formatDate } from "@/lib/utils";
 import type { Ticket } from "@/data/types";
 import type { Capability } from "@/auth/permissions";
 import { RequestChangesDialog, ResumeRemediationButton, WithdrawRemediationDialog } from "./remediation";
 import { ReviewRiskAcceptanceDialog } from "./acceptance";
-import { RunRetestButton, WithdrawReassessmentDialog } from "./reassessment";
+import { RunRetestButton } from "./reassessment";
 
 export function RiskConversationActions({
-  conversation,
   finding,
   application,
   ticket,
@@ -17,36 +23,51 @@ export function RiskConversationActions({
   can,
   profileId,
 }: RiskConversationContext) {
-  const pending = activeReassessment(retests);
-  if (!pending || !finding) return null;
+  const outstanding = outstandingReassessments(retests);
+  const running = runningReassessment(retests);
+  const next = nextReassessment(retests);
+  if (outstanding.length === 0 || !finding) return null;
 
-  const mayWithdraw =
-    can("request_retest") &&
-    !!conversation &&
-    canWithdrawReassessment(pending, ticket, profileId);
   const mayRun = can("run_test") && !!application;
-  if (!mayWithdraw && !mayRun) return null;
+  if (!mayRun) return null;
 
   return (
-    <div className="flex flex-wrap items-start gap-3">
-      {mayWithdraw && conversation && (
-        <WithdrawReassessmentDialog
-          retest={pending}
-          conversationId={conversation.id}
-          findingId={finding.id}
-          ticketId={pending.ticket_id as string}
-        />
-      )}
-
-      {mayRun && application && (
-        <RunRetestButton
-          key={pending.id}
-          ticket={ticket}
-          finding={finding}
-          application={application}
-          retestId={pending.id}
-        />
-      )}
+    <div className="space-y-2">
+      <ol className="space-y-1">
+        {outstanding.map((request, index) => (
+          <li key={request.id} className="flex flex-wrap items-baseline gap-x-2 text-xs">
+            <span className="font-medium text-foreground">
+              {request.status === "running" ? "Running" : `Queued #${index + 1}`}
+            </span>
+            <span className="text-muted-foreground">
+              {request.requested_by === profileId ? "you" : "a teammate"} ·{" "}
+              {formatDate(request.created_at)}
+            </span>
+          </li>
+        ))}
+      </ol>
+      <div className="flex flex-wrap items-center gap-3">
+        {next && application ? (
+          <RunRetestButton
+            key={next.id}
+            ticket={ticket}
+            finding={finding}
+            application={application}
+            retestId={next.id}
+          />
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            {running
+              ? "A reassessment for this risk is already running. The next request can be started once it finishes."
+              : "No reassessment is waiting to be started."}
+          </p>
+        )}
+        {outstanding.length > 1 && (
+          <span className="text-xs text-muted-foreground">
+            {outstanding.length} requests outstanding — security runs them one at a time.
+          </span>
+        )}
+      </div>
     </div>
   );
 }

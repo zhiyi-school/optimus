@@ -1,8 +1,6 @@
 import type { ControlDetail } from "@/api/playbook-types";
 import type { RetestRun, Ticket, TicketControl, TicketControlStep } from "@/data/types";
 import {
-  activeReassessment,
-  AWAITING_SECURITY,
   canEditRemediation,
   canRequestReassessment,
   canSelectApproach,
@@ -35,10 +33,7 @@ export type RemediationReasonCode =
   | "reassessment_loading"
   | "reassessment_load_failed"
   | "reassessment_replaced"
-  | "reassessment_no_approach"
-  | "reassessment_reconciling"
-  | "reassessment_no_steps"
-  | "reassessment_incomplete";
+  | "reassessment_no_approach";
 
 export interface RemediationBlock {
   code: RemediationReasonCode;
@@ -92,12 +87,7 @@ export function remediationWorkflow(input: RemediationWorkflowInput): Remediatio
     : undefined;
 
   const approachChangeBlock = approachBlock(input.ticket, input.mayEdit);
-  const reassessmentBlock = reassessmentBlockFor({
-    ...input,
-    replaced,
-    reconciled,
-    liveControl,
-  });
+  const reassessmentBlock = reassessmentBlockFor({ ...input, replaced, selected });
 
   return {
     candidates,
@@ -132,29 +122,22 @@ function approachBlock(
 function reassessmentBlockFor(
   input: RemediationWorkflowInput & {
     replaced: boolean;
-    reconciled: boolean;
-    liveControl: LiveControl | undefined;
+    selected: ControlDetail | undefined;
   },
 ): RemediationBlock | null {
   if (!input.mayRequest) return { code: "reassessment_permission" };
-  const active = activeReassessment(input.retests);
-  if (active?.status === "running") return { code: "reassessment_active_running" };
-  if (active) return { code: "reassessment_active_queued" };
+  // An outstanding request no longer blocks another submission: they queue and
+  // security runs them one at a time.
   const ticket = input.ticket;
   if (!ticket || ticket.type !== "remediation") return { code: "reassessment_no_remediation" };
   if (ticket.status === "withdrawn") return { code: "reassessment_withdrawn" };
   if (SECURITY_FINALISED.includes(ticket.status)) return { code: "reassessment_security_finalised" };
-  if (AWAITING_SECURITY.includes(ticket.status)) return { code: "reassessment_security_owned" };
   if (!canRequestReassessment(ticket)) return { code: "reassessment_wrong_state" };
-  if (input.definitionsState === "loading" || input.controlsLoading || input.stepsLoading) {
-    return { code: "reassessment_loading" };
-  }
+  // Progress is recorded separately: only the approach selection gates a request,
+  // and judging whether one is still on offer needs the playbook's own list.
+  if (input.definitionsState === "loading") return { code: "reassessment_loading" };
   if (input.definitionsState === "error") return { code: "reassessment_load_failed" };
   if (input.replaced) return { code: "reassessment_replaced" };
-  if (!input.liveControl) return { code: "reassessment_no_approach" };
-  if (!input.reconciled) return { code: "reassessment_reconciling" };
-  const { completed, total } = input.liveControl.progress;
-  if (total === 0) return { code: "reassessment_no_steps" };
-  if (completed < total) return { code: "reassessment_incomplete", completed, total };
+  if (!input.selected) return { code: "reassessment_no_approach" };
   return null;
 }

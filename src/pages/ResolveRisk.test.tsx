@@ -2,9 +2,9 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { roleCan, type Capability } from "@/auth/permissions";
-import { parseCriticalFindings } from "@/lib/critical-findings";
 import type { Finding, RetestRun, Ticket, UserRole } from "@/data/types";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -20,7 +20,7 @@ let tickets: Ticket[] = [];
 let retests: RetestRun[] = [];
 let conversationFound = true;
 let runHistory: unknown[] = [];
-let staticAnalysis: unknown = undefined;
+let analysisDocument: unknown = undefined;
 
 const CONTROL = "example-feature-01-risk-01-control-01";
 let definitions: unknown[] = [];
@@ -172,6 +172,7 @@ vi.mock("@/test-support/query-hooks", () => {
     useWithdrawReassessment: () => mutation,
     useProfiles: () => ({ ...idle, data: [] }),
     useTestRunHistory: () => ({ ...idle, data: runHistory }),
+    useIpaAnalysis: () => ({ ...idle, data: analysisDocument }),
     useRiskConversation: () => ({
       ...idle,
       data: conversationFound ? { id: "example-conversation-id" } : null,
@@ -184,9 +185,13 @@ vi.mock("@/test-support/query-hooks", () => {
     useRiskControls: () => ({ ...idle, data: definitions }),
     useTicketControls: () => ({ ...idle, data: controlRows }),
     useTicketControlSteps: () => ({ ...idle, data: stepRows }),
-    useCriticalFindings: () => ({ ...idle, data: staticAnalysis }),
     useStartRemediation: () => mutation,
     useResumeTicket: () => mutation,
+    useUpdateTicketStatus: () => mutation,
+    useWithdrawTicket: () => mutation,
+    useReviewRiskAcceptance: () => mutation,
+    useActiveRun: () => ({ run: undefined, platformRun: undefined }),
+    useRunEvents: () => ({ events: [], streamState: "idle" }),
   };
 });
 
@@ -202,7 +207,7 @@ beforeEach(() => {
   retests = [];
   conversationFound = true;
   runHistory = [];
-  staticAnalysis = undefined;
+  analysisDocument = undefined;
   completedApproach();
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -217,11 +222,13 @@ afterEach(() => {
 function render(riskId = RISK) {
   act(() =>
     root.render(
-      <MemoryRouter initialEntries={[`/resolve/applications/${APP}/risks/${riskId}`]}>
-        <Routes>
-          <Route path="/resolve/applications/:applicationId/risks/:riskId" element={<ResolveRisk />} />
-        </Routes>
-      </MemoryRouter>,
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <MemoryRouter initialEntries={[`/resolve/applications/${APP}/risks/${riskId}`]}>
+          <Routes>
+            <Route path="/resolve/applications/:applicationId/risks/:riskId" element={<ResolveRisk />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
     ),
   );
 }
@@ -401,19 +408,6 @@ describe("the automated evidence a developer is shown", () => {
         raw: {},
       },
     ];
-    staticAnalysis = parseCriticalFindings({
-      status: "RISK_EXISTS",
-      highest_severity: "HIGH",
-      flags: [
-        {
-          id: "EXAMPLE_HIGH",
-          severity: "HIGH",
-          title: "Potential sensitive information is present",
-          evidence: ["HIGH EXAMPLE_KEY in Example.plist"],
-          recommendation: "Move the value out of the bundle.",
-        },
-      ],
-    });
   }
 
   it("does not repeat the run summary card the assessment page shows", () => {
@@ -423,13 +417,46 @@ describe("the automated evidence a developer is shown", () => {
     expect(text()).not.toContain("Latest automated result");
   });
 
-  it("still shows the structured static-analysis findings", () => {
+  const analysisFixture = {
+    analysis_provider: "builtin",
+    sensitive_scan: { enabled: true },
+    sensitive_information_findings: [
+      {
+        path: "Example-Info.plist",
+        key_path: "$.API_KEY",
+        match_type: "GOOGLE_API_KEY",
+        masked_value: "AIza...0000",
+      },
+      { path: "Example-Info.plist", key_path: "$.score", match_type: "SECURITY_SCORE", masked_value: "42" },
+    ],
+  };
+
+  it("shows the run's plaintext literals to the developer, and only those", () => {
+    completedRun();
+    analysisDocument = analysisFixture;
+    render();
+
+    expect(text()).toContain("Exposed plaintext literals");
+    expect(text()).toContain("Potential hardcoded secret key");
+    expect(text()).toContain("AIza...0000");
+    expect(text()).not.toContain("SECURITY_SCORE");
+  });
+
+  it("says nothing matched rather than claiming the app has no secrets", () => {
+    completedRun();
+    analysisDocument = { ...analysisFixture, sensitive_information_findings: [] };
+    render();
+
+    expect(text()).toContain("No matching plaintext literals reported in this run.");
+  });
+
+  it("shows no static-analysis findings table", () => {
     completedRun();
     render();
 
-    expect(text()).toContain("Potential sensitive information is present");
-    expect(text()).toContain("HIGH");
-    expect(container.querySelector("table")).not.toBeNull();
+    expect(container.querySelector("table")).toBeNull();
+    expect(text()).not.toContain("Static analysis findings");
+    expect(text()).not.toContain("Download Markdown");
   });
 
   it("still lists the run's artefacts in the evidence rail", () => {
@@ -441,6 +468,69 @@ describe("the automated evidence a developer is shown", () => {
     expect(
       container.querySelector("button[aria-label='Download critical_findings.json']"),
     ).not.toBeNull();
+  });
+
+  function runOfEight() {
+    completedRun();
+    (runHistory[0] as { evidence: unknown[] }).evidence = Array.from(
+      { length: 8 },
+      (_, index) => ({
+        kind: "json",
+        label: `Artefact ${index}`,
+        path: `reports/example/file-${index}.json`,
+        ref: `example-ref-${index}`,
+        size_bytes: 128,
+      }),
+    );
+  }
+
+  /** The rail is the list the expansion control owns; the thread renders runs separately. */
+  function railToggle() {
+    return [...container.querySelectorAll("button")].find((button) =>
+      /^Show (\d+ more artefacts?|fewer artefacts)$/.test(button.textContent?.trim() ?? ""),
+    );
+  }
+
+  function railNames() {
+    const listId = railToggle()?.getAttribute("aria-controls");
+    const list = listId ? document.getElementById(listId) : null;
+    return [...(list?.querySelectorAll("li") ?? [])].map((row) => row.textContent ?? "");
+  }
+
+  it("counts every artefact but shows the first five", () => {
+    runOfEight();
+    render();
+
+    expect(text()).toContain("8 items");
+    expect(railNames()).toHaveLength(5);
+    expect(railNames()[4]).toContain("Artefact 4");
+    expect(railNames().join()).not.toContain("Artefact 5");
+    expect(railToggle()?.textContent?.trim()).toBe("Show 3 more artefacts");
+  });
+
+  it("reveals the rest on request, each with its own download", () => {
+    runOfEight();
+    render();
+    act(() => railToggle()?.click());
+
+    expect(railNames()).toHaveLength(8);
+    expect(railNames()[7]).toContain("Artefact 7");
+    expect(text()).toContain("8 items");
+    for (const index of [5, 6, 7]) {
+      expect(
+        container.querySelector(`button[aria-label='Download file-${index}.json']`),
+      ).not.toBeNull();
+    }
+
+    act(() => railToggle()?.click());
+    expect(railNames()).toHaveLength(5);
+    expect(text()).toContain("8 items");
+  });
+
+  it("keeps no dead 'more artefacts in this run' row", () => {
+    runOfEight();
+    render();
+    expect(text()).not.toContain("more artefacts in this run");
   });
 });
 
@@ -500,16 +590,23 @@ describe("the reassessment actions in the developer's conversation", () => {
     expect(container.querySelector("form")?.contains(withdraw)).toBe(false);
   });
 
-  it("explains an incomplete approach accessibly rather than hiding the request", () => {
+  it("offers the request with the approach's steps still outstanding", () => {
     stepRows = [
       { id: "tc-1-step-one", ticket_control_id: "tc-1", step_key: "step-one", status: "not_started" },
     ];
     render();
 
     const request = buttonLabelled("Request reassessment")!;
-    expect(request.disabled).toBe(true);
-    const note = document.getElementById(request.getAttribute("aria-describedby") as string);
-    expect(note?.textContent).toContain("Complete all 1 steps of the selected approach first");
+    expect(request.disabled).toBe(false);
+    expect(request.getAttribute("aria-describedby")).toBeNull();
+  });
+
+  it("offers the request when no progress rows exist at all", () => {
+    controlRows = [];
+    stepRows = [];
+    render();
+
+    expect(buttonLabelled("Request reassessment")!.disabled).toBe(false);
   });
 
   it("offers the request straight from an in-progress remediation once its steps are done", () => {
@@ -521,31 +618,49 @@ describe("the reassessment actions in the developer's conversation", () => {
     expect(text()).not.toContain("Submit");
   });
 
-  it("offers withdrawal to the developer who requested a queued reassessment", () => {
+  it("offers the requester no withdrawal, only the queued state", () => {
     tickets = [ticket({ status: "retest_requested" })];
     retests = [retest()];
     render();
 
-    expect(buttonLabelled("Withdraw reassessment")).toBeDefined();
+    expect(buttonLabelled("Withdraw reassessment")).toBeUndefined();
     expect(text()).toContain("Awaiting reassessment");
   });
 
-  it("does not offer withdrawal to a developer who did not request it", () => {
+  it("offers no withdrawal to a developer who did not request it either", () => {
     tickets = [ticket({ status: "retest_requested" })];
     retests = [retest({ requested_by: "00000000-0000-0000-0000-0000000000ff" })];
     render();
 
     expect(buttonLabelled("Withdraw reassessment")).toBeUndefined();
-    expect(buttonLabelled("Request reassessment")?.disabled).toBe(true);
+    expect(buttonLabelled("Request reassessment")?.disabled).toBe(false);
   });
 
-  it("says security has started rather than offering withdrawal on a running request", () => {
+  it("offers no withdrawal to a reader who also holds the security role", () => {
+    roles = ["developer", "security"];
+    tickets = [ticket({ status: "retest_requested" })];
+    retests = [retest()];
+    render();
+
+    expect(buttonLabelled("Withdraw reassessment")).toBeUndefined();
+  });
+
+  it("keeps a historical withdrawal event readable in the conversation", () => {
+    tickets = [ticket({ status: "in_progress" })];
+    retests = [retest({ status: "cancelled", cancellation_reason: "Found another defect." })];
+    render();
+
+    expect(buttonLabelled("Withdraw reassessment")).toBeUndefined();
+    expect(buttonLabelled("Request reassessment")?.disabled).toBe(false);
+  });
+
+  it("offers another request even while security is running one", () => {
     tickets = [ticket({ status: "retest_in_progress" })];
     retests = [retest({ status: "running" })];
     render();
 
     expect(buttonLabelled("Withdraw reassessment")).toBeUndefined();
-    expect(text()).toContain("already started verifying this remediation");
+    expect(buttonLabelled("Request reassessment")?.disabled).toBe(false);
   });
 
   it("treats a cancelled request as history, offering the reassessment again", () => {

@@ -22,6 +22,7 @@ let roles: UserRole[] = ["security"];
 let assessmentFound = true;
 let entries: RiskConversationEntry[] = [];
 let history: AutomationResultRow[] = [];
+let analysisDocument: unknown = undefined;
 let historyFailed = false;
 let findingFound = true;
 let conversationFound = true;
@@ -179,6 +180,7 @@ vi.mock("@/test-support/query-hooks", () => {
     }),
     useFindingEvidenceItems: () => ({ ...idle, data: [] }),
     useTestRunHistory: () => ({ ...idle, isError: historyFailed, data: history }),
+    useIpaAnalysis: () => ({ ...idle, data: analysisDocument }),
     useActiveRun: () => ({ run: undefined, platformRun: undefined }),
     useRunEvents: () => ({ events: [], streamState: "idle" }),
     useRunSyncStatus: () => idle,
@@ -207,7 +209,6 @@ vi.mock("@/test-support/query-hooks", () => {
       ...idle,
       data: [{ id: "tc-1-step-one", ticket_control_id: "tc-1", step_key: "step-one", status: stepStatus }],
     }),
-    useCriticalFindings: () => idle,
     useStartRemediation: () => mutation,
     useResumeTicket: () => mutation,
     useWithdrawTicket: () => mutation,
@@ -260,6 +261,7 @@ beforeEach(() => {
   conversationFailed = false;
   entries = [];
   history = [];
+  analysisDocument = undefined;
   historyFailed = false;
   ticketStatus = "in_progress";
   stepStatus = "completed";
@@ -382,12 +384,129 @@ describe("the risk page is the one conversation location", () => {
     expect(items[2]).toContain("Shipped 2.1.");
   });
 
-  it("keeps the latest automated result in full on the assessment page", () => {
+  it("keeps the latest automated result in full for a reader who is not security", () => {
+    roles = ["cio"];
     history = [historyRun()];
     render();
 
     expect(text()).toContain("Latest automated result");
     expect(text()).toContain("2026-01-02_00-00-00");
+  });
+
+  it.each([
+    [["security"]],
+    [["security", "developer"]],
+    [["security", "admin"]],
+    [["admin", "security"]],
+  ])("hides the latest automated result from %s", (profileRoles) => {
+    roles = profileRoles as UserRole[];
+    history = [historyRun()];
+    render();
+
+    expect(text()).not.toContain("Latest automated result");
+    // The run itself still reaches security through the conversation history.
+    expect(text()).toContain("The example check did not pass.");
+  });
+
+  const analysisFixture = {
+    analysis_provider: "builtin",
+    sensitive_scan: { enabled: true },
+    sensitive_information_findings: [
+      {
+        path: "Example-Info.plist",
+        key_path: "$.API_KEY",
+        match_type: "GOOGLE_API_KEY",
+        masked_value: "AIza...0000",
+      },
+      { path: "Example-Info.plist", key_path: "$.score", match_type: "SECURITY_SCORE", masked_value: "42" },
+    ],
+  };
+
+  it.each([[["security"]], [["security", "developer"]], [["cio"]]])(
+    "shows the same plaintext literals to %s",
+    (profileRoles) => {
+      roles = profileRoles as UserRole[];
+      history = [historyRun()];
+      analysisDocument = analysisFixture;
+      render();
+
+      expect(text()).toContain("Exposed plaintext literals");
+      expect(text()).toContain("AIza...0000");
+      expect(text()).not.toContain("SECURITY_SCORE");
+    },
+  );
+
+  it("shows no static-analysis findings table to anyone", () => {
+    roles = ["cio"];
+    history = [historyRun()];
+    render();
+
+    expect(container.querySelector("table")).toBeNull();
+    expect(text()).not.toContain("Static analysis findings");
+    expect(text()).not.toContain("Download Markdown");
+  });
+
+  /** The rail is the list the expansion control owns; the thread renders runs separately. */
+  function railToggle() {
+    return [...container.querySelectorAll("button")].find((button) =>
+      /^Show (\d+ more artefacts?|fewer artefacts)$/.test(button.textContent?.trim() ?? ""),
+    );
+  }
+
+  function railRows() {
+    const listId = railToggle()?.getAttribute("aria-controls");
+    const list = listId ? document.getElementById(listId) : null;
+    return [...(list?.querySelectorAll("li") ?? [])].map((row) => row.textContent ?? "");
+  }
+
+  it("shows five of a run's eight artefacts, counting all of them", () => {
+    history = [
+      historyRun({
+        evidence: Array.from({ length: 8 }, (_, index) => ({
+          kind: "json",
+          label: `Artefact ${index}`,
+          path: `reports/example/file-${index}.json`,
+          ref: `example-ref-${index}`,
+          size_bytes: 128,
+        })),
+      }),
+    ];
+    render();
+
+    expect(text()).toContain("8 items");
+    expect(railRows()).toHaveLength(5);
+    expect(railToggle()?.textContent?.trim()).toBe("Show 3 more artefacts");
+    expect(railToggle()?.getAttribute("aria-expanded")).toBe("false");
+    expect(text()).not.toContain("more artefacts in this run");
+
+    act(() => railToggle()?.click());
+    expect(railRows()).toHaveLength(8);
+    expect(railRows()[7]).toContain("Artefact 7");
+    expect(text()).toContain("8 items");
+    expect(
+      container.querySelector("button[aria-label='Download file-7.json']"),
+    ).not.toBeNull();
+
+    act(() => railToggle()?.click());
+    expect(railRows()).toHaveLength(5);
+  });
+
+  it("offers nothing to expand when a run has five artefacts", () => {
+    history = [
+      historyRun({
+        evidence: Array.from({ length: 5 }, (_, index) => ({
+          kind: "json",
+          label: `Artefact ${index}`,
+          path: `reports/example/file-${index}.json`,
+          ref: `example-ref-${index}`,
+          size_bytes: 128,
+        })),
+      }),
+    ];
+    render();
+
+    expect(text()).toContain("5 items");
+    expect(railToggle()).toBeUndefined();
   });
 
   it("keeps the live progress panel separate from the history", () => {
@@ -542,13 +661,12 @@ describe("a developer", () => {
     expect(usableButtonLabels()).toContain("Request reassessment");
   });
 
-  it("is told which steps are outstanding rather than shown nothing", () => {
+  it("can ask for a reassessment with steps still outstanding", () => {
     stepStatus = "not_started";
     render();
 
-    expect(buttonLabels()).toContain("Request reassessment");
-    expect(usableButtonLabels()).not.toContain("Request reassessment");
-    expect(text()).toContain("Complete all 1 steps of the selected approach first");
+    expect(usableButtonLabels()).toContain("Request reassessment");
+    expect(text()).not.toContain("Complete all");
   });
 
   it("is told to start a remediation when there is no ticket, and can still ask a question", () => {
@@ -561,12 +679,12 @@ describe("a developer", () => {
     expect(container.querySelectorAll("textarea")).toHaveLength(1);
   });
 
-  it("sees that a reassessment is already under way instead of asking twice", () => {
+  it("can queue another request while one is already waiting", () => {
     retestStatus = "queued";
+    ticketStatus = "retest_requested";
     render();
 
-    expect(usableButtonLabels()).not.toContain("Request reassessment");
-    expect(text()).toContain("A reassessment has been requested");
+    expect(usableButtonLabels()).toContain("Request reassessment");
   });
 
   it("is refused an assessment outside their application scope", () => {

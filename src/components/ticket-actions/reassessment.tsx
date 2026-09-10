@@ -1,13 +1,10 @@
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/input";
 import { RunEventTimeline } from "@/components/run-events";
-import { useWithdrawReassessment } from "@/hooks/queries/conversations";
 import { defaultConfigPath } from "@/api/automation-services";
 import { useReassessmentRun } from "@/hooks/use-reassessment-run";
-import { errorMessage } from "@/lib/utils";
-import type { Application, Finding, RetestRun, Ticket } from "@/data/types";
+import type { Application, Finding, Ticket } from "@/data/types";
 
 export function RunRetestButton({
   ticket,
@@ -81,80 +78,6 @@ export function RunRetestButton({
                   : "Start retest"}
           </Button>
         </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/** Withdraws the reassessment request only — the remediation and its work stay. */
-export function WithdrawReassessmentDialog({
-  retest,
-  conversationId,
-  findingId,
-  ticketId,
-}: {
-  retest: RetestRun;
-  conversationId: string;
-  findingId: string;
-  ticketId: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const [reason, setReason] = useState("");
-  const withdraw = useWithdrawReassessment(conversationId);
-
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
-    await withdraw.mutateAsync({ retestId: retest.id, reason, findingId, ticketId });
-    setOpen(false);
-    setReason("");
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm" variant="outline">
-          Withdraw reassessment
-        </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Withdraw this reassessment request?</DialogTitle>
-          <DialogDescription>
-            Security will no longer be asked to retest this fix. Your remediation, control
-            progress, evidence, and conversation will be preserved.
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={onSubmit} className="space-y-3">
-          <div>
-            <label
-              htmlFor="withdraw-reassessment-reason"
-              className="mb-1 block text-xs font-medium text-muted-foreground"
-            >
-              Reason for withdrawing the reassessment *
-            </label>
-            <Textarea
-              id="withdraw-reassessment-reason"
-              rows={3}
-              required
-              placeholder="Why are you taking this request back?"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-            />
-          </div>
-          {withdraw.isError && (
-            <p className="text-xs text-danger">
-              {errorMessage(withdraw.error, "Could not withdraw this reassessment.")}
-            </p>
-          )}
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={withdraw.isPending || !reason.trim()}>
-              {withdraw.isPending ? "Withdrawing…" : "Withdraw reassessment"}
-            </Button>
-          </DialogFooter>
-        </form>
       </DialogContent>
     </Dialog>
   );

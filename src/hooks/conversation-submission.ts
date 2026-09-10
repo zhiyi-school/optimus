@@ -58,6 +58,7 @@ export function useConversationSubmission(input: {
   const latestState = useRef(state);
   const scope = useRef(0);
   const inFlight = useRef(false);
+  const pendingSubmission = useRef<string | null>(null);
   latestState.current = state;
 
   const abandonAttachment = useCallback(async () => {
@@ -123,6 +124,10 @@ export function useConversationSubmission(input: {
 
   async function submitOnce(submission: ComposerSubmission) {
     const generation = scope.current;
+    // Held until the record lands, so a Send retried after a lost response
+    // resolves to the request that write already made; cleared afterwards so
+    // the next intentional Send is a new request.
+    const submissionId = (pendingSubmission.current ??= crypto.randomUUID());
     const current = latestState.current;
     if (current.phase === "attachment_failed") {
       if (!current.context.retryable) throw new AttachmentError(current.context.error);
@@ -147,12 +152,15 @@ export function useConversationSubmission(input: {
           findingId: input.findingId as string,
           ticketId: input.ticketId ?? null,
           message: submission.message,
+          submissionId,
         });
         entryId = result.entryId;
       } else {
         const entry = await sendMessage.mutateAsync({ message: submission.message });
         entryId = entry.id;
       }
+
+      pendingSubmission.current = null;
 
       if (scope.current !== generation) return;
       if (!submission.file) {

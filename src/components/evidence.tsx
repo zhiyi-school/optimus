@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import {
   Download,
   ExternalLink,
@@ -13,6 +13,9 @@ import { errorMessage, formatBytes } from "@/lib/utils";
 import type { EvidenceItem } from "@/lib/evidence-types";
 
 export type { EvidenceItem } from "@/lib/evidence-types";
+
+/** How many rail items are shown before the reader asks for the rest. */
+export const RAIL_COLLAPSED_ITEMS = 5;
 
 function iconFor(kind: string) {
   if (kind === "image") return ImageIcon;
@@ -73,67 +76,88 @@ function DownloadButton({
 /** The rail lists evidence in one narrow column; the full-width view keeps the two-up grid. */
 export function EvidenceList({ items }: { items: EvidenceItem[] }) {
   const { busy, failed, start } = useDownload();
+  const [expanded, setExpanded] = useState(false);
+  const listId = useId();
 
   if (items.length === 0) {
     return <p className="text-xs text-muted-foreground">No evidence recorded yet.</p>;
   }
+
+  const hidden = items.length - RAIL_COLLAPSED_ITEMS;
+  const visible = expanded ? items : items.slice(0, RAIL_COLLAPSED_ITEMS);
+
   return (
-    <ul className="divide-y divide-border/70">
-      {items.map((item) => {
-        const Icon = iconFor(item.kind);
-        return (
-          <li key={item.id} className="py-2">
-            <div className="flex items-center gap-2.5">
-              {item.kind === "image" && item.url ? (
-                <img
-                  src={item.url}
-                  alt={item.name}
-                  className="h-9 w-9 shrink-0 rounded border border-border object-cover"
-                />
-              ) : (
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded border border-border bg-muted/40">
-                  <Icon className="h-4 w-4 text-muted-foreground" />
+    <>
+      <ul id={listId} className="divide-y divide-border/70">
+        {visible.map((item) => {
+          const Icon = iconFor(item.kind);
+          return (
+            <li key={item.id} className="py-2">
+              <div className="flex items-center gap-2.5">
+                {item.kind === "image" && item.url ? (
+                  <img
+                    src={item.url}
+                    alt={item.name}
+                    className="h-9 w-9 shrink-0 rounded border border-border object-cover"
+                  />
+                ) : (
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded border border-border bg-muted/40">
+                    <Icon className="h-4 w-4 text-muted-foreground" />
+                  </span>
+                )}
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-xs font-medium text-foreground">
+                    {item.name}
+                  </span>
+                  <span className="block truncate text-xs text-muted-foreground">
+                    {[item.source, item.sizeBytes ? formatBytes(item.sizeBytes) : null]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </span>
                 </span>
+                {item.url && (
+                  <a
+                    href={item.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label={`View ${item.name}`}
+                    className="shrink-0 rounded text-muted-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                )}
+                <DownloadButton item={item} busy={busy === item.id} onDownload={start} compact />
+              </div>
+              {failed?.id === item.id && (
+                <p className="mt-1 text-xs text-danger">
+                  {failed.message}{" "}
+                  <button
+                    type="button"
+                    onClick={() => start(item)}
+                    className="rounded font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                  >
+                    Try again
+                  </button>
+                </p>
               )}
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-xs font-medium text-foreground">
-                  {item.name}
-                </span>
-                <span className="block truncate text-xs text-muted-foreground">
-                  {[item.source, item.sizeBytes ? formatBytes(item.sizeBytes) : null]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </span>
-              </span>
-              {item.url && (
-                <a
-                  href={item.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  aria-label={`View ${item.name}`}
-                  className="shrink-0 rounded text-muted-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                >
-                  <ExternalLink className="h-3.5 w-3.5" />
-                </a>
-              )}
-              <DownloadButton item={item} busy={busy === item.id} onDownload={start} compact />
-            </div>
-            {failed?.id === item.id && (
-              <p className="mt-1 text-xs text-danger">
-                {failed.message}{" "}
-                <button
-                  type="button"
-                  onClick={() => start(item)}
-                  className="rounded font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                >
-                  Try again
-                </button>
-              </p>
-            )}
-          </li>
-        );
-      })}
-    </ul>
+            </li>
+          );
+        })}
+      </ul>
+      {hidden > 0 && (
+        <button
+          type="button"
+          onClick={() => setExpanded((open) => !open)}
+          aria-expanded={expanded}
+          aria-controls={listId}
+          className="mt-2 rounded text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+        >
+          {expanded
+            ? "Show fewer artefacts"
+            : `Show ${hidden} more artefact${hidden === 1 ? "" : "s"}`}
+        </button>
+      )}
+    </>
   );
 }
 

@@ -24,8 +24,8 @@ export const automationKeys = {
   runResults: (timestamp: string | undefined) => ["runResults", timestamp] as const,
   testHistory: (appId: string | undefined, testId: string | undefined) =>
     ["testRunHistory", appId, testId] as const,
-  criticalFindings: (timestamp: string | undefined, ref: string | undefined) =>
-    ["criticalFindings", timestamp, ref] as const,
+  ipaAnalysis: (timestamp: string | undefined, ref: string | undefined) =>
+    ["ipaAnalysis", timestamp, ref] as const,
   playbookStatus: (platform: string | undefined) => ["playbookStatus", platform] as const,
   riskControls: (platform?: string, riskId?: string | null) =>
     ["riskControls", platform, riskId] as const,

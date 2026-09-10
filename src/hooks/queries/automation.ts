@@ -6,15 +6,12 @@ import type { ControlDetail } from "@/api/playbook-types";
 import { playbookApi } from "@/api/playbook-services";
 import { findActiveRun, findPlatformRun, type ActiveRunFilter } from "@/data/sync";
 import { SYNC_STATUS_POLL_INTERVAL_MS, syncPollInterval } from "@/lib/dashboard-sync";
-import { parseCriticalFindings } from "@/lib/critical-findings";
 import { selectableControls } from "@/lib/resolve";
 import { dashboardSyncInvalidationPrefixes } from "./invalidation-rules";
 import { automationKeys } from "@/hooks/query-keys";
 import type { RunEventStreamState } from "@/lib/run-event-types";
 
 export type { RunEventStreamState } from "@/lib/run-event-types";
-
-const REFERENCE_DATA_STALE_TIME_MS = 5 * 60_000;
 
 export function useRiskCatalogue(platform: AutomationPlatform | undefined) {
   return useQuery({
@@ -240,24 +237,24 @@ export function useTestRunHistory(appExternalId: string | undefined, testId: str
   });
 }
 
-const PLAYBOOK_POLL_INTERVAL_MS = 45_000;
-
-/** One run's structured static-analysis report, fetched through the evidence endpoint. */
-export function useCriticalFindings(runTimestamp: string | undefined, ref: string | undefined) {
+/** One run's structured analysis document, fetched through the evidence endpoint. */
+export function useIpaAnalysis(runTimestamp: string | undefined, ref: string | undefined) {
   return useQuery({
-    queryKey: automationKeys.criticalFindings(runTimestamp, ref),
+    queryKey: automationKeys.ipaAnalysis(runTimestamp, ref),
     queryFn: async () => {
       const response = await fetch(
         assessmentApi.evidenceFileUrl(runTimestamp as string, ref as string),
       );
-      if (!response.ok) throw new Error(`Static analysis unavailable (${response.status})`);
-      return parseCriticalFindings(await response.json());
+      if (!response.ok) throw new Error(`Analysis unavailable (${response.status})`);
+      return (await response.json()) as unknown;
     },
     enabled: !!runTimestamp && !!ref,
-    staleTime: REFERENCE_DATA_STALE_TIME_MS,
+    staleTime: 5 * 60_000,
     retry: false,
   });
 }
+
+const PLAYBOOK_POLL_INTERVAL_MS = 45_000;
 
 /** The revision seen on arrival is kept in session memory only, never written to the database. */
 export function usePlaybookRevisionWatch(

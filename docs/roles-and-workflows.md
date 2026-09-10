@@ -131,6 +131,16 @@ come from the backend's external playbook directory, served as structured JSON
 part stored here, in `ticket_controls` and `ticket_control_steps` — see
 [data-model.md](./data-model.md#developer-remediation-progress).
 
+Every code block a control renders — in the control introduction, the control
+preview, and the guided remediation steps — comes from one shared component with
+a **Copy** button that writes the whole block. The clipboard receives the
+backend's own `text` for that block, so indentation, blank lines and special
+characters survive exactly, and fence delimiters, the language label and the
+highlighting never reach it. Swift and shell blocks are tokenised for colour;
+any other language, or none, renders as plain text. Copying confirms only after
+the write succeeds; a browser that refuses clipboard access says so and leaves
+the code selectable rather than reporting a copy that did not happen.
+
 ### The playbook is always live
 
 A ticket never pins a playbook version. Every title, instruction, code block,
@@ -207,6 +217,46 @@ their only source. A run still going is shown separately, as live progress
 rather than history, and a link to a specific run still highlights and scrolls
 to it in the feed.
 
+Neither risk workspace renders a broad static-analysis findings table. The run's
+structured reports are still produced, stored and served unchanged: they reach a
+reader as ordinary artefacts in the evidence rail, where each one has its own
+View and Download. Removing the table changed presentation only — no finding,
+report or artefact reference was dropped.
+
+In its place both workspaces show one focused **Exposed plaintext literals**
+card, the same for security and for the owning developer. It reads the run's
+structured `sensitive_information_findings` from `ipa_analysis.json` — never
+regex over a human-readable summary — and shows the category, the location, the
+masked value and the reason each item was flagged, with a link to the playbook
+control that addresses it.
+
+Only detections the plaintext-literal risk is about are listed: potential
+embedded credentials, potential hardcoded secret keys and tokens, and URLs that
+carry credentials. Other sensitive values appear only when the analyzer gave a
+specific reason, such as a key whose name states it holds a secret. Security
+scores, package inspectability, permissions, encryption metadata, ordinary
+public URLs and public identifiers are other subjects and are deliberately
+absent, as are API-key reuse outcomes.
+
+Categories stay hedged — "potential", "suspected" — because a pattern match is
+not proof a credential is valid, and the dashboard never tests one. Only
+`masked_value` is ever read: a report captured with `reveal_values` enabled
+still cannot put a raw secret on screen. A match seen only inside an analyzer's
+own report is labelled as such rather than given a source file it never had.
+
+The card distinguishes four states, because none of them means the same thing:
+literals found, the scan ran and matched nothing ("No matching plaintext
+literals reported in this run."), the scan did not run, and the analysis could
+not be loaded or is an unsupported schema. A failed request is never rendered as
+an empty result.
+
+The **Latest automated result** card summarises the newest run at the top of the
+Assess risk workspace. It is shown to readers who do not hold the `security`
+role; security reads the same run — verdict, status, timestamp and summary —
+from the conversation's own history, so the card would only repeat it. A profile
+holding `security` alongside any other role is still security for this purpose.
+The Resolve workspace has never shown the card.
+
 Everything else links or redirects to the conversation rather than repeating
 it. Legacy finding and ticket URLs resolve into the assessment or Resolve risk
 workspace; there are no standalone detail pages with separate composers. A ticket records the
@@ -226,19 +276,46 @@ and RLS still decides what is visible, so an assessment outside their scope
 comes back empty and the page says so. Reading a conversation grants nothing
 else - a developer never gets test execution or classification.
 
-Requesting a reassessment is still gated on the remediation workflow, and not
-only in the UI: `enforce_retest_request_permissions` requires a non-security
-caller to name an eligible remediation whose selected approach has recorded,
-completed steps, and refuses a ticket raised against a different risk. A
-developer with no eligible ticket can still post a message and ask a question.
+Requesting a reassessment is gated on the remediation workflow, and not only in
+the UI: `enforce_retest_request_permissions` requires a non-security caller to
+name an eligible remediation with an approach selected, and refuses a ticket
+raised against a different risk. A developer with no eligible ticket can still
+post a message and ask a question.
+
+**Several requests may be outstanding at once.** Each intentional Send creates
+its own request, even while an earlier one is queued or running, and each gets
+its own conversation event and attachment. Retrying the same Send does not add a
+second request: the submission carries an identifier that the database
+deduplicates on, scoped to the conversation and the requester, so a retry after
+a lost response resolves to the request that write already made. Security runs
+them one at a time, oldest first, and starts each explicitly — nothing executes
+on its own, and only one reassessment per risk can be running. Migration `0030`
+replaced the one-active-request index with an at-most-one-*running* rule plus
+that submission identity.
+
+**Remediation progress is not a condition.** A developer may ask for a
+reassessment with none, some or all of the approach's steps marked complete, and
+whether progress rows exist or have finished reconciling makes no difference to
+eligibility. Ticking steps records the developer's own tracking; security still
+runs the reassessment and decides the classification from its result. Migration
+`0029` removed the progress-row, non-zero-step and completion checks from the
+trigger while keeping every other condition. A dashboard offering a request on
+incomplete progress against a database still on `0028` or earlier is refused by
+that older trigger with "complete every step of the selected remediation
+approach first", so `0029` must be applied before that frontend is deployed.
 
 Both actions live inside the conversation composer rather than as buttons above
 the thread, and both are *additions* to an ordinary message rather than a
-different way of writing one. The message box, its placeholder, the attachment
-control and the Send button never change; a permitted user adds **Change
-classification** or **Request reassessment** as a removable chip, and Send then
-records that workflow step as well. Adding, swapping or removing a chip leaves
-the draft and any chosen file untouched.
+different way of writing one. They sit at the top of the composer, above the
+message box: the offered actions first, then the selected action's chip and its
+options, then the message box with Attach and Send, then the chosen file and any
+submission feedback. That is the real DOM order, so keyboard focus follows what
+the reader sees, and the row disappears entirely — leaving no gap — when a reader
+is offered nothing. The message box, its placeholder, the attachment control and
+the Send button never change; a permitted user adds **Change classification** or
+**Request reassessment** as a removable chip, and Send then records that workflow
+step as well. Adding, swapping or removing a chip leaves the draft and any chosen
+file untouched.
 
 Classification uses the message as its required reason and refuses the
 classification the risk already has. A reassessment needs no text, and anything
@@ -293,13 +370,17 @@ classification with no reason, or a send already in flight all do nothing. An
 input method's Enter, which accepts a candidate rather than finishing a
 sentence, never sends.
 
-**Run Retest** and **Withdraw reassessment** act immediately and so stay outside
-the composer.
+**Run Retest** acts immediately and so stays outside the composer.
+
+Developers no longer withdraw a reassessment from the dashboard: the control is
+gone from the conversation actions. This is a UI removal only — the
+`withdraw_reassessment()` RPC, its permissions and its `retest_withdrawn`
+history are untouched, and past withdrawal events still read in the feed.
 
 When an action cannot be used it stays visible and says why, rather than
 disappearing: a developer with no remediation ticket is told to start one, one
-whose selected approach still has incomplete steps is told to finish them, and one whose
-reassessment is already queued is told security has it. Security sees the same
+with no approach chosen is told to choose one, and one whose reassessment is
+already queued is told security has it. Security sees the same
 treatment on the classification control when no result has been published for
 the risk yet. Only one reassessment can be in flight per risk, and that is
 enforced by the database, not just by hiding the button.
@@ -336,7 +417,7 @@ Developer opens an At Risk / Inconclusive finding
    → the ticket's required controls are initialised from the playbook
    → Developer works through each control's steps, marking them complete
    → in the conversation composer, Developer adds "Request reassessment"
-     (offered once every step of the selected approach is done)
+     (offered once an approach is selected, whatever the step progress)
      → ticket → retest_requested
    → in the same conversation, Security Team clicks "Run Retest"
      → automation API runs the test
@@ -349,10 +430,10 @@ Discussion, classification and reassessment all live in the conversation on
 the assessment's risk page, never on the ticket — see
 [the conversation](#the-conversation).
 
-Completing every control step **does not** resolve the finding. It only makes
-the risk ready for the reassessment the developer then asks for; the finding's
-status changes on a real reassessment result or an explicit Security Team
-override.
+Completing every control step **does not** resolve the finding, and it is not
+what makes a reassessment possible either. Progress is the developer's own
+record of the work; the finding's status changes on a real reassessment result
+or an explicit Security Team override.
 
 ### Authoritative transition matrix
 
@@ -367,8 +448,8 @@ for permissions and persisted transitions.
 | Finding needs work; no active remediation | developer assigned to the application's team | Start remediation | ticket `open`, `remediation_started` event, selected approach and progress rows | capability, application scope, live approach selection | ticket/application RLS and insert policies; the database does not know which controls the playbook currently offers |
 | `open`, `in_progress`, `rejected` | owning developer | Select or replace approach | `selected_control_id` changes; old progress remains history | live active/required candidates, permission and state | `enforce_ticket_update_permissions`; it validates lifecycle and ownership, not playbook membership |
 | editable remediation with a live selected approach | owning developer | Record step progress | step row status changes | live definition matched by stable control/step keys; missing/new steps are incomplete | progress RLS and ticket access |
-| every current selected-approach step completed; no active reassessment | owning developer | Request reassessment in the conversation | retest `queued`, ticket `retest_requested`, one `retest_requested` event | load/error/replacement/reconciliation/zero-step/completion and capability checks | `enforce_retest_request_permissions` rechecks ticket state, recorded selected-control rows, non-zero steps and completion; partial unique index permits one active run |
-| queued reassessment | developer who requested it | Withdraw reassessment | run `cancelled`, ticket restored to its recorded prior state, `retest_withdrawn` event | requester id, linked ticket and queued state | `withdraw_reassessment()` locks and verifies requester, access, run and ticket state |
+| an approach selected, any step progress; earlier requests may be outstanding | owning developer | Request reassessment in the conversation | retest `queued`, ticket `retest_requested`, one `retest_requested` event | approach load/error/replacement, selection and capability checks — neither progress nor an outstanding request is consulted | `enforce_retest_request_permissions` rechecks ticket state and the selected approach; a unique index permits one *running* run per risk and deduplicates a retried submission |
+| queued reassessment | — | no dashboard withdrawal; `withdraw_reassessment()` remains available to future callers | run `cancelled`, ticket restored to its recorded prior state, `retest_withdrawn` event | RPC verifies requester, access, run and ticket state | `withdraw_reassessment()` locks and verifies requester, access, run and ticket state |
 | queued reassessment | security | Run reassessment | run `running`, ticket `retest_in_progress`, `retest_started` event | security capability and current run | `start_reassessment()` atomically claims only a queued request |
 | automation result arrives | sync worker / security-owned processing | Reconcile result | run completes or fails; finding/ticket/events follow the result | progress display and polling only | sync idempotency keys and server-side writes |
 | `under_review` or verification result | security | Close or request changes | ticket `closed`, or `rejected` plus conversation message | security capability | ticket update trigger/RLS reserve finalisation and security states for security |
