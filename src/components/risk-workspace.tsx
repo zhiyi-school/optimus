@@ -52,7 +52,9 @@ export function RiskHeader({
           {badges}
         </div>
         {description && (
-          <p className="mt-0.5 text-sm text-muted-foreground">{plainText(description)}</p>
+          <p className="mt-0.5 whitespace-pre-line text-sm text-muted-foreground">
+            {plainText(description)}
+          </p>
         )}
         {meta && <div className="mt-1 text-xs text-muted-foreground">{meta}</div>}
       </div>

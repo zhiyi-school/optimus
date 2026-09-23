@@ -1,6 +1,4 @@
-import { useRemediationReadiness } from "@/hooks/use-remediation-readiness";
 import { useConversationSubmission } from "@/hooks/conversation-submission";
-import { remediationBlockMessage } from "@/lib/remediation-workflow-messages";
 import type {
   Application,
   Finding,
@@ -49,9 +47,8 @@ export function useRiskComposer({
   conversation,
   finding,
   ticket,
-  retests,
   can,
-}: Omit<RiskConversationContext, "application" | "profileId">) {
+}: Omit<RiskConversationContext, "application" | "profileId" | "retests">) {
   const conversationId = conversation?.id;
   const submission = useConversationSubmission({
     conversationId,
@@ -60,14 +57,6 @@ export function useRiskComposer({
   });
 
   const mayRequest = can("request_retest");
-  const readiness = useRemediationReadiness({
-    ticket,
-    finding,
-    retests,
-    mayEdit: can("update_control_progress"),
-    mayRequest,
-  });
-  const reassessmentBlocked = remediationBlockMessage(readiness.reassessmentBlock);
   const offers: ComposerActionOffer[] = [];
 
   if (can("update_finding")) {
@@ -88,7 +77,7 @@ export function useRiskComposer({
       blockedReason:
         !conversation || !finding
           ? "No result has been published for this risk yet, so there is nothing to reassess."
-          : reassessmentBlocked,
+          : null,
     });
   }
 

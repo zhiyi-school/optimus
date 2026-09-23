@@ -2,6 +2,8 @@ import type { DashboardSyncStatus, RunSyncStatus } from "@/api/automation-types"
 import type { Tone } from "@/lib/status";
 
 export const SYNC_STATUS_POLL_INTERVAL_MS = 4000;
+/** Bounds the wait for a record that never appears, so a backend without the endpoint stops. */
+export const SYNC_STATUS_POLL_MAX_ATTEMPTS = 15;
 
 const PRESENTATION: Record<DashboardSyncStatus, { label: string; tone: Tone; detail: string }> = {
   queued: {
@@ -41,8 +43,16 @@ export function isSyncPending(status: DashboardSyncStatus | undefined): boolean 
   return status === "queued" || status === "running";
 }
 
-export function syncPollInterval(status: DashboardSyncStatus | undefined): number | false {
-  return isSyncPending(status) ? SYNC_STATUS_POLL_INTERVAL_MS : false;
+/** A run the worker has not registered yet has no record, so keep polling until the cap. */
+export function syncPollInterval(
+  status: DashboardSyncStatus | undefined,
+  attempts = 0,
+): number | false {
+  if (isSyncPending(status)) return SYNC_STATUS_POLL_INTERVAL_MS;
+  if (status === undefined && attempts < SYNC_STATUS_POLL_MAX_ATTEMPTS) {
+    return SYNC_STATUS_POLL_INTERVAL_MS;
+  }
+  return false;
 }
 
 export function canRetrySync(sync: RunSyncStatus | null | undefined): boolean {

@@ -20,7 +20,7 @@ export function useRemediationReconciliation({
   selectControl,
   reconcile,
 }: {
-  ticketId: string;
+  ticketId: string | undefined;
   mayChangeApproach: boolean;
   activeControlId: string | null;
   storedSelection: string | null;

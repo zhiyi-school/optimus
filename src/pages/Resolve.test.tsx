@@ -21,6 +21,8 @@ let tickets: Ticket[] = [];
 let controls: TicketControl[] = [];
 let steps: TicketControlStep[] = [];
 let isFetching = false;
+let iosCatalogue: { risk_id: string }[] = [{ risk_id: RISK }, { risk_id: "example-feature-02-risk-01" }];
+const androidCatalogue: { risk_id: string }[] = [];
 
 function application(id: string, name: string, version: string | null) {
   return {
@@ -136,6 +138,10 @@ vi.mock("@/test-support/query-hooks", () => {
       stepKeys: new Set(["step-one", "step-two", "alt-step-one"]),
       candidatesByRisk: new Map(),
     }),
+    useRiskCatalogue: (platform?: string) => ({
+      ...idle,
+      data: platform === "ios" ? iosCatalogue : androidCatalogue,
+    }),
   };
 });
 
@@ -153,6 +159,7 @@ beforeEach(() => {
   controls = [];
   steps = [];
   isFetching = false;
+  iosCatalogue = [{ risk_id: RISK }, { risk_id: "example-feature-02-risk-01" }];
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -214,6 +221,23 @@ describe("the Resolve list", () => {
   it("presents the reference columns", () => {
     renderList();
     expect(headers()).toEqual(["App", "Version", "Progress", "Status", "Created At", ""]);
+  });
+
+  it("reports risk coverage against the catalogue, not remediation steps", () => {
+    findings = [finding()];
+    renderList();
+
+    expect(text()).toContain("Risks tested");
+    expect(text()).not.toContain("Remediation steps");
+    // One of the two catalogue risks has a finding, so half the catalogue has run.
+    expect(container.querySelector("[role='progressbar']")?.getAttribute("aria-valuenow")).toBe("50");
+  });
+
+  it("counts a reduced-risk finding as tested just the same", () => {
+    findings = [finding({ status: "reduced_risk" })];
+    renderList();
+
+    expect(container.querySelector("[role='progressbar']")?.getAttribute("aria-valuenow")).toBe("50");
   });
 
   it("describes itself the way the reference does", () => {

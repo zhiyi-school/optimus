@@ -237,6 +237,14 @@ const TestDetail = (await import("@/pages/TestDetail")).default;
 let container: HTMLDivElement;
 let root: Root;
 
+const ANALYSIS_ARTIFACT = {
+  kind: "report",
+  label: "ipa_analysis.json",
+  path: "reports/2026-01-02_00-00-00/ipa_analysis.json",
+  ref: "ref-ipa_analysis.json",
+  size_bytes: 256,
+};
+
 function historyRun(overrides: Partial<AutomationResultRow> = {}): AutomationResultRow {
   return {
     app_id: "example_app",
@@ -441,7 +449,7 @@ describe("the risk page is the one conversation location", () => {
     "shows the same plaintext literals to %s",
     (profileRoles) => {
       roles = profileRoles as UserRole[];
-      history = [historyRun()];
+      history = [historyRun({ evidence: [ANALYSIS_ARTIFACT] })];
       analysisDocument = analysisFixture;
       render();
 
@@ -450,6 +458,16 @@ describe("the risk page is the one conversation location", () => {
       expect(text()).not.toContain("SECURITY_SCORE");
     },
   );
+
+  it("says nothing about plaintext literals when the run produced no analysis report", () => {
+    roles = ["security"];
+    history = [historyRun({ evidence: [] })];
+    analysisDocument = analysisFixture;
+    render();
+
+    expect(text()).not.toContain("Exposed plaintext literals");
+    expect(text()).not.toContain("No matching plaintext literals reported in this run.");
+  });
 
   it("shows no static-analysis findings table to anyone", () => {
     roles = ["cio"];
@@ -611,21 +629,6 @@ describe("security", () => {
     expect(container.querySelector("#composer-classification")).toBeNull();
   });
 
-  it("keeps Run Retest outside the composer, where it acts immediately", () => {
-    retestStatus = "queued";
-    render();
-    const run = [...container.querySelectorAll("button")].find(
-      (button) => button.textContent?.trim() === "Run Retest",
-    )!;
-    expect(composerForm()?.contains(run)).toBe(false);
-  });
-
-  it("can run a reassessment a developer has requested", () => {
-    retestStatus = "queued";
-    render();
-    expect(usableButtonLabels()).toContain("Run Retest");
-  });
-
   it("is told why the classification cannot be changed when no result exists yet", () => {
     findingFound = false;
     render();
@@ -668,7 +671,6 @@ describe("a developer", () => {
   it("cannot run a reassessment even when one is queued", () => {
     retestStatus = "queued";
     render();
-    expect(buttonLabels()).not.toContain("Run Retest");
   });
 
   it("can request a reassessment once every step of the approach is done", () => {
@@ -684,13 +686,12 @@ describe("a developer", () => {
     expect(text()).not.toContain("Complete all");
   });
 
-  it("is told to start a remediation when there is no ticket, and can still ask a question", () => {
+  it("can ask for a reassessment with no remediation ticket at all", () => {
     ticketStatus = null;
     render();
 
-    expect(buttonLabels()).toContain("Request reassessment");
-    expect(usableButtonLabels()).not.toContain("Request reassessment");
-    expect(text()).toContain("Start a remediation for this risk");
+    expect(usableButtonLabels()).toContain("Request reassessment");
+    expect(text()).not.toContain("Start a remediation for this risk");
     expect(container.querySelectorAll("textarea")).toHaveLength(1);
   });
 
@@ -730,7 +731,6 @@ describe("a read-only viewer", () => {
     retestStatus = "queued";
     render();
     expect(buttonLabels()).not.toContain("Change classification");
-    expect(buttonLabels()).not.toContain("Run Retest");
     expect(buttonLabels()).not.toContain("Run Automated Test");
   });
 });

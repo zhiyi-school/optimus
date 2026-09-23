@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/useAuth";
 import { LoadingState, ErrorState } from "@/components/common";
 import { Card, CardContent } from "@/components/ui/card";
@@ -39,13 +39,15 @@ import {
 import { remediationWorkflow } from "@/lib/remediation-workflow";
 import { remediationBlockMessage } from "@/lib/remediation-workflow-messages";
 import { useRemediationReconciliation } from "@/hooks/remediation-reconciliation";
+import { useEnsureRemediation } from "@/hooks/use-ensure-remediation";
 import { cn, errorMessage } from "@/lib/utils";
 import type { ControlDetail } from "@/api/playbook-types";
+import type { Finding } from "@/data/types";
 
-export default function ResolveTicket({ ticketId }: { ticketId: string }) {
+export default function ResolveTicket({ ticketId, finding: fallback }: { ticketId?: string; finding?: Finding }) {
   const { can } = useAuth();
   const ticket = useTicket(ticketId);
-  const finding = ticket.data?.finding;
+  const finding = ticket.data?.finding ?? fallback;
 
   const { data: profiles } = useProfiles();
   const controls = useTicketControls(ticketId);
@@ -88,7 +90,7 @@ export default function ResolveTicket({ ticketId }: { ticketId: string }) {
 
   useRemediationReconciliation({
     ticketId,
-    mayChangeApproach,
+    mayChangeApproach: mayChangeApproach && !!ticketId,
     activeControlId,
     storedSelection,
     plan,
@@ -100,11 +102,13 @@ export default function ResolveTicket({ ticketId }: { ticketId: string }) {
     reconcile,
   });
 
+  const ensure = useEnsureRemediation(finding, ticketId);
+  const navigate = useNavigate();
   const playbook = usePlaybookRevisionWatch(finding?.platform, !!ticketId);
   const live = workflow.liveControl ? [workflow.liveControl] : [];
 
-  if (ticket.isLoading) return <LoadingState label="Loading remediation…" />;
-  if (ticket.isError || !ticket.data) {
+  if (ticketId && ticket.isLoading) return <LoadingState label="Loading remediation…" />;
+  if (ticketId && (ticket.isError || !ticket.data)) {
     return <ErrorState message="Unable to load this remediation." onRetry={() => ticket.refetch()} />;
   }
 
@@ -144,7 +148,19 @@ export default function ResolveTicket({ ticketId }: { ticketId: string }) {
               )}
               <ControlChecklist
                 controls={live}
-                linkTo={(controlId) => `/resolve/tickets/${ticketId}/controls/${controlId}`}
+                linkTo={(controlId) =>
+                  ticketId
+                    ? `/resolve/tickets/${ticketId}/controls/${controlId}`
+                    : `/resolve/findings/${finding?.id}/controls/${controlId}`
+                }
+                onOpen={
+                  ticketId
+                    ? undefined
+                    : async (controlId) => {
+                        const id = await ensure(controlId);
+                        if (id) navigate(`/resolve/tickets/${id}/controls/${controlId}`);
+                      }
+                }
                 emptyMessage={
                   finding?.test_id
                     ? "The playbook has no developer controls for this risk yet."
@@ -157,27 +173,35 @@ export default function ResolveTicket({ ticketId }: { ticketId: string }) {
                   selectedControlId={activeControlId}
                   hasProgress={progress.completed > 0}
                   findingId={finding?.id}
-                  blockedReason={remediationBlockMessage(workflow.approachChangeBlock)}
-                  onSelect={(controlId) => selectControl.mutateAsync(controlId)}
+                  blockedReason={
+                    ticketId ? remediationBlockMessage(workflow.approachChangeBlock) : null
+                  }
+                  onSelect={(controlId) =>
+                    ticketId ? selectControl.mutateAsync(controlId) : ensure(controlId)
+                  }
                 />
               )}
             </>
           )}
 
           <div className="mt-4 space-y-2 border-t border-border pt-4">
-            <WithdrawalNotice
-              ticket={ticket.data}
-              actorName={
-                ticket.data.withdrawn_by
-                  ? profileMap.get(ticket.data.withdrawn_by)?.display_name
-                  : null
-              }
-            />
-            {(showResume || showWithdraw) && (
-              <div className="flex flex-wrap items-center gap-2">
-                {showResume && <ResumeRemediationButton ticket={ticket.data} />}
-                {showWithdraw && <WithdrawRemediationDialog ticket={ticket.data} />}
-              </div>
+            {ticketId && ticket.data && (
+              <>
+                <WithdrawalNotice
+                  ticket={ticket.data}
+                  actorName={
+                    ticket.data.withdrawn_by
+                      ? profileMap.get(ticket.data.withdrawn_by)?.display_name
+                      : null
+                  }
+                />
+                {(showResume || showWithdraw) && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {showResume && <ResumeRemediationButton ticket={ticket.data} />}
+                    {showWithdraw && <WithdrawRemediationDialog ticket={ticket.data} />}
+                  </div>
+                )}
+              </>
             )}
             <p className="text-xs text-muted-foreground">
               Track your remediation progress here. Request reassessment from the conversation.

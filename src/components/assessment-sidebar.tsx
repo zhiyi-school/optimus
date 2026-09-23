@@ -36,7 +36,7 @@ export function AssessmentSidebar({
       progress={{
         completed: assessment.completed_tests,
         total: assessment.total_tests,
-        label: "tests completed",
+        label: "risks tested",
       }}
       risks={entries}
       activeRiskId={activeTestId}

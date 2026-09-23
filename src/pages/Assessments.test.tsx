@@ -13,6 +13,9 @@ type Row = Assessment & { application: Application | null };
 let roles: UserRole[] = ["security"];
 let assessments: Row[] = [];
 let isFetching = false;
+let reports: string[] = [];
+let reportsFailed = false;
+const reportStatuses: (string | undefined)[] = [];
 
 function application(id: string, name: string): Application {
   return {
@@ -80,7 +83,10 @@ vi.mock("@/test-support/query-hooks", () => {
   return {
     useAssessments: () => ({ ...idle, data: assessments, isFetching }),
     useApplications: () => ({ ...idle, data: assessments.map((a) => a.application).filter(Boolean) }),
-    useAutomationReports: () => ({ ...idle, data: [] }),
+    useAutomationReports: (status?: string) => {
+      reportStatuses.push(status);
+      return { ...idle, data: reports, isError: reportsFailed, error: reportsFailed ? new Error("Network Error") : undefined };
+    },
     useDeleteApplication: () => ({ mutateAsync: async () => {}, isPending: false }),
     useAssessmentRunRequest: () => ({ ...idle, data: null }),
     useRequestAssessmentRun: () => ({
@@ -102,6 +108,9 @@ let root: Root;
 beforeEach(() => {
   roles = ["security"];
   isFetching = false;
+  reports = [];
+  reportsFailed = false;
+  reportStatuses.length = 0;
   assessments = [assessment({})];
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -353,5 +362,53 @@ describe("expanded state held in the URL", () => {
 
     expect(path()).toContain("status=waiting");
     expect(path()).not.toContain("expanded=");
+  });
+});
+
+describe("the automation-backend notices", () => {
+  it("asks the backend only for completed runs", () => {
+    render();
+    expect(reportStatuses).toContain("completed");
+  });
+
+  it("reports an unreachable backend on its own, in danger styling", () => {
+    reportsFailed = true;
+    render();
+
+    expect((container.textContent ?? "")).toContain("Can't reach the automation backend");
+    expect((container.textContent ?? "")).toContain("Network Error");
+    expect(container.querySelector(".border-danger\\/30")).not.toBeNull();
+  });
+
+  it("keeps the unsynced-runs warning out of the way of a connectivity failure", () => {
+    reportsFailed = true;
+    reports = ["2026-01-09_00-00-00", "2026-01-10_00-00-00"];
+    render();
+
+    expect((container.textContent ?? "")).toContain("Can't reach the automation backend");
+    expect((container.textContent ?? "")).not.toContain("not appeared here yet");
+  });
+
+  it("warns about runs the host has not synced when the backend is reachable", () => {
+    reports = ["2026-01-09_00-00-00"];
+    render();
+
+    expect((container.textContent ?? "")).toContain("1 completed run has not appeared here yet");
+    expect((container.textContent ?? "")).not.toContain("Can't reach the automation backend");
+    expect(container.querySelector(".border-warning\\/30")).not.toBeNull();
+  });
+
+  it("pluralises the warning for several unsynced runs", () => {
+    reports = ["2026-01-09_00-00-00", "2026-01-10_00-00-00"];
+    render();
+
+    expect((container.textContent ?? "")).toContain("2 completed runs have not appeared here yet");
+  });
+
+  it("says nothing at all when every run has synced", () => {
+    render();
+
+    expect((container.textContent ?? "")).not.toContain("not appeared here yet");
+    expect((container.textContent ?? "")).not.toContain("Can't reach the automation backend");
   });
 });

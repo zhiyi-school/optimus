@@ -56,10 +56,11 @@ import { combinedEvidence, latestResult, latestResultDetail } from "@/lib/automa
 import { PlaintextLiteralsCard } from "@/components/plaintext-literals";
 import { analysisArtifact, plaintextLiterals } from "@/lib/plaintext-literals";
 import { LatestResultPanel } from "@/components/latest-result";
-import { activeRemediationTicket, resumableRemediationTicket } from "@/lib/resolve";
+import { activeRemediationTicket, nextReassessment, resumableRemediationTicket } from "@/lib/resolve";
 import { cn, errorMessage, formatDate } from "@/lib/utils";
 import type { Application, Finding } from "@/data/types";
-import { assessmentKeys, automationKeys, evidenceKeys } from "@/hooks/query-keys";
+import { assessmentKeys, automationKeys, evidenceKeys, ticketKeys } from "@/hooks/query-keys";
+import { retestData } from "@/data/services/tickets";
 
 export default function TestDetail() {
   // Both routes share this element, so :testId changes without remounting.
@@ -126,7 +127,6 @@ function TestPage() {
     conversation: conversation.data,
     finding: currentFinding,
     ticket: remediationTicket,
-    retests,
     can,
   });
 
@@ -165,7 +165,7 @@ function TestPage() {
   useEffect(() => {
     if (activeRunId) setWatchedRunId(activeRunId);
   }, [activeRunId]);
-  const { data: sync } = useRunSyncStatus(watchedRunId);
+  const { data: sync } = useRunSyncStatus(watchedRunId, { enabled: !watching && !adoptedRun });
   const resync = useResyncRun(watchedRunId);
 
   const progress = riskProgressInRun(runEvents, adoptedRun, appExternalId, testId);
@@ -195,12 +195,17 @@ function TestPage() {
     setRunError(null);
     setProgressOpen(true);
     cancelRef.current = { cancelled: false };
+    const claim = nextReassessment(retests);
     try {
+      if (claim) await retestData.startRun(claim.id);
       const { run, outcome } = await syncService.runAndWait(
         { platform, config_path: defaultConfigPath(platform), apps: appExternalId, risks: testId },
         (started) => {
           setStartedRunId(started.run_id);
-          return queryClient.invalidateQueries({ queryKey: automationKeys.runs() });
+          return Promise.all([
+            claim ? retestData.markRunning(claim.id, started.run_id) : Promise.resolve(),
+            queryClient.invalidateQueries({ queryKey: automationKeys.runs() }),
+          ]);
         },
         cancelRef.current,
       );
@@ -221,6 +226,7 @@ function TestPage() {
         refetch(),
         queryClient.invalidateQueries({ queryKey: assessmentKeys.detail(assessmentId) }),
         queryClient.invalidateQueries({ queryKey: evidenceKeys.findings() }),
+        queryClient.invalidateQueries({ queryKey: ticketKeys.findingRetests(currentFinding?.id) }),
       ]);
     } catch (err) {
       setRunError(errorMessage(err, "Unable to run this test."));
@@ -375,17 +381,19 @@ function TestPage() {
 
         {!isSecurity && <LatestResultPanel result={latestResultDetail(newest)} />}
 
-        <PlaintextLiteralsCard
-          analysis={literals}
-          isLoading={analysis.isLoading}
-          isError={analysis.isError}
-          onRetry={() => void analysis.refetch()}
-          controlHref={(controlId) =>
-            currentFinding
-              ? `/resolve/findings/${currentFinding.id}/controls/${encodeURIComponent(controlId)}`
-              : "#"
-          }
-        />
+        {analysisRef && (
+          <PlaintextLiteralsCard
+            analysis={literals}
+            isLoading={analysis.isLoading}
+            isError={analysis.isError}
+            onRetry={() => void analysis.refetch()}
+            controlHref={(controlId) =>
+              currentFinding
+                ? `/resolve/findings/${currentFinding.id}/controls/${encodeURIComponent(controlId)}`
+                : "#"
+            }
+          />
+        )}
 
         {(executing || queued) && (
           <Card className="border-primary/40">

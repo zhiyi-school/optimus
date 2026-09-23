@@ -205,6 +205,14 @@ export function selectedControlProgress(
   return liveControls([chosen], controls, steps)[0];
 }
 
+/** Any completed automated test counts, whatever the verdict. */
+export function testingProgress(findings: Finding[], catalogueSize: number): Progress {
+  const tested = new Set(
+    findings.filter((finding) => finding.test_id).map((finding) => finding.test_id as string),
+  );
+  return progress(tested.size, Math.max(catalogueSize, tested.size));
+}
+
 export function findingProgress(findings: Finding[]): Progress {
   const actionable = findings.filter(
     (finding) => finding.status === "at_risk" || finding.status === "reduced_risk",
@@ -240,6 +248,7 @@ export interface ApplicationRemediation {
   awaitingReassessment: number;
   withdrawnTickets: number;
   findings: Progress;
+  tested: Progress;
   controls: Progress;
   status: RemediationStatus;
   lastUpdatedAt: string | null;
@@ -258,6 +267,7 @@ export function summarizeApplication(
   controls: TicketControl[],
   steps: TicketControlStep[],
   liveKeys?: LivePlaybookKeys,
+  catalogueSize?: number,
 ): ApplicationRemediation {
   const own = findings.filter((finding) => finding.application_id === applicationId);
   const ownTickets = tickets.filter(
@@ -303,6 +313,7 @@ export function summarizeApplication(
       .length,
     withdrawnTickets: ownTickets.filter((ticket) => ticket.status === "withdrawn").length,
     findings: findingProgress(own),
+    tested: testingProgress(own, catalogueSize ?? 0),
     controls: progress(completedSteps, ownSteps.length),
     status: remediationStatus(own, openTickets),
     lastUpdatedAt,
@@ -387,41 +398,6 @@ export function approachChangeBlockedReason(
 export function canRequestReassessment(ticket: Ticket | null | undefined): boolean {
   if (!ticket || ticket.type !== "remediation") return false;
   return REASSESSMENT_REQUESTABLE_FROM.includes(ticket.status) || isHistoricalFixSubmitted(ticket.status);
-}
-
-export interface ReassessmentReadiness {
-  ticket: Ticket | null | undefined;
-  /** The playbook's approaches for this risk are still being fetched. */
-  loading: boolean;
-  failed?: boolean;
-  /** The stored approach is no longer one the playbook offers. */
-  replaced: boolean;
-  /** The ticket holds a row for every step of the selected approach. */
-  reconciled: boolean;
-  control: LiveControl | undefined;
-  activeRetest: RetestRun | undefined;
-  mayRequest: boolean;
-}
-
-/**
- * Why a reassessment cannot be asked for, or null when every condition holds.
- * The database enforces the same rules; this only says so first.
- */
-export function reassessmentBlockedReason(readiness: ReassessmentReadiness): string | null {
-  const { ticket, control, activeRetest } = readiness;
-  let block: RemediationBlock | null = null;
-  if (!readiness.mayRequest) block = { code: "reassessment_permission" };
-  else if (activeRetest?.status === "running") block = { code: "reassessment_active_running" };
-  else if (activeRetest) block = { code: "reassessment_active_queued" };
-  else if (!ticket || ticket.type !== "remediation") block = { code: "reassessment_no_remediation" };
-  else if (ticket.status === "withdrawn") block = { code: "reassessment_withdrawn" };
-  else if (SECURITY_FINALISED.includes(ticket.status)) block = { code: "reassessment_security_finalised" };
-  else if (!canRequestReassessment(ticket)) block = { code: "reassessment_wrong_state" };
-  else if (readiness.loading) block = { code: "reassessment_loading" };
-  else if (readiness.failed) block = { code: "reassessment_load_failed" };
-  else if (readiness.replaced) block = { code: "reassessment_replaced" };
-  else if (!control) block = { code: "reassessment_no_approach" };
-  return remediationBlockMessage(block);
 }
 
 /** Deterministic queue order: oldest first, id breaking a tie. */

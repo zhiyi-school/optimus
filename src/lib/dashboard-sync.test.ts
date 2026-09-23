@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { DashboardSyncStatus, RunSyncStatus } from "@/api/automation-types";
 import {
   SYNC_STATUS_POLL_INTERVAL_MS,
+  SYNC_STATUS_POLL_MAX_ATTEMPTS,
   canRetrySync,
   dashboardSyncPresentation,
   isSyncPending,
@@ -38,9 +39,29 @@ describe("polling", () => {
     }
   });
 
-  it("does not poll when the backend keeps no status record", () => {
-    expect(syncPollInterval(undefined)).toBe(false);
+  it("keeps polling while the worker has not registered the run yet", () => {
+    expect(syncPollInterval(undefined)).toBe(SYNC_STATUS_POLL_INTERVAL_MS);
+    expect(syncPollInterval(undefined, SYNC_STATUS_POLL_MAX_ATTEMPTS - 1)).toBe(
+      SYNC_STATUS_POLL_INTERVAL_MS,
+    );
     expect(isSyncPending(undefined)).toBe(false);
+  });
+
+  it("gives up on a record that never appears, so a backend without the endpoint stops", () => {
+    expect(syncPollInterval(undefined, SYNC_STATUS_POLL_MAX_ATTEMPTS)).toBe(false);
+    expect(syncPollInterval(undefined, SYNC_STATUS_POLL_MAX_ATTEMPTS + 50)).toBe(false);
+  });
+
+  it("stops at a terminal state however few attempts have been made", () => {
+    for (const terminal of ["completed", "failed", "not_required"] as DashboardSyncStatus[]) {
+      expect(syncPollInterval(terminal, 0), terminal).toBe(false);
+    }
+  });
+
+  it("bounds the wait for a missing record to about a minute", () => {
+    const windowMs = SYNC_STATUS_POLL_MAX_ATTEMPTS * SYNC_STATUS_POLL_INTERVAL_MS;
+    expect(windowMs).toBeGreaterThanOrEqual(30_000);
+    expect(windowMs).toBeLessThanOrEqual(120_000);
   });
 
   it("polls no faster than a few seconds so a run does not hammer the host", () => {

@@ -17,7 +17,6 @@ import {
   controlSummary,
   introRepeatsSummary,
   canRequestReassessment,
-  reassessmentBlockedReason,
   canResumeTicket,
   canWithdrawTicket,
   resumableRemediationTicket,
@@ -37,6 +36,7 @@ import {
   developerTicketLabel,
   developerTicketLabels,
   findingProgress,
+  testingProgress,
   developerRiskOrder,
   preferredDeveloperRisk,
   summarizeApplication,
@@ -328,6 +328,43 @@ describe("liveControlStatus", () => {
 
   it("falls back to the stored status when the control has no steps", () => {
     expect(liveControlStatus(control({ status: "in_progress" }), [])).toBe("in_progress");
+  });
+});
+
+describe("testingProgress", () => {
+  function tested(testId: string | null, overrides: Partial<Finding> = {}): Finding {
+    return { id: `f-${testId}`, test_id: testId, status: "at_risk", ...overrides } as Finding;
+  }
+
+  it("counts a risk as tested whatever the verdict", () => {
+    const findings = [
+      tested("risk-1", { status: "at_risk" }),
+      tested("risk-2", { status: "reduced_risk" }),
+      tested("risk-3", { status: "inconclusive" }),
+    ];
+    expect(testingProgress(findings, 4)).toEqual({ completed: 3, total: 4, ratio: 3 / 4 });
+  });
+
+  it("counts each risk once however many findings name it", () => {
+    const findings = [tested("risk-1"), tested("risk-1", { id: "second" })];
+    expect(testingProgress(findings, 2)).toEqual({ completed: 1, total: 2, ratio: 0.5 });
+  });
+
+  it("ignores a finding that names no risk", () => {
+    expect(testingProgress([tested(null), tested("risk-1")], 2).completed).toBe(1);
+  });
+
+  it("never reports more tested than the total, even with a stale catalogue", () => {
+    const findings = [tested("risk-1"), tested("risk-2"), tested("risk-3")];
+    expect(testingProgress(findings, 1)).toEqual({ completed: 3, total: 3, ratio: 1 });
+  });
+
+  it("reports nothing tested against an unavailable catalogue and no findings", () => {
+    expect(testingProgress([], 0)).toEqual({ completed: 0, total: 0, ratio: 0 });
+  });
+
+  it("reports none of the catalogue tested when nothing has run", () => {
+    expect(testingProgress([], 5)).toEqual({ completed: 0, total: 5, ratio: 0 });
   });
 });
 
@@ -729,168 +766,6 @@ describe("selected-control progress", () => {
   it("has no progress at all when the selection is not on offer", () => {
     expect(selectedControlProgress([first], "example-removed-control", [control()], []))
       .toBeUndefined();
-  });
-});
-
-describe("reassessmentBlockedReason", () => {
-  const first = definition();
-  const rows = [control()];
-  const done = [step("tc-1", ROTATE, "completed"), step("tc-1", REVOKE, "completed")];
-  const partial = [step("tc-1", ROTATE, "completed"), step("tc-1", REVOKE, "not_started")];
-
-  function readiness(
-    overrides: Partial<Parameters<typeof reassessmentBlockedReason>[0]> = {},
-  ): Parameters<typeof reassessmentBlockedReason>[0] {
-    return {
-      ticket: ticket(),
-      loading: false,
-      replaced: false,
-      reconciled: true,
-      control: selectedControlProgress([first], first.control_id, rows, done),
-      activeRetest: undefined,
-      mayRequest: true,
-      ...overrides,
-    };
-  }
-
-  it("allows the request once every current selected step is complete", () => {
-    expect(reassessmentBlockedReason(readiness())).toBeNull();
-  });
-
-  it("allows it straight from an in-progress remediation, with no submission first", () => {
-    expect(reassessmentBlockedReason(readiness({ ticket: ticket({ status: "in_progress" }) }))).toBeNull();
-    expect(reassessmentBlockedReason(readiness({ ticket: ticket({ status: "open" }) }))).toBeNull();
-    expect(reassessmentBlockedReason(readiness({ ticket: ticket({ status: "rejected" }) }))).toBeNull();
-  });
-
-  it("still allows one on a remediation recorded before the submission step was retired", () => {
-    expect(
-      reassessmentBlockedReason(readiness({ ticket: ticket({ status: "fix_submitted" }) })),
-    ).toBeNull();
-  });
-
-  it("allows the request while a selected step is still outstanding", () => {
-    const control = selectedControlProgress([first], first.control_id, rows, partial);
-    expect(reassessmentBlockedReason(readiness({ control }))).toBeNull();
-  });
-
-  it("ignores an incomplete alternative", () => {
-    const second = definition({
-      control_id: "example-feature-01-risk-01-control-02",
-      steps: [first.steps[0]],
-    });
-    const live = selectedControlProgress(
-      [first, second],
-      first.control_id,
-      [...rows, control({ id: "tc-2", control_id: second.control_id })],
-      done,
-    );
-
-    expect(reassessmentBlockedReason(readiness({ control: live }))).toBeNull();
-  });
-
-  it("blocks while the approaches are still loading", () => {
-    expect(reassessmentBlockedReason(readiness({ loading: true, control: undefined }))).toContain(
-      "Loading",
-    );
-  });
-
-  it("blocks when the approaches could not be loaded", () => {
-    expect(
-      reassessmentBlockedReason(readiness({ failed: true, control: undefined })),
-    ).toContain("could not be loaded");
-  });
-
-  it("blocks until a replaced approach has been reviewed", () => {
-    expect(reassessmentBlockedReason(readiness({ replaced: true }))).toContain(
-      "no longer in the playbook",
-    );
-  });
-
-  it("blocks when no approach is chosen at all", () => {
-    expect(reassessmentBlockedReason(readiness({ control: undefined }))).toContain(
-      "Choose a remediation approach",
-    );
-  });
-
-  it("allows the request before the approach's rows have been reconciled", () => {
-    expect(reassessmentBlockedReason(readiness({ reconciled: false }))).toBeNull();
-  });
-
-  it("allows the request when the approach records no steps at all", () => {
-    const empty = definition({ steps: [] });
-    const control = selectedControlProgress([empty], empty.control_id, rows, []);
-    expect(reassessmentBlockedReason(readiness({ control }))).toBeNull();
-  });
-
-  it("blocks a second request while one is queued or running", () => {
-    const inFlight = (status: "queued" | "running") =>
-      ({ id: "example-retest-id", status }) as RetestRun;
-    expect(reassessmentBlockedReason(readiness({ activeRetest: inFlight("queued") }))).toContain(
-      "has been requested",
-    );
-    expect(reassessmentBlockedReason(readiness({ activeRetest: inFlight("running") }))).toContain(
-      "already started verifying",
-    );
-  });
-
-  it("blocks a reader who may not request one", () => {
-    expect(reassessmentBlockedReason(readiness({ mayRequest: false }))).toContain(
-      "Only the developers assigned",
-    );
-  });
-
-  it("points a developer with no remediation at starting one", () => {
-    expect(reassessmentBlockedReason(readiness({ ticket: null }))).toMatch(/start a remediation/i);
-    expect(
-      reassessmentBlockedReason(readiness({ ticket: ticket({ type: "risk_acceptance" }) })),
-    ).toMatch(/start a remediation/i);
-  });
-
-  it("allows another request from every state a reassessment leaves behind", () => {
-    for (const status of ["retest_requested", "retest_in_progress", "under_review"] as TicketStatus[]) {
-      expect(
-        reassessmentBlockedReason(readiness({ ticket: ticket({ status }) })),
-        status,
-      ).toBeNull();
-    }
-  });
-
-  it("says a withdrawn remediation has to be resumed first", () => {
-    expect(reassessmentBlockedReason(readiness({ ticket: ticket({ status: "withdrawn" }) }))).toMatch(
-      /resume/i,
-    );
-  });
-
-  it("says security has finished once the ticket is closed or accepted", () => {
-    for (const status of ["closed", "accepted"] as TicketStatus[]) {
-      expect(reassessmentBlockedReason(readiness({ ticket: ticket({ status }) })), status).toMatch(
-        /finished/i,
-      );
-    }
-  });
-
-  it("never asks for a fix to be submitted", () => {
-    for (const status of [
-      "open",
-      "in_progress",
-      "rejected",
-      "retest_requested",
-      "under_review",
-      "closed",
-      "withdrawn",
-    ] as TicketStatus[]) {
-      const reason = reassessmentBlockedReason(readiness({ ticket: ticket({ status }) })) ?? "";
-      expect(reason.toLowerCase(), status).not.toContain("submit");
-    }
-  });
-
-  it("always explains itself rather than going quiet", () => {
-    for (const status of ["accepted", "closed", "withdrawn"] as TicketStatus[]) {
-      const reason = reassessmentBlockedReason(readiness({ ticket: ticket({ status }) }));
-      expect(reason, status).toBeTruthy();
-      expect((reason ?? "").length, status).toBeGreaterThan(10);
-    }
   });
 });
 

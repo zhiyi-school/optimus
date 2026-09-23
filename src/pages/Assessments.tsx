@@ -65,7 +65,7 @@ export default function Assessments() {
     data: reports,
     isError: reportsError,
     error: reportsErrorDetail,
-  } = useAutomationReports();
+  } = useAutomationReports("completed");
   const deleteApp = useDeleteApplication();
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const canRunTest = can("run_test");
@@ -213,17 +213,23 @@ export default function Assessments() {
         }
       />
 
-      {(reportsError || awaitingSync.length > 0) && (
+      {reportsError && (
+        <p className="mb-3 flex items-start gap-2 rounded-md border border-danger/30 bg-danger/5 px-3 py-2 text-xs text-foreground">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-danger" />
+          <span>
+            {`Can't reach the automation backend (${
+              reportsErrorDetail instanceof Error ? reportsErrorDetail.message : "network error"
+            }). Check VITE_API_BASE_URL and its CORS origins — see docs/AUTOMATION_API.md.`}
+          </span>
+        </p>
+      )}
+      {!reportsError && awaitingSync.length > 0 && (
         <p className="mb-3 flex items-start gap-2 rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-xs text-foreground">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
           <span>
-            {reportsError
-              ? `Can't reach the automation backend (${
-                  reportsErrorDetail instanceof Error ? reportsErrorDetail.message : "network error"
-                }). Check VITE_API_BASE_URL and its CORS origins — see docs/AUTOMATION_API.md.`
-              : `${awaitingSync.length} completed run${
-                  awaitingSync.length > 1 ? "s have" : " has"
-                } not appeared here yet. The automation host syncs them on its own schedule.`}
+            {`${awaitingSync.length} completed run${
+              awaitingSync.length > 1 ? "s have" : " has"
+            } not appeared here yet. The automation host syncs them on its own schedule.`}
           </span>
         </p>
       )}

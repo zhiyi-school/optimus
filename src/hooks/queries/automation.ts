@@ -77,10 +77,10 @@ export function useActiveRun(filter: ActiveRunFilter) {
   };
 }
 
-export function useAutomationReports() {
+export function useAutomationReports(status?: string) {
   return useQuery({
-    queryKey: automationKeys.reports(),
-    queryFn: assessmentApi.listReports,
+    queryKey: [...automationKeys.reports(), status ?? null],
+    queryFn: () => assessmentApi.listReports(status),
   });
 }
 
@@ -97,26 +97,31 @@ export function useRunStatus(runId: string | undefined, opts: { poll?: boolean }
   });
 }
 
-export function useRunSyncStatus(runId: string | undefined) {
+export function useRunSyncStatus(runId: string | undefined, opts: { enabled?: boolean } = {}) {
   const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: automationKeys.runSyncStatus(runId),
     queryFn: () => syncApi.getRunSyncStatus(runId as string),
-    enabled: !!runId,
-    refetchInterval: (q) => syncPollInterval(q.state.data?.status),
+    enabled: !!runId && (opts.enabled ?? true),
+    refetchInterval: (q) => syncPollInterval(q.state.data?.status, q.state.dataUpdateCount + q.state.errorUpdateCount),
     retry: false,
   });
 
   const status = query.data?.status;
   const seenRef = useRef<DashboardSyncStatus | undefined>();
+  const seenRunRef = useRef(runId);
   useEffect(() => {
+    if (seenRunRef.current !== runId) {
+      seenRunRef.current = runId;
+      seenRef.current = undefined;
+    }
     const previous = seenRef.current;
     seenRef.current = status;
-    if (status !== "completed" || previous === undefined || previous === "completed") return;
+    if (status !== "completed" || previous === "completed") return;
     for (const queryKey of dashboardSyncInvalidationPrefixes) {
       void queryClient.invalidateQueries({ queryKey });
     }
-  }, [status, queryClient]);
+  }, [runId, status, queryClient]);
 
   return query;
 }

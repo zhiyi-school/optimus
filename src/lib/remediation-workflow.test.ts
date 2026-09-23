@@ -67,16 +67,13 @@ describe("remediation workflow calculation", () => {
     expect(state.selectedControlId).toBe("replacement");
     expect(state.replaced).toBe(true);
     expect(state.complete).toBe(false);
-    expect(state.reassessmentBlock?.code).toBe("reassessment_replaced");
   });
 
   it("does not treat an unavailable playbook as zero work or complete", () => {
     const loading = calculate({ definitions: undefined, definitionsState: "loading" });
     const failed = calculate({ definitions: undefined, definitionsState: "error" });
     expect(loading.complete).toBe(false);
-    expect(loading.reassessmentBlock?.code).toBe("reassessment_loading");
     expect(failed.complete).toBe(false);
-    expect(failed.reassessmentBlock?.code).toBe("reassessment_load_failed");
   });
 
   it("still reports a newly added step as unreconciled progress, without blocking the request", () => {
@@ -90,5 +87,17 @@ describe("remediation workflow calculation", () => {
     const state = calculate({ ticket: ticket({ status: "fix_submitted" }) });
     expect(state.approachChangeBlock).toBeNull();
     expect(state.reassessmentBlock).toBeNull();
+  });
+
+  it("blocks a reassessment on permission alone, whatever the remediation says", () => {
+    expect(calculate({ mayRequest: false }).reassessmentBlock?.code).toBe("reassessment_permission");
+    for (const state of [
+      calculate({ ticket: null }),
+      calculate({ ticket: ticket({ status: "withdrawn" }) }),
+      calculate({ ticket: ticket({ type: "risk_acceptance" }) }),
+      calculate({ definitions: [], definitionsState: "error" }),
+    ]) {
+      expect(state.reassessmentBlock).toBeNull();
+    }
   });
 });

@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ComposerSubmission } from "@/hooks/conversation-composer";
-import type { Finding, RetestRun, Ticket } from "@/data/types";
+import type { Finding, Ticket } from "@/data/types";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -148,18 +148,17 @@ let composer: ReturnType<typeof useRiskComposer>;
 
 function Probe({
   can,
-  retests,
   conversationId = CONVERSATION,
+  withTicket = true,
 }: {
   can: (capability: string) => boolean;
-  retests: RetestRun[] | undefined;
   conversationId?: string;
+  withTicket?: boolean;
 }) {
   composer = useRiskComposer({
     conversation: { id: conversationId } as never,
     finding,
-    ticket: ticket(),
-    retests,
+    ticket: withTicket ? ticket() : null,
     can: can as never,
   });
   return null;
@@ -167,10 +166,14 @@ function Probe({
 
 function render({
   can = () => true,
-  retests = [] as RetestRun[] | undefined,
   conversationId = CONVERSATION,
-}: { can?: (capability: string) => boolean; retests?: RetestRun[] | undefined; conversationId?: string } = {}) {
-  act(() => root.render(<Probe can={can} retests={retests} conversationId={conversationId} />));
+  withTicket = true,
+}: {
+  can?: (capability: string) => boolean;
+  conversationId?: string;
+  withTicket?: boolean;
+} = {}) {
+  act(() => root.render(<Probe can={can} conversationId={conversationId} withTicket={withTicket} />));
 }
 
 async function submit(submission: ComposerSubmission) {
@@ -246,6 +249,17 @@ describe("routing a submission to its workflow", () => {
       input: { findingId: FINDING, ticketId: TICKET, message: "Fixed in build 2.1." },
     });
     expect((calls[0].input as { submissionId: string }).submissionId).toEqual(expect.any(String));
+  });
+
+  it("submits a reassessment with no remediation, recording no ticket at all", async () => {
+    render({ withTicket: false });
+    await submit({ message: "Please look again.", action: { kind: "reassessment" } });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
+      name: "reassessment",
+      input: { findingId: FINDING, ticketId: null, message: "Please look again." },
+    });
   });
 
   it("gives each intentional submission its own identity, and a retry the same one", async () => {
@@ -489,24 +503,26 @@ describe("what each reader is offered", () => {
     expect(composer.offers[0].blockedReason).toBeNull();
   });
 
-  it("blocks the request when the risk has no approach to follow", () => {
+  it("offers the request with no approach chosen", () => {
     definitions = [];
     selectedControlId = null;
     render({ can: (capability) => capability === "request_retest" });
-    expect(composer.offers[0].blockedReason).toBe("Choose a remediation approach first.");
+    expect(composer.offers[0].blockedReason).toBeNull();
   });
 
-  it("blocks the request once security has finished with the remediation", () => {
-    ticketStatus = "closed";
-    render({ can: (capability) => capability === "request_retest" });
-    expect(composer.offers[0].blockedReason).toBe("Security has finished with this remediation.");
+  it("offers the request with no remediation ticket at all", () => {
+    render({ can: (capability) => capability === "request_retest", withTicket: false });
+    expect(composer.offers[0].blockedReason).toBeNull();
   });
 
-  it("blocks the request on a withdrawn remediation and says to resume it", () => {
-    ticketStatus = "withdrawn";
-    render({ can: (capability) => capability === "request_retest" });
-    expect(composer.offers[0].blockedReason).toContain("Resume it");
-  });
+  it.each(["closed", "withdrawn", "under_review", "retest_in_progress"])(
+    "offers the request on a %s remediation",
+    (status) => {
+      ticketStatus = status;
+      render({ can: (capability) => capability === "request_retest" });
+      expect(composer.offers[0].blockedReason).toBeNull();
+    },
+  );
 
   it("still lets a remediation recorded before the change ask for one", () => {
     ticketStatus = "fix_submitted";
@@ -514,16 +530,16 @@ describe("what each reader is offered", () => {
     expect(composer.offers[0].blockedReason).toBeNull();
   });
 
-  it("blocks the request when the approaches could not be loaded", () => {
+  it("offers the request when the approaches could not be loaded", () => {
     definitionsFailed = true;
     render({ can: (capability) => capability === "request_retest" });
-    expect(composer.offers[0].blockedReason).toContain("could not be loaded");
+    expect(composer.offers[0].blockedReason).toBeNull();
   });
 
-  it("blocks the request when the stored approach is no longer in the playbook", () => {
+  it("offers the request when the stored approach is no longer in the playbook", () => {
     definitions = [{ ...approach(), control_id: "example-replacement-control" }];
     render({ can: (capability) => capability === "request_retest" });
-    expect(composer.offers[0].blockedReason).toContain("no longer in the playbook");
+    expect(composer.offers[0].blockedReason).toBeNull();
   });
 
   it("offers the request while the approach's progress rows are still being reconciled", () => {
@@ -535,20 +551,14 @@ describe("what each reader is offered", () => {
 
   it("offers another request while one is already queued", () => {
     ticketStatus = "retest_requested";
-    render({
-      can: (capability) => capability === "request_retest",
-      retests: [{ id: "retest-1", status: "queued" } as RetestRun],
-    });
+    render({ can: (capability) => capability === "request_retest" });
 
     expect(composer.offers[0].blockedReason).toBeNull();
   });
 
   it("offers another request while security is running one", () => {
     ticketStatus = "retest_in_progress";
-    render({
-      can: (capability) => capability === "request_retest",
-      retests: [{ id: "retest-1", status: "running" } as RetestRun],
-    });
+    render({ can: (capability) => capability === "request_retest" });
 
     expect(composer.offers[0].blockedReason).toBeNull();
   });

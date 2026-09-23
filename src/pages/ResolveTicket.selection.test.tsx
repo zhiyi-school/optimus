@@ -8,6 +8,11 @@ import type { Ticket, TicketControl, TicketControlStep, TicketStatus } from "@/d
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+vi.mock("react-router-dom", async () => {
+  const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
+  return { ...actual, useNavigate: () => (to: string) => navigated.push(to) };
+});
+
 const TICKET = "example-ticket-id";
 const FIRST = "example-feature-01-risk-01-control-01";
 const SECOND = "example-feature-01-risk-01-control-02";
@@ -57,6 +62,8 @@ function definition(overrides: Partial<ControlDetail> = {}): ControlDetail {
 }
 
 let definitions: ControlDetail[] = [];
+const started: (string | null)[] = [];
+const navigated: string[] = [];
 let storedSelection: string | null = null;
 let ticketStatus: TicketStatus = "in_progress";
 let controlRows: TicketControl[] = [];
@@ -143,9 +150,9 @@ vi.mock("@/hooks/queries/tickets", async () => await import("@/test-support/quer
 vi.mock("@/test-support/query-hooks", () => {
   const idle = { data: undefined, isLoading: false, isError: false, refetch: () => {} };
   return {
-    useTicket: () => ({
+    useTicket: (id?: string) => ({
       ...idle,
-      data: {
+      data: !id ? undefined : {
         ...ticket(),
         finding: {
           id: "example-finding-id",
@@ -161,6 +168,14 @@ vi.mock("@/test-support/query-hooks", () => {
       },
     }),
     useRiskControls: () => ({ ...idle, data: definitions }),
+    useStartRemediation: () => ({
+      mutateAsync: (input: { ticket: { selected_control_id: string | null } }) => {
+        started.push(input.ticket.selected_control_id);
+        return Promise.resolve({ id: "created-ticket-id" });
+      },
+      isPending: false,
+      isError: false,
+    }),
     useTicketControls: () => ({ ...idle, data: controlRows }),
     useTicketControlSteps: () => ({ ...idle, data: stepRows }),
     useRiskConversationById: () => idle,
@@ -223,6 +238,8 @@ beforeEach(() => {
   stepRows = [];
   capabilities = ["update_control_progress", "view_resolve"];
   selected = [];
+  started.length = 0;
+  navigated.length = 0;
   reconciled = [];
   selectRejects = null;
   container = document.createElement("div");
@@ -240,6 +257,25 @@ function render() {
     root.render(
       <MemoryRouter initialEntries={[`/resolve/applications/example-app-id/risks/example-risk`]}>
         <ResolveTicket ticketId={TICKET} />
+      </MemoryRouter>,
+    ),
+  );
+}
+
+const FINDING = {
+  id: "example-finding-id",
+  application_id: "example-app-id",
+  assessment_id: "example-assessment-id",
+  platform: "ios",
+  test_id: "example-feature-01-risk-01",
+  title: "Example finding",
+} as never;
+
+function renderWithoutTicket() {
+  act(() =>
+    root.render(
+      <MemoryRouter initialEntries={[`/resolve/applications/example-app-id/risks/example-risk`]}>
+        <ResolveTicket finding={FINDING} />
       </MemoryRouter>,
     ),
   );
@@ -660,5 +696,57 @@ describe("the simplified remediation view", () => {
     expect(link?.getAttribute("href")).toBe(
       `/resolve/tickets/${TICKET}/controls/${FIRST}`,
     );
+  });
+});
+
+describe("the remediation view before a remediation exists", () => {
+  it("shows the approach and its steps with no ticket at all", () => {
+    renderWithoutTicket();
+
+    expect(text()).toContain("Approach one");
+    expect(text()).toContain("Steps completed");
+    expect(buttonNamed("Start remediation")).toBeUndefined();
+  });
+
+  it("offers each control as a button rather than a link", () => {
+    renderWithoutTicket();
+
+    const open = [...container.querySelectorAll("button")].find((button) =>
+      button.getAttribute("aria-label")?.startsWith("View steps for"),
+    );
+    expect(open).toBeDefined();
+    expect(container.querySelector("a[aria-label^='View steps for']")).toBeNull();
+  });
+
+  it("creates the remediation when a control is opened, carrying that control as the approach", async () => {
+    renderWithoutTicket();
+
+    const open = [...container.querySelectorAll("button")].find((button) =>
+      button.getAttribute("aria-label")?.startsWith("View steps for"),
+    )!;
+    await act(async () => open.click());
+
+    expect(started).toEqual([FIRST]);
+    expect(selected).toEqual([]);
+    expect(navigated).toEqual([`/resolve/tickets/created-ticket-id/controls/${FIRST}`]);
+  });
+
+  it("creates rather than mutates when an approach is picked", async () => {
+    twoApproaches();
+    renderWithoutTicket();
+
+    act(() => buttonNamed("View other approaches (1)")!.click());
+    await act(async () => buttonNamed("Use this approach")!.click());
+
+    expect(started).toEqual([SECOND]);
+    expect(selected).toEqual([]);
+  });
+
+  it("offers no withdrawal or resume before a remediation exists", () => {
+    renderWithoutTicket();
+
+    expect(buttonNamed("Withdraw remediation")).toBeUndefined();
+    expect(buttonNamed("Resume remediation")).toBeUndefined();
+    expect(text()).toContain("Track your remediation progress here.");
   });
 });

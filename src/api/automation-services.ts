@@ -147,8 +147,10 @@ export const assessmentApi = {
     return data;
   },
 
-  async listReports(): Promise<string[]> {
-    const { data } = await automationClient.get("/reports");
+  async listReports(status?: string): Promise<string[]> {
+    const { data } = await automationClient.get("/reports", {
+      params: status ? { status } : undefined,
+    });
     return data;
   },
 

@@ -21,6 +21,8 @@ let retests: RetestRun[] = [];
 let conversationFound = true;
 let runHistory: unknown[] = [];
 let analysisDocument: unknown = undefined;
+let riskDescription = "Example risk description.";
+const reassessmentInputs: { ticketId: string | null }[] = [];
 
 const CONTROL = "example-feature-01-risk-01-control-01";
 let definitions: unknown[] = [];
@@ -134,7 +136,7 @@ vi.mock("@/auth/useAuth", () => ({
 }));
 
 vi.mock("@/pages/ResolveTicket", () => ({
-  default: ({ ticketId }: { ticketId: string }) => <p>{`remediation:${ticketId}`}</p>,
+  default: ({ ticketId }: { ticketId?: string }) => <p>{`remediation:${ticketId ?? "none"}`}</p>,
 }));
 
 vi.mock("@/hooks/queries/assessments", async () => await import("@/test-support/query-hooks"));
@@ -162,13 +164,19 @@ vi.mock("@/test-support/query-hooks", () => {
     useRiskCatalogue: () => ({
       ...idle,
       data: [
-        { risk_id: RISK, name: "Example Risk", description: "Example risk description." },
+        { risk_id: RISK, name: "Example Risk", description: riskDescription },
         { risk_id: OTHER_RISK, name: "Example Second Risk", description: "Another risk." },
       ],
     }),
     useFindingEvidenceItems: () => ({ ...idle, data: [] }),
     useFindingRetests: () => ({ ...idle, data: retests }),
-    useRequestReassessment: () => mutation,
+    useRequestReassessment: () => ({
+      ...mutation,
+      mutateAsync: (input: { ticketId: string | null }) => {
+        reassessmentInputs.push(input);
+        return Promise.resolve({ run: { id: "retest-1" }, entryId: "entry-1" });
+      },
+    }),
     useWithdrawReassessment: () => mutation,
     useProfiles: () => ({ ...idle, data: [] }),
     useTestRunHistory: () => ({ ...idle, data: runHistory }),
@@ -192,6 +200,7 @@ vi.mock("@/test-support/query-hooks", () => {
     useReviewRiskAcceptance: () => mutation,
     useActiveRun: () => ({ run: undefined, platformRun: undefined }),
     useRunEvents: () => ({ events: [], streamState: "idle" }),
+    useRunSyncStatus: () => ({ data: undefined }),
   };
 });
 
@@ -208,6 +217,8 @@ beforeEach(() => {
   conversationFound = true;
   runHistory = [];
   analysisDocument = undefined;
+  riskDescription = "Example risk description.";
+  reassessmentInputs.length = 0;
   completedApproach();
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -250,6 +261,34 @@ describe("the developer feature-risk workspace", () => {
     expect(text()).toContain("At Risk");
   });
 
+  it("reports risk coverage in the sidebar, not findings resolved", () => {
+    findings = [finding()];
+    render();
+
+    // One of the two catalogue risks has a finding.
+    expect(text()).toContain("1 of 2 risks tested");
+    expect(text()).not.toContain("findings resolved");
+  });
+
+  it("counts every risk with a finding, whatever its verdict", () => {
+    findings = [finding(), finding({ id: "second-finding-id", test_id: OTHER_RISK, status: "reduced_risk" })];
+    render();
+
+    expect(text()).toContain("2 of 2 risks tested");
+  });
+
+  it("keeps the paragraph break an authored description carries", () => {
+    riskDescription = "The first paragraph.\n\nThe second paragraph.";
+    render();
+
+    const paragraph = [...container.querySelectorAll("p")].find((node) =>
+      node.textContent?.startsWith("The first paragraph."),
+    );
+    expect(paragraph).toBeDefined();
+    expect(paragraph!.className).toContain("whitespace-pre-line");
+    expect(paragraph!.textContent).toBe("The first paragraph.\n\nThe second paragraph.");
+  });
+
   it("shows the related ticket state alongside the risk", () => {
     render();
     expect(text()).toContain("In progress");
@@ -260,13 +299,19 @@ describe("the developer feature-risk workspace", () => {
     expect(text()).toContain("remediation:example-ticket-id");
   });
 
-  it("offers to start remediation when no ticket exists yet", () => {
+  it("shows the remediation panel with no ticket, and never a Start remediation button", () => {
     tickets = [];
     render();
-    expect(text()).not.toContain("remediation:");
+
+    expect(text()).toContain("remediation:none");
     expect(
       [...container.querySelectorAll("button")].some((b) => b.textContent === "Start remediation"),
-    ).toBe(true);
+    ).toBe(false);
+  });
+
+  it("shows the same panel against the existing remediation when there is one", () => {
+    render();
+    expect(text()).toContain("remediation:example-ticket-id");
   });
 
   it("lists the application's risks in the sidebar and marks the open one", () => {
@@ -389,6 +434,13 @@ describe("the automated evidence a developer is shown", () => {
         duration_seconds: 42,
         evidence: [
           {
+            kind: "report",
+            label: "ipa_analysis.json",
+            path: "reports/example/ipa_analysis.json",
+            ref: "example-analysis-ref",
+            size_bytes: 256,
+          },
+          {
             kind: "json",
             label: "Critical findings",
             path: "reports/example/critical_findings.json",
@@ -448,6 +500,16 @@ describe("the automated evidence a developer is shown", () => {
     render();
 
     expect(text()).toContain("No matching plaintext literals reported in this run.");
+  });
+
+  it("says nothing about plaintext literals when the run produced no analysis report", () => {
+    completedRun();
+    (runHistory[0] as { evidence: unknown[] }).evidence = [];
+    analysisDocument = analysisFixture;
+    render();
+
+    expect(text()).not.toContain("Exposed plaintext literals");
+    expect(text()).not.toContain("No matching plaintext literals reported in this run.");
   });
 
   it("shows no static-analysis findings table", () => {
@@ -616,6 +678,34 @@ describe("the reassessment actions in the developer's conversation", () => {
     const request = buttonLabelled("Request reassessment")!;
     expect(request.disabled).toBe(false);
     expect(text()).not.toContain("Submit");
+  });
+
+  it("attaches no ticket to a request made against a withdrawn remediation", async () => {
+    tickets = [ticket({ status: "withdrawn", withdrawn_at: "2026-01-02T00:00:00Z" })];
+    render();
+
+    const composer = container.querySelector("textarea") as HTMLTextAreaElement;
+    composer.value = "Please look again.";
+    composer.dispatchEvent(new Event("input", { bubbles: true }));
+    act(() => buttonLabelled("Request reassessment")!.click());
+    await act(async () => buttonLabelled("Send")!.click());
+
+    expect(reassessmentInputs).toHaveLength(1);
+    expect(reassessmentInputs[0].ticketId).toBeNull();
+  });
+
+  it("attaches the active remediation to a request made against one", async () => {
+    tickets = [ticket({ status: "in_progress" })];
+    render();
+
+    const composer = container.querySelector("textarea") as HTMLTextAreaElement;
+    composer.value = "Fixed in build 2.1.";
+    composer.dispatchEvent(new Event("input", { bubbles: true }));
+    act(() => buttonLabelled("Request reassessment")!.click());
+    await act(async () => buttonLabelled("Send")!.click());
+
+    expect(reassessmentInputs).toHaveLength(1);
+    expect(reassessmentInputs[0].ticketId).toBe("example-ticket-id");
   });
 
   it("offers the requester no withdrawal, only the queued state", () => {

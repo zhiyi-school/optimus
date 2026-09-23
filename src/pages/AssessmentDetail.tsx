@@ -72,8 +72,9 @@ export default function AssessmentDetail() {
             <CardContent className="py-4">
               <h2 className="text-sm font-semibold text-foreground">Assessment complete</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                {assessment.completed_tests} of {assessment.total_tests} security tests were
-                recorded for {application?.name ?? "this app"} on {formatDate(assessment.updated_at)}.
+                {assessment.completed_tests} of {assessment.total_tests} risks have been
+                tested for {application?.name ?? "this app"}, as of{" "}
+                {formatDate(assessment.updated_at)}.
               </p>
               <div className="mt-4">
                 <EmptyState

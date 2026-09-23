@@ -171,6 +171,16 @@ describe("opening a completed assessment", () => {
     expect(text()).toContain("No security tests are available");
   });
 
+  it("reports the stored risk coverage as one sentence with one number", () => {
+    catalogue = [];
+    findings = [];
+    render();
+
+    expect(text()).toContain("0 of 3 risks have been tested for Example Application, as of");
+    expect(text()).not.toContain("This run recorded");
+    expect(text()).not.toContain("security tests were");
+  });
+
   it("never leaves the main pane blank, whatever the catalogue is doing", () => {
     for (const loading of [true, false]) {
       catalogueLoading = loading;

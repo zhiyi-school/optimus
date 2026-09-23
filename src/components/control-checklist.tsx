@@ -23,11 +23,14 @@ const iconTone: Record<ControlProgressStatus, string> = {
 export function ControlChecklist({
   controls,
   linkTo,
+  onOpen,
   unavailable = false,
   emptyMessage = "No remediation controls are linked to this risk yet.",
 }: {
   controls: LiveControl[];
   linkTo: (controlId: string) => string;
+  /** Opening the control has to do work first; the card becomes a button rather than a link. */
+  onOpen?: (controlId: string) => void;
   unavailable?: boolean;
   emptyMessage?: string;
 }) {
@@ -48,13 +51,9 @@ export function ControlChecklist({
         const Icon = statusIcon[status];
         const href = linkTo(definition.control_id);
 
-        return (
-          <li key={definition.control_id}>
-            <Link
-              to={href}
-              aria-label={`View steps for ${definition.title}`}
-              className="group block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-            >
+        const openClassName =
+          "group block w-full rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40";
+        const body = (
               <Card className="transition-colors group-hover:border-primary/40 group-focus-visible:border-primary/40">
                 <CardContent className="py-3">
                   <div className="flex items-start gap-3">
@@ -84,7 +83,24 @@ export function ControlChecklist({
                   </div>
                 </CardContent>
               </Card>
-            </Link>
+        );
+
+        return (
+          <li key={definition.control_id}>
+            {onOpen ? (
+              <button
+                type="button"
+                onClick={() => onOpen(definition.control_id)}
+                aria-label={`View steps for ${definition.title}`}
+                className={openClassName}
+              >
+                {body}
+              </button>
+            ) : (
+              <Link to={href} aria-label={`View steps for ${definition.title}`} className={openClassName}>
+                {body}
+              </Link>
+            )}
           </li>
         );
       })}

@@ -2,13 +2,11 @@ import { useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { useAuth } from "@/auth/useAuth";
 import { LoadingState, ErrorState, EmptyState } from "@/components/common";
-import { Card, CardContent } from "@/components/ui/card";
 import { PlatformBadge, SeverityBadge, StatusBadge } from "@/components/data-display";
 import { ToneBadge } from "@/components/resolve-display";
 import { RiskSidebar, type RiskSidebarEntry } from "@/components/risk-sidebar";
 import { EvidenceRail, RiskDetailGrid, RiskHeader, RiskWorkspace } from "@/components/risk-workspace";
 import { RiskConversationActions } from "@/components/ticket-actions/composition";
-import { WorkOnRiskButton } from "@/components/ticket-actions/remediation";
 import { useRiskComposer } from "@/hooks/conversation-composer";
 import { EvidenceList } from "@/components/evidence";
 import { RiskConversationPanel } from "@/components/conversation-panel";
@@ -42,6 +40,7 @@ import {
   developerRiskOrder,
   developerTicketLabel,
   resumableRemediationTicket,
+  testingProgress,
 } from "@/lib/resolve";
 import { riskIcon } from "@/lib/entity-icons";
 
@@ -70,6 +69,7 @@ function RiskPage() {
     ? (activeRemediationTicket(finding.id, tickets.data) ??
       resumableRemediationTicket(finding.id, tickets.data))
     : undefined;
+  const queueTicket = finding ? activeRemediationTicket(finding.id, tickets.data) : undefined;
 
   const canComment = can("comment_risk_conversation");
   const conversation = useRiskConversation(applicationId, riskId, finding?.id, {
@@ -115,8 +115,7 @@ function RiskPage() {
   const composer = useRiskComposer({
     conversation: conversation.data,
     finding,
-    ticket,
-    retests: retests.data,
+    ticket: queueTicket,
     can,
   });
 
@@ -139,10 +138,10 @@ function RiskPage() {
     [findings.data, risks, tickets.data],
   );
 
-  const resolved = (findings.data ?? []).filter((c) => c.status === "reduced_risk").length;
-  const actionable = (findings.data ?? []).filter(
-    (c) => c.status === "at_risk" || c.status === "reduced_risk",
-  ).length;
+  const tested = useMemo(
+    () => testingProgress(findings.data ?? [], risks?.length ?? 0),
+    [findings.data, risks],
+  );
 
   // The application is the page's identity: once it is known — usually from the
   // already-cached list — the shell renders and findings fill in beneath it.
@@ -169,7 +168,7 @@ function RiskPage() {
           backTo="/resolve"
           backLabel="Back to Resolve"
           application={application}
-          progress={{ completed: resolved, total: actionable, label: "findings resolved" }}
+          progress={{ completed: tested.completed, total: tested.total, label: "risks tested" }}
           risks={sidebarRisks}
           activeRiskId={riskId}
           riskHref={(id) => `/resolve/applications/${applicationId}/risks/${id}`}
@@ -222,25 +221,19 @@ function RiskPage() {
               </EvidenceRail>
             }
           >
-            <PlaintextLiteralsCard
-              analysis={literals}
-              isLoading={analysis.isLoading}
-              isError={analysis.isError}
-              onRetry={() => void analysis.refetch()}
-              controlHref={(controlId) =>
-                `/resolve/findings/${finding.id}/controls/${encodeURIComponent(controlId)}`
-              }
-            />
-
-            {!ticket && (
-              <Card>
-                <CardContent className="py-3.5">
-                  <WorkOnRiskButton finding={finding} application={application} />
-                </CardContent>
-              </Card>
+            {analysisRef && (
+              <PlaintextLiteralsCard
+                analysis={literals}
+                isLoading={analysis.isLoading}
+                isError={analysis.isError}
+                onRetry={() => void analysis.refetch()}
+                controlHref={(controlId) =>
+                  `/resolve/findings/${finding.id}/controls/${encodeURIComponent(controlId)}`
+                }
+              />
             )}
 
-            {ticket && <ResolveTicket ticketId={ticket.id} />}
+            <ResolveTicket ticketId={ticket?.id} finding={finding} />
           </RiskDetailGrid>
 
           {can("view_risk_conversation") && (

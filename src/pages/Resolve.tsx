@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { RefreshCw } from "lucide-react";
 import { PageHeader, LoadingState, ErrorState, EmptyState } from "@/components/common";
@@ -11,7 +11,7 @@ import {
   useControlProgressForTickets,
   useTickets,
 } from "@/hooks/queries/tickets";
-import { useLiveControlKeys } from "@/hooks/queries/automation";
+import { useLiveControlKeys, useRiskCatalogue } from "@/hooks/queries/automation";
 import { useAuth } from "@/auth/useAuth";
 import {
   remediationStatusLabels,
@@ -47,6 +47,13 @@ export default function Resolve() {
     [findings.data],
   );
   const liveKeys = useLiveControlKeys(risks);
+  const iosCatalogue = useRiskCatalogue("ios");
+  const androidCatalogue = useRiskCatalogue("android");
+  const catalogueSize = useCallback(
+    (platform: string) =>
+      (platform === "ios" ? iosCatalogue.data : androidCatalogue.data)?.length ?? 0,
+    [iosCatalogue.data, androidCatalogue.data],
+  );
 
   const rows = useMemo<Row[]>(() => {
     return (applications.data ?? [])
@@ -60,10 +67,11 @@ export default function Resolve() {
           controls.controls,
           controls.steps,
           liveKeys,
+          catalogueSize(application.platform),
         ),
       }))
       .sort((a, b) => compareByName(a.application.name, b.application.name, a.application.id, b.application.id));
-  }, [applications.data, findings.data, tickets.data, controls.controls, controls.steps, liveKeys]);
+  }, [applications.data, findings.data, tickets.data, controls.controls, controls.steps, liveKeys, catalogueSize]);
 
   const columns: DataTableColumn<Row>[] = useMemo(
     () => [
@@ -83,7 +91,7 @@ export default function Resolve() {
         header: "Progress",
         render: (row) => (
           <div className="w-40">
-            <ProgressBar label="Remediation steps" progress={row.summary.controls} />
+            <ProgressBar label="Risks tested" progress={row.summary.tested} />
           </div>
         ),
       },
