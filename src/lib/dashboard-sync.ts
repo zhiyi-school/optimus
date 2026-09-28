@@ -1,3 +1,7 @@
+/**
+ * Presentation and polling rules for a run's dashboard sync status.
+ */
+
 import type { DashboardSyncStatus, RunSyncStatus } from "@/api/automation-types";
 import type { Tone } from "@/lib/status";
 
@@ -34,16 +38,17 @@ const PRESENTATION: Record<DashboardSyncStatus, { label: string; tone: Tone; det
   },
 };
 
+/** Label, tone and explanation for a dashboard sync status. */
 export function dashboardSyncPresentation(status: DashboardSyncStatus) {
   return PRESENTATION[status];
 }
 
-/** The run and its dashboard sync are separate workflows; only the sync is still moving here. */
+/** True while the dashboard sync, a workflow separate from the run, is queued or running. */
 export function isSyncPending(status: DashboardSyncStatus | undefined): boolean {
   return status === "queued" || status === "running";
 }
 
-/** A run the worker has not registered yet has no record, so keep polling until the cap. */
+/** Poll interval while the sync is pending or not yet recorded (up to the attempt cap); otherwise false. */
 export function syncPollInterval(
   status: DashboardSyncStatus | undefined,
   attempts = 0,
@@ -55,10 +60,12 @@ export function syncPollInterval(
   return false;
 }
 
+/** True when the sync failed and the backend marked it retryable. */
 export function canRetrySync(sync: RunSyncStatus | null | undefined): boolean {
   return sync?.status === "failed" && sync.retryable === true;
 }
 
+/** A sentence counting what a completed sync recorded, or null when it recorded nothing. */
 export function syncCountsSummary(sync: RunSyncStatus | null | undefined): string | null {
   if (!sync || sync.status !== "completed") return null;
   const { findings, history, activity } = sync.counts;
@@ -69,6 +76,7 @@ export function syncCountsSummary(sync: RunSyncStatus | null | undefined): strin
   return `${parts.join(", ")} recorded.`;
 }
 
+/** Formats a count with the singular or plural noun. */
 function plural(count: number, singular: string, plural?: string): string {
   return `${count} ${count === 1 ? singular : (plural ?? `${singular}s`)}`;
 }

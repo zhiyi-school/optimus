@@ -1,3 +1,7 @@
+/**
+ * React context carrying the signed-in session, profile, auth actions and capability check.
+ */
+
 import { createContext } from "react";
 import type { Session } from "@supabase/supabase-js";
 import type { Profile } from "@/data/types";

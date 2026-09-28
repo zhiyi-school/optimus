@@ -1,3 +1,7 @@
+/**
+ * Risk conversation composer hook, classification options and action offers.
+ */
+
 import { useConversationSubmission } from "@/hooks/conversation-submission";
 import type {
   Application,
@@ -42,7 +46,7 @@ export interface RiskConversationContext {
   profileId: string | undefined;
 }
 
-/** One submit for every action: the file lands on the entry that action created. */
+/** Returns the reader's classification and reassessment offers plus the shared record-then-attach submission. */
 export function useRiskComposer({
   conversation,
   finding,

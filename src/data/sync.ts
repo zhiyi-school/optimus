@@ -1,3 +1,7 @@
+/**
+ * Public entry point for app provisioning and run orchestration.
+ */
+
 export { mapVerdictToFindingStatus } from "./sync/mapping";
 export type { RunCancelToken } from "./sync/mapping";
 export { addApp } from "./sync/provisioning";

@@ -1,3 +1,7 @@
+/**
+ * Supabase operations on risk conversations, their entries, attachments and realtime updates.
+ */
+
 import { supabase } from "@/data/supabase";
 import {
   conversationAttachmentData,
@@ -33,6 +37,7 @@ export interface RiskConversationOwner {
 }
 
 export const riskConversationData = {
+  /** Finds the conversation for an application risk, or null. */
   async find(applicationId: string, riskId: string): Promise<RiskConversation | null> {
     debug("finding conversation", { applicationId, riskId });
     const { data, error } = await supabase
@@ -54,6 +59,7 @@ export const riskConversationData = {
     return data;
   },
 
+  /** Fetches one conversation, or null. */
   async get(id: string): Promise<RiskConversation | null> {
     debug("fetching conversation", { id });
     const { data, error } = await supabase.from("risk_conversations").select("*").eq("id", id).maybeSingle();
@@ -65,7 +71,7 @@ export const riskConversationData = {
     return data;
   },
 
-  /** The database uniqueness constraint resolves simultaneous creation attempts. */
+  /** Returns the app risk's conversation, creating it or filling in missing links; the unique key settles races. */
   async getOrCreate(owner: RiskConversationOwner): Promise<RiskConversation> {
     debug("getting or creating conversation", owner);
     const existing = await riskConversationData.find(owner.applicationId, owner.riskId);
@@ -124,6 +130,7 @@ export const riskConversationData = {
     return data;
   },
 
+  /** Lists a conversation's entries in creation order. */
   async listEntries(conversationId: string): Promise<RiskConversationEntry[]> {
     debug("listing conversation entries", { conversationId });
     const { data, error } = await supabase
@@ -144,6 +151,7 @@ export const riskConversationData = {
     return data;
   },
 
+  /** Lists the attachments of the given entries in upload order. */
   async listAttachments(entryIds: string[]): Promise<RiskConversationAttachment[]> {
     if (entryIds.length === 0) {
       debug("no entries; skipping attachment query");
@@ -167,6 +175,7 @@ export const riskConversationData = {
     return data;
   },
 
+  /** Inserts a conversation entry authored by the signed-in user. */
   async addEntry(input: RiskConversationEntryInput): Promise<RiskConversationEntry> {
     debug("adding conversation entry", {
       conversationId: input.conversation_id,
@@ -199,6 +208,7 @@ export const riskConversationData = {
     return data;
   },
 
+  /** Finds the entry recorded under a sync key, or null. */
   async findEntryBySyncKey(syncKey: string): Promise<RiskConversationEntry | null> {
     debug("finding entry by sync key", { syncKey });
     const { data, error } = await supabase.from("risk_conversation_entries").select("*").eq("sync_key", syncKey).maybeSingle();
@@ -210,7 +220,7 @@ export const riskConversationData = {
     return data;
   },
 
-  /** The unique sync key turns a losing insert race into the row already written. */
+  /** Adds an entry once per sync key, returning the existing row on a retry or a lost insert race. */
   async addEntryOnce(
     input: RiskConversationEntryInput & { sync_key: string },
   ): Promise<RiskConversationEntry> {
@@ -236,6 +246,7 @@ export const riskConversationData = {
     }
   },
 
+  /** Uploads a file for an entry and records its attachment row. */
   async uploadAttachment(
     conversationId: string,
     entryId: string,
@@ -252,10 +263,12 @@ export const riskConversationData = {
     return conversationAttachmentData.saveMetadata(pending);
   },
 
+  /** Creates a signed URL for an attachment. */
   getSignedUrl(storagePath: string) {
     return conversationAttachmentData.getSignedUrl(storagePath);
   },
 
+  /** Calls `onChange` on each new entry in the conversation; returns the unsubscribe function. */
   subscribeToConversation(conversationId: string, onChange: () => void) {
     debug("subscribing to conversation", { conversationId });
     const channel = supabase

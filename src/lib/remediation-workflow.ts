@@ -1,3 +1,7 @@
+/**
+ * Shared selection, reconciliation and readiness decisions for a remediation's approach.
+ */
+
 import type { ControlDetail } from "@/api/playbook-types";
 import type { RetestRun, Ticket, TicketControl, TicketControlStep } from "@/data/types";
 import {
@@ -60,6 +64,7 @@ export interface RemediationWorkflow {
   reassessmentBlock: RemediationBlock | null;
 }
 
+/** Derives the selected approach, reconciliation, completion, editability and blocks for a remediation. */
 export function remediationWorkflow(input: RemediationWorkflowInput): RemediationWorkflow {
   const candidates = selectableControls(input.definitions);
   const storedControlId = input.ticket?.selected_control_id ?? null;
@@ -115,6 +120,7 @@ export function remediationWorkflow(input: RemediationWorkflowInput): Remediatio
   return workflow;
 }
 
+/** Why the approach cannot be changed, or null when it can. */
 function approachBlock(
   ticket: Ticket | null | undefined,
   mayEdit: boolean,
@@ -127,6 +133,7 @@ function approachBlock(
   return { code: "approach_security_owned" };
 }
 
+/** Why a reassessment cannot be requested, or null when it can. */
 function reassessmentBlockFor(input: RemediationWorkflowInput): RemediationBlock | null {
   if (!input.mayRequest) return { code: "reassessment_permission" };
   return null;

@@ -1,3 +1,7 @@
+/**
+ * Notice showing a run's dashboard synchronization status.
+ */
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { RunSyncStatus } from "@/api/automation-types";
@@ -7,6 +11,7 @@ import { cn } from "@/lib/utils";
 
 const debug = createDebug("component:dashboard-sync-notice");
 
+/** Shows sync status, counts or detail, errors and a retry button when retry is allowed. */
 export function DashboardSyncNotice({
   sync,
   onRetry,

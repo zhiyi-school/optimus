@@ -1,3 +1,7 @@
+/**
+ * Supabase operations on a ticket's control and step progress.
+ */
+
 import { supabase } from "@/data/supabase";
 import type {
   ControlProgressStatus,
@@ -15,6 +19,7 @@ export interface ControlReconciliation {
   step_keys: string[];
 }
 
+/** Status fields to write, stamping completion time and user only when completed. */
 function completionFields(status: ControlProgressStatus, userId: string) {
   const completed = status === "completed";
   return {
@@ -25,6 +30,7 @@ function completionFields(status: ControlProgressStatus, userId: string) {
 }
 
 export const controlProgressData = {
+  /** Lists a ticket's control rows by control id. */
   async listForTicket(ticketId: string): Promise<TicketControl[]> {
     debug("listing ticket controls", { ticketId });
     const { data, error } = await supabase
@@ -40,6 +46,7 @@ export const controlProgressData = {
     return data;
   },
 
+  /** Lists the control rows of several tickets. */
   async listForTicketIds(ticketIds: string[]): Promise<TicketControl[]> {
     if (ticketIds.length === 0) {
       debug("no tickets; skipping control query");
@@ -62,6 +69,7 @@ export const controlProgressData = {
     return data;
   },
 
+  /** Lists the step rows of several control rows by step key. */
   async listStepsForControlIds(controlRowIds: string[]): Promise<TicketControlStep[]> {
     if (controlRowIds.length === 0) {
       debug("no control rows; skipping step query");
@@ -85,6 +93,7 @@ export const controlProgressData = {
     return data;
   },
 
+  /** Lists one control row's steps by step key. */
   async listSteps(ticketControlId: string): Promise<TicketControlStep[]> {
     debug("listing control steps", { ticketControlId });
     const { data, error } = await supabase
@@ -104,6 +113,7 @@ export const controlProgressData = {
     return data;
   },
 
+  /** Lists every step row across a ticket's controls. */
   async listStepsForTicket(ticketId: string): Promise<TicketControlStep[]> {
     debug("listing steps for ticket", { ticketId });
     const controls = await controlProgressData.listForTicket(ticketId);
@@ -127,7 +137,7 @@ export const controlProgressData = {
     return data;
   },
 
-  /** Adds only: nothing is updated or removed, so a step that left the playbook keeps its history. */
+  /** Adds rows for live controls and steps the ticket lacks; never updates or removes, preserving history. */
   async reconcile(
     ticketId: string,
     live: ControlReconciliation[],
@@ -202,6 +212,7 @@ export const controlProgressData = {
     return controls;
   },
 
+  /** Sets a step's status and optional note, then logs the change. */
   async setStepStatus(
     ticketId: string,
     stepId: string,
@@ -234,6 +245,7 @@ export const controlProgressData = {
     return data;
   },
 
+  /** Sets a control's status and optional note, then logs the change. */
   async setControlStatus(
     ticketId: string,
     controlRowId: string,

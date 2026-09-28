@@ -1,3 +1,7 @@
+/**
+ * Query and mutation hooks for tickets, remediation controls, risk acceptance, activity and metrics.
+ */
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { activityData } from "@/data/services/activity";
 import { controlProgressData, type ControlReconciliation } from "@/data/services/controls";
@@ -19,6 +23,7 @@ import { createDebug } from "@/lib/debug";
 
 const debug = createDebug("hooks:queries:tickets");
 
+/** Fetches a finding's retest runs. */
 export function useFindingRetests(findingId: string | undefined) {
   return useQuery({
     queryKey: ticketKeys.findingRetests(findingId),
@@ -32,6 +37,7 @@ export function useFindingRetests(findingId: string | undefined) {
   });
 }
 
+/** Fetches the tickets linked to a finding. */
 export function useFindingTickets(findingId: string | undefined) {
   return useQuery({
     queryKey: ticketKeys.byFinding(findingId),
@@ -45,6 +51,7 @@ export function useFindingTickets(findingId: string | undefined) {
   });
 }
 
+/** Fetches the tickets linked to any of the given findings. */
 export function useTicketsByFindingIds(findingIds: string[]) {
   return useQuery({
     queryKey: ticketKeys.byFindingIds(findingIds),
@@ -58,6 +65,7 @@ export function useTicketsByFindingIds(findingIds: string[]) {
   });
 }
 
+/** Fetches tickets with their relations, filtered as given. */
 export function useTickets(filters: TicketFilters = {}) {
   return useQuery({
     queryKey: ticketKeys.withRelations(filters),
@@ -70,6 +78,7 @@ export function useTickets(filters: TicketFilters = {}) {
   });
 }
 
+/** Fetches one ticket with its relations. */
 export function useTicket(id: string | undefined) {
   return useQuery({
     queryKey: ticketKeys.detail(id),
@@ -83,6 +92,7 @@ export function useTicket(id: string | undefined) {
   });
 }
 
+/** Fetches a ticket's risk acceptance. */
 export function useRiskAcceptance(ticketId: string | undefined) {
   return useQuery({
     queryKey: ticketKeys.acceptance(ticketId),
@@ -96,6 +106,7 @@ export function useRiskAcceptance(ticketId: string | undefined) {
   });
 }
 
+/** Fetches pending risk acceptances. */
 export function usePendingRiskAcceptance() {
   return useQuery({
     queryKey: ticketKeys.pendingAcceptance(),
@@ -108,6 +119,7 @@ export function usePendingRiskAcceptance() {
   });
 }
 
+/** Fetches the activity log for an entity. */
 export function useActivity(entityType: string, entityId: string | undefined) {
   return useQuery({
     queryKey: ticketKeys.activity(entityType, entityId),
@@ -121,6 +133,7 @@ export function useActivity(entityType: string, entityId: string | undefined) {
   });
 }
 
+/** Fetches the dashboard overview metrics. */
 export function useDashboardMetrics() {
   return useQuery({
     queryKey: ticketKeys.metrics(),
@@ -133,6 +146,7 @@ export function useDashboardMetrics() {
   });
 }
 
+/** Creates a remediation ticket and refreshes ticket lists and metrics. */
 export function useCreateRemediationTicket() {
   const invalidate = useInvalidateQueries();
   return useMutation({
@@ -149,12 +163,7 @@ export function useCreateRemediationTicket() {
   });
 }
 
-/**
- * The conversation is resolved here, not on the page: a new remediation reuses
- * the application's existing conversation for that risk, and the ticket records
- * the assessment it was opened against before a later run moves the finding's
- * own assessment reference on.
- */
+/** Opens a remediation on the risk's shared conversation, recording its origin assessment, then seeds progress. */
 export function useStartRemediation() {
   const invalidate = useInvalidateQueries();
   return useMutation({
@@ -203,6 +212,7 @@ export function useStartRemediation() {
   });
 }
 
+/** Withdraws a ticket with a reason and refreshes its lifecycle keys. */
 export function useWithdrawTicket(ticketId: string, findingId: string | null | undefined) {
   const invalidate = useInvalidateQueries();
   return useMutation({
@@ -216,6 +226,7 @@ export function useWithdrawTicket(ticketId: string, findingId: string | null | u
   });
 }
 
+/** Resumes a withdrawn ticket and refreshes its lifecycle keys. */
 export function useResumeTicket(ticketId: string, findingId: string | null | undefined) {
   const invalidate = useInvalidateQueries();
   return useMutation({
@@ -229,6 +240,7 @@ export function useResumeTicket(ticketId: string, findingId: string | null | und
   });
 }
 
+/** Creates a risk acceptance ticket and refreshes ticket lists and metrics. */
 export function useCreateRiskAcceptanceTicket() {
   const invalidate = useInvalidateQueries();
   return useMutation({
@@ -245,6 +257,7 @@ export function useCreateRiskAcceptanceTicket() {
   });
 }
 
+/** Changes a ticket's status and refreshes the ticket, lists, activity and metrics. */
 export function useUpdateTicketStatus(ticketId: string) {
   const invalidate = useInvalidateQueries();
   return useMutation({
@@ -262,6 +275,7 @@ export function useUpdateTicketStatus(ticketId: string) {
   });
 }
 
+/** Reclassifies a finding from the conversation and refreshes finding, ticket and conversation keys. */
 export function useClassifyRisk(findingId: string | undefined, conversationId: string | undefined) {
   const invalidate = useInvalidateQueries();
   return useMutation({
@@ -289,6 +303,7 @@ export function useClassifyRisk(findingId: string | undefined, conversationId: s
   });
 }
 
+/** Records a risk acceptance decision and refreshes the ticket, acceptances and metrics. */
 export function useReviewRiskAcceptance() {
   const invalidate = useInvalidateQueries();
   return useMutation({
@@ -318,6 +333,7 @@ export function useReviewRiskAcceptance() {
 }
 
 
+/** Fetches the playbook controls that mitigate a risk. */
 export function useRiskControls(
   platform: AutomationPlatform | undefined,
   riskId: string | null | undefined,
@@ -336,6 +352,7 @@ export function useRiskControls(
   });
 }
 
+/** Fetches one control definition from the playbook. */
 export function useControlDetail(
   platform: AutomationPlatform | undefined,
   controlId: string | undefined,
@@ -354,6 +371,7 @@ export function useControlDetail(
   });
 }
 
+/** Fetches a control's playbook source. */
 export function useControlSource(
   platform: AutomationPlatform | undefined,
   controlId: string | undefined,
@@ -371,6 +389,7 @@ export function useControlSource(
   });
 }
 
+/** Fetches a ticket's control progress rows. */
 export function useTicketControls(ticketId: string | undefined) {
   return useQuery({
     queryKey: ticketKeys.controls(ticketId),
@@ -384,6 +403,7 @@ export function useTicketControls(ticketId: string | undefined) {
   });
 }
 
+/** Fetches a ticket's control step progress rows. */
 export function useTicketControlSteps(ticketId: string | undefined) {
   return useQuery({
     queryKey: ticketKeys.controlSteps(ticketId),
@@ -397,6 +417,7 @@ export function useTicketControlSteps(ticketId: string | undefined) {
   });
 }
 
+/** Fetches control and step progress for several tickets, combining their loading and error state. */
 export function useControlProgressForTickets(ticketIds: string[]) {
   const key = [...ticketIds].sort();
   const controls = useQuery({
@@ -433,7 +454,7 @@ export function useControlProgressForTickets(ticketIds: string[]) {
 const EMPTY_CONTROLS: TicketControl[] = [];
 const EMPTY_STEPS: TicketControlStep[] = [];
 
-/** The cached ticket carries the new approach immediately, and is put back if the write is refused. */
+/** Selects a ticket's remediation control optimistically, restoring the cached ticket if the write fails. */
 export function useSelectRemediationControl(
   ticketId: string | undefined,
   findingId: string | null | undefined,
@@ -465,6 +486,7 @@ export function useSelectRemediationControl(
   });
 }
 
+/** Applies a reconciliation plan to a ticket's control progress. */
 export function useReconcileTicketControls(ticketId: string | undefined) {
   const invalidate = useInvalidateQueries();
   return useMutation({
@@ -476,6 +498,7 @@ export function useReconcileTicketControls(ticketId: string | undefined) {
   });
 }
 
+/** Sets a control step's progress status and refreshes control progress. */
 export function useSetControlStepStatus(ticketId: string | undefined) {
   const invalidate = useInvalidateQueries();
   return useMutation({
@@ -493,6 +516,7 @@ export function useSetControlStepStatus(ticketId: string | undefined) {
   });
 }
 
+/** Sets a control's progress status and refreshes control progress. */
 export function useSetControlStatus(ticketId: string | undefined) {
   const invalidate = useInvalidateQueries();
   return useMutation({

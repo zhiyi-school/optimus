@@ -1,3 +1,7 @@
+/**
+ * The browser Supabase client and storage bucket names; fails fast when configuration is missing.
+ */
+
 import { createClient } from "@supabase/supabase-js";
 import { createDebug } from "@/lib/debug";
 

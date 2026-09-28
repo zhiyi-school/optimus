@@ -1,9 +1,14 @@
+/**
+ * Live timeline of automation run progress events.
+ */
+
 import { CheckCircle2, Circle, Radio, WifiOff, XCircle } from "lucide-react";
 import type { RunProgressEvent } from "@/api/automation-types";
 import type { RunEventStreamState } from "@/lib/run-event-types";
 import { streamStateLabel } from "@/lib/run-stream";
 import { cn, formatDate } from "@/lib/utils";
 
+/** Human-readable text for a run event, preferring its own message. */
 function eventLabel(event: RunProgressEvent): string {
   if (event.message && typeof event.message === "string") return event.message;
   if (event.type === "risk_started") {
@@ -20,6 +25,7 @@ function eventLabel(event: RunProgressEvent): string {
   return event.type.replaceAll("_", " ");
 }
 
+/** Icon for a run event: completed, failed, Appium recovery or generic. */
 function iconFor(event: RunProgressEvent) {
   if (event.type === "risk_completed" || (event.type === "done" && event.status === "completed")) {
     return CheckCircle2;
@@ -29,6 +35,7 @@ function iconFor(event: RunProgressEvent) {
   return Circle;
 }
 
+/** Lists run events with icons and times beside the live stream state. */
 export function RunEventTimeline({
   events,
   streamState,

@@ -1,3 +1,7 @@
+/**
+ * Resolve application route that redirects developers to the risk needing most attention.
+ */
+
 import { Navigate, useParams } from "react-router-dom";
 import { PageHeader, LoadingState, ErrorState, EmptyState } from "@/components/common";
 import { ApplicationIcon } from "@/components/application-icon";
@@ -10,11 +14,7 @@ import { preferredDeveloperRisk } from "@/lib/resolve";
 
 const debug = createDebug("page:ResolveApplication");
 
-/**
- * There is no application overview in the developer flow: opening an application
- * opens the feature-risk that most needs attention. The route stays so older
- * links, and the Resolve list, keep working.
- */
+/** Redirects to the application's most urgent developer risk, or shows an empty state when none exists. */
 export default function ResolveApplication() {
   const { applicationId } = useParams<{ applicationId: string }>();
   const applications = useApplications();
@@ -23,8 +23,6 @@ export default function ResolveApplication() {
 
   const application = applications.data?.find((candidate) => candidate.id === applicationId);
 
-  // This route only redirects, so it waits for the data that decides where to
-  // go — but not for a refetch of data it already has.
   if ((!application && applications.isLoading) || findings.isLoading || tickets.isLoading) {
     return <LoadingState label="Opening your remediation work…" />;
   }

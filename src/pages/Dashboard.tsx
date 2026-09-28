@@ -1,3 +1,7 @@
+/**
+ * Role-based landing dashboard with developer and CIO metric views.
+ */
+
 import { Navigate } from "react-router-dom";
 import { ListChecks, Settings } from "lucide-react";
 import { useAuth } from "@/auth/useAuth";
@@ -18,6 +22,7 @@ const roleGreeting: Record<UserRole, string> = {
   admin: "Manage teams, users, and application ownership.",
 };
 
+/** Shows role-specific metrics or links, redirecting security users to Assessments. */
 export default function Dashboard() {
   const { profile } = useAuth();
   const { data: metrics, isLoading, isError, refetch } = useDashboardMetrics();
@@ -54,6 +59,7 @@ export default function Dashboard() {
   );
 }
 
+/** Renders the developer's finding status counts and open ticket total. */
 function DeveloperDashboard({ metrics }: { metrics: ReturnType<typeof useDashboardMetrics>["data"] }) {
   if (!metrics) return null;
   return (
@@ -83,6 +89,7 @@ function DeveloperDashboard({ metrics }: { metrics: ReturnType<typeof useDashboa
   );
 }
 
+/** Renders the CIO's portfolio totals, security posture counts and outstanding work link. */
 function CioDashboard({ metrics }: { metrics: ReturnType<typeof useDashboardMetrics>["data"] }) {
   if (!metrics) return null;
   return (

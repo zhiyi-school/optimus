@@ -1,3 +1,7 @@
+/**
+ * Guided page walking security testers through a risk's manual demonstration steps.
+ */
+
 import { useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { FileText } from "lucide-react";
@@ -21,6 +25,7 @@ import { useRiskCatalogue } from "@/hooks/queries/automation";
 
 const debug = createDebug("page:ManualTestSteps");
 
+/** Renders a playbook setup table, deriving columns from the union of row keys. */
 function SetupTable({ block }: { block: DemonstrationTableBlock }) {
   const columns = useMemo(() => {
     const seen: string[] = [];
@@ -65,6 +70,7 @@ function SetupTable({ block }: { block: DemonstrationTableBlock }) {
   );
 }
 
+/** Renders a reference screenshot for a manual step. */
 function StepImage({ image }: { image: DemonstrationImage }) {
   return (
     <PlaybookFigure
@@ -77,6 +83,7 @@ function StepImage({ image }: { image: DemonstrationImage }) {
   );
 }
 
+/** Renders one ordered playbook content block by its type. */
 function StepContent({ block }: { block: DemonstrationContentBlock }) {
   switch (block.type) {
     case "paragraph":
@@ -108,6 +115,7 @@ function StepContent({ block }: { block: DemonstrationContentBlock }) {
   }
 }
 
+/** Renders a step's title, text and ordered content, falling back to its commands and images. */
 function StepBody({ step, number }: { step: DemonstrationStep; number: number }) {
   const ordered = step.content ?? [];
   return (
@@ -136,6 +144,7 @@ function StepBody({ step, number }: { step: DemonstrationStep; number: number })
   );
 }
 
+/** Shows the risk's MITRE ATT&CK tactic when one is defined. */
 function RiskTactic({ risk }: { risk: RiskDefinition | undefined }) {
   if (!risk?.tactic) return null;
   return (
@@ -152,7 +161,7 @@ interface FlatStep {
   step: DemonstrationStep;
 }
 
-/** One running number across every steps block, keyed on the backend step id where there is one. */
+/** Numbers steps across every steps block, keying each on its backend step ID where there is one. */
 function flattenSteps(blocks: DemonstrationBlock[]): FlatStep[] {
   const flat: FlatStep[] = [];
   blocks.forEach((block) => {
@@ -165,6 +174,7 @@ function flattenSteps(blocks: DemonstrationBlock[]): FlatStep[] {
   return flat;
 }
 
+/** Shows the risk's manual steps one at a time, with setup tables on the first step. */
 export default function ManualTestSteps() {
   const { assessmentId, testId } = useParams<{ assessmentId: string; testId: string }>();
   const { data: assessment, isLoading } = useAssessment(assessmentId);

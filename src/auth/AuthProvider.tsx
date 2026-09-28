@@ -1,3 +1,7 @@
+/**
+ * Provider that tracks the Supabase session, loads the user's profile and exposes auth actions.
+ */
+
 import {
   useCallback,
   useEffect,
@@ -14,6 +18,7 @@ import type { Profile } from "@/data/types";
 import { roleCan, type Capability } from "@/auth/permissions";
 import { AuthContext, type AuthContextValue } from "@/auth/AuthContext";
 
+/** Tracks the Supabase session and profile, clearing cached queries whenever the account changes. */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const [session, setSession] = useState<Session | null>(null);
@@ -27,6 +32,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loadedUserRef = useRef<string | null>(null);
   const sessionUserRef = useRef<string | null>(null);
 
+  /** Loads the current profile, ignoring stale responses; a blocking load clears the profile on failure. */
   const fetchProfile = useCallback(
     async (userId: string, { blocking }: { blocking: boolean }) => {
       const seq = ++requestSeqRef.current;
@@ -61,6 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  /** Drops the profile, cancels in-flight loads and clears the query cache. */
   const clearAccountState = useCallback(() => {
     requestSeqRef.current += 1;
     pendingUserRef.current = null;
@@ -88,8 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const hasProfile = loadedUserRef.current === userId;
 
-      // A refreshed token is the same user with a new access token: keep the
-      // profile, and never block the routes already on screen.
+      // A token refresh is the same user: keep the profile and never block routes on screen.
       if (event === "TOKEN_REFRESHED" && hasProfile) return;
 
       if (event === "USER_UPDATED") {
@@ -108,6 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => listener.subscription.unsubscribe();
   }, [clearAccountState, fetchProfile]);
 
+  /** Signs in with email and password, recording and rethrowing any error. */
   const signIn = useCallback(async (email: string, password: string) => {
     setError(null);
     const { error: signInError } = await supabase.auth.signInWithPassword({
@@ -120,6 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  /** Creates an account and reports whether email confirmation is still required. */
   const signUp = useCallback(
     async (email: string, password: string, displayName: string) => {
       setError(null);
@@ -137,18 +145,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  /** Signs out and clears the previous account's state. */
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
     // Otherwise the next sign-in reuses the previous account's cached queries.
     clearAccountState();
   }, [clearAccountState]);
 
+  /** Reloads the profile of the current user without blocking the UI. */
   const refreshProfile = useCallback(async () => {
     const userId = loadedUserRef.current ?? pendingUserRef.current ?? sessionUserRef.current;
     if (!userId) return;
     await fetchProfile(userId, { blocking: false });
   }, [fetchProfile]);
 
+  /** True when the current profile's roles grant the capability. */
   const can = useCallback(
     (capability: Capability) => roleCan(profile?.roles, capability),
     [profile?.roles],

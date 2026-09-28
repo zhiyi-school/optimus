@@ -1,22 +1,6 @@
--- One-off cleanup for duplicate `applications` rows caused by a real bug:
--- a manually-added app (via "Add App") has no external_id, so when a real
--- automation run later synced results for that same app, the sync couldn't
--- match it back and created a second row instead of merging into the
--- first. The underlying bug is now fixed in src/data/sync.ts
--- (syncService.syncReport) — this script is only for cleaning up rows that
--- already got duplicated before that fix.
---
--- This is NOT a migration — do not add it to supabase/migrations/. Run it
--- once, by hand, in the Supabase SQL Editor.
---
--- ===========================================================================
--- STEP 1 — PREVIEW (read-only, run this first and review the results)
--- ===========================================================================
--- Shows every group of applications that share a name (case-insensitive)
--- and platform, with more than one row. For each group: which row would be
--- kept (the one with a real external_id if there's exactly one such row,
--- otherwise the oldest row), and how many assessments/findings/tickets
--- would be moved off of each of the others before they're deleted.
+-- One-off, hand-run cleanup merging duplicate `applications` rows; not a migration, run in the Supabase SQL Editor.
+
+-- STEP 1 — PREVIEW (read-only): duplicate name/platform groups, each keeper (oldest linked row, else oldest) and rows to move.
 
 with duplicate_groups as (
   select lower(name) as name_key, platform, array_agg(id order by created_at) as app_ids
@@ -54,13 +38,7 @@ from keepers k
 join applications a on a.id = any(k.app_ids)
 order by k.name_key, k.platform, is_keeper desc, a.created_at;
 
--- ===========================================================================
--- STEP 2 — MERGE (destructive — only run after reviewing Step 1's output)
--- ===========================================================================
--- For each duplicate group: reassigns every assessment/finding/ticket from
--- the non-keeper rows onto the keeper, then deletes the non-keeper rows.
--- Wrapped in a transaction — if anything looks wrong afterward, ROLLBACK
--- instead of COMMIT.
+-- STEP 2 — MERGE (destructive): uncomment after reviewing Step 1; ROLLBACK instead of COMMIT if anything looks wrong.
 
 -- begin;
 --

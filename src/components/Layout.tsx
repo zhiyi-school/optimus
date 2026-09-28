@@ -1,3 +1,7 @@
+/**
+ * App shell with the top navigation bar, account menu and routed page outlet.
+ */
+
 import { Suspense } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { ShieldCheck, LogOut, Settings as SettingsIcon } from "lucide-react";
@@ -30,14 +34,13 @@ const debug = createDebug("component:Layout");
 const ASSESS_ROUTES = ["/assessments", "/runs"];
 const RESOLVE_ROUTES = ["/resolve"];
 
+/** Renders the header navigation filtered by capability, the account menu and the current route. */
 export function Layout() {
   const { profile, can, signOut } = useAuth();
   const { data: teams } = useTeams();
   const team = teams?.find((t) => t.id === profile?.team_id);
   const { pathname } = useLocation();
 
-  // Findings and tickets live inside their feature-risk workspace; their routes
-  // stay reachable for old links but are no longer navigation destinations.
   const navItems = [
     { to: "/assessments", label: "Assess", match: ASSESS_ROUTES, show: can("view_assessments") },
     { to: "/resolve", label: "Resolve", match: RESOLVE_ROUTES, show: can("view_resolve") },

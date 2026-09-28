@@ -1,3 +1,7 @@
+/**
+ * Syntax-highlighted code block with a copy-to-clipboard button.
+ */
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Copy, TriangleAlert } from "lucide-react";
 import { tokenize, type CodeTokenKind } from "@/lib/code-highlight";
@@ -18,6 +22,7 @@ const TOKEN_CLASS: Record<CodeTokenKind, string> = {
 
 type CopyState = "idle" | "copied" | "failed";
 
+/** Renders tokenized code with a language label and copy button that reports success or failure. */
 export function CodeBlock({ code, language }: { code: string; language?: string | null }) {
   const [state, setState] = useState<CopyState>("idle");
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -32,6 +37,7 @@ export function CodeBlock({ code, language }: { code: string; language?: string 
 
   useEffect(() => () => clearTimeout(timer.current), []);
 
+  /** Copies the code to the clipboard and shows copied or failed feedback briefly. */
   async function copy() {
     clearTimeout(timer.current);
     debug("copies code", { language: label, length: code.length });

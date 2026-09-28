@@ -1,8 +1,13 @@
+/**
+ * Rendering and plain-text conversion for the inline markdown used in playbook content.
+ */
+
 import type { ReactNode } from "react";
 
 const TOKEN =
   /(`[^`]+`)|(\*\*[^*]+\*\*)|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<>()]+)/g;
 
+/** An external link that opens in a new tab without referrer. */
 function link(href: string, label: string, key: number): ReactNode {
   return (
     <a
@@ -22,11 +27,10 @@ const CODE_SPAN = /`([^`]+)`/g;
 const ASTERISK_EMPHASIS = /(\*{1,3})(\S(?:[\s\S]*?\S)?)\1/g;
 const UNDERSCORE_EMPHASIS = /(^|[^\w])(_{1,3})(\S(?:[\s\S]*?\S)?)\2(?!\w)/g;
 
-/** Authored markdown as the plain sentence it reads as, for places that render text rather than nodes. */
+/** Strips links, code spans and (nested) emphasis from markdown, for places that render plain text. */
 export function plainText(text: string | undefined | null): string {
   if (!text) return "";
   let result = text.replace(LINK, "$1").replace(CODE_SPAN, "$1");
-  // Nested emphasis such as _**Tactic**_ needs a second pass to unwrap both layers.
   for (let pass = 0; pass < 3; pass += 1) {
     const next = result.replace(ASTERISK_EMPHASIS, "$2").replace(UNDERSCORE_EMPHASIS, "$1$3");
     if (next === result) break;
@@ -35,7 +39,7 @@ export function plainText(text: string | undefined | null): string {
   return result.trim();
 }
 
-/** The subset of markdown the playbook uses inline: code spans, bold, links. */
+/** Renders the playbook's inline markdown subset: code spans, bold, links and bare URLs. */
 export function renderInline(text: string | undefined | null): ReactNode {
   if (!text) return null;
   const parts: ReactNode[] = [];

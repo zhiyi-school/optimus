@@ -1,3 +1,7 @@
+/**
+ * Hook for downloading risk conversation attachments through on-demand signed URLs.
+ */
+
 import { useState } from "react";
 import { riskConversationData } from "@/data/services/conversations";
 import { attachmentSource } from "@/lib/attachments";
@@ -8,7 +12,7 @@ import type { RiskConversationAttachment } from "@/data/types";
 
 const debug = createDebug("hooks:attachments");
 
-/** Minted per download and never cached, so a link cannot outlive the reader's access. */
+/** Mints an uncached signed URL per download so links cannot outlive access; server-held files are unsupported. */
 async function attachmentUrl(attachment: RiskConversationAttachment): Promise<string> {
   const source = attachmentSource(attachment);
   debug("resolves attachment source", { attachmentId: attachment.id, provider: source.provider });
@@ -27,10 +31,12 @@ async function attachmentUrl(attachment: RiskConversationAttachment): Promise<st
   return data.signedUrl;
 }
 
+/** Tracks busy and failed attachment downloads and exposes a start function. */
 export function useAttachmentDownload() {
   const [busy, setBusy] = useState<string | null>(null);
   const [failed, setFailed] = useState<{ id: string; message: string } | null>(null);
 
+  /** Downloads an attachment unless another download is in progress, recording any failure. */
   async function start(attachment: RiskConversationAttachment) {
     if (busy) {
       debug("ignores download while busy", { attachmentId: attachment.id, busy });

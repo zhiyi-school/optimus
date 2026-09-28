@@ -1,9 +1,14 @@
+/**
+ * Card listing plaintext literals exposed in a run's static analysis.
+ */
+
 import { KeyRound } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { ErrorState, LoadingState } from "@/components/common";
 import type { PlaintextAnalysis, PlaintextLiteral } from "@/lib/plaintext-literals";
 
+/** Location of a literal: its bundle file and key path, or the reporting analyzer. */
 function SourceCell({ item }: { item: PlaintextLiteral }) {
   if (item.sourceKind === "analyzer_report") {
     return (
@@ -20,6 +25,7 @@ function SourceCell({ item }: { item: PlaintextLiteral }) {
   );
 }
 
+/** Shows masked plaintext literals with fix links, or the loading, error or not-analyzed state. */
 export function PlaintextLiteralsCard({
   analysis,
   isLoading,

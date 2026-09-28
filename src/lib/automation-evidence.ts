@@ -1,3 +1,7 @@
+/**
+ * Selecting automation results and turning their evidence refs into displayable evidence items.
+ */
+
 import type { AutomationResultRow, EvidenceRef } from "@/api/automation-types";
 import type { EvidenceItem } from "@/lib/evidence-types";
 import { createDebug } from "@/lib/debug";
@@ -8,6 +12,7 @@ const debug = createDebug("lib:automation-evidence");
 export const AUTOMATION_SOURCE = "Automated test";
 export const MANUAL_SOURCE = "Security team";
 
+/** The most recently started result for this app and risk in the history. */
 export function latestResult(
   history: AutomationResultRow[] | undefined,
   appExternalId: string | null | undefined,
@@ -30,6 +35,7 @@ export function latestResult(
   return newest;
 }
 
+/** The viewer kind for an artifact: image, text, or its own kind. */
 function displayKind(kind: string, label: string): string {
   const name = label.toLowerCase();
   if (kind === "screenshot" || /\.(png|jpe?g)\b/.test(name)) return "image";
@@ -48,6 +54,7 @@ export interface LatestResultDetail {
   testName: string;
 }
 
+/** Display fields for a result, with formatted time and duration. */
 export function latestResultDetail(
   row: AutomationResultRow | undefined,
 ): LatestResultDetail | undefined {
@@ -64,6 +71,7 @@ export function latestResultDetail(
   };
 }
 
+/** A result's evidence refs, dropping blank and duplicate refs. */
 export function artifactsOf(row: AutomationResultRow | undefined): EvidenceRef[] {
   const seen = new Set<string>();
   const artifacts: EvidenceRef[] = [];
@@ -76,6 +84,7 @@ export function artifactsOf(row: AutomationResultRow | undefined): EvidenceRef[]
   return artifacts;
 }
 
+/** The result's evidence artifact with this file name. */
 export function artifactNamed(
   row: AutomationResultRow | undefined,
   fileName: string,
@@ -83,6 +92,7 @@ export function artifactNamed(
   return artifactsOf(row).find((artifact) => artifact.path.split("/").pop() === fileName);
 }
 
+/** Evidence items for a result's artifacts, downloadable by opaque ref. */
 export function automationEvidence(
   row: AutomationResultRow | undefined,
   evidenceUrl: (runTimestamp: string, ref: string) => string,
@@ -103,6 +113,7 @@ export function automationEvidence(
   });
 }
 
+/** Automated evidence followed by manual evidence, each labelled with its source. */
 export function combinedEvidence(
   row: AutomationResultRow | undefined,
   manual: EvidenceItem[] | undefined,

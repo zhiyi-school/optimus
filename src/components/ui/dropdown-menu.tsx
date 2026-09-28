@@ -1,3 +1,7 @@
+/**
+ * Dropdown menu primitives styled over Radix Dropdown Menu.
+ */
+
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
 import type { ComponentProps } from "react";
 import { cn } from "@/lib/utils";
@@ -5,6 +9,7 @@ import { cn } from "@/lib/utils";
 export const DropdownMenu = DropdownMenuPrimitive.Root;
 export const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;
 
+/** Menu panel rendered in a portal, offset from its trigger. */
 export function DropdownMenuContent({
   className,
   sideOffset = 6,
@@ -24,6 +29,7 @@ export function DropdownMenuContent({
   );
 }
 
+/** Selectable menu row. */
 export function DropdownMenuItem({
   className,
   ...props
@@ -39,6 +45,7 @@ export function DropdownMenuItem({
   );
 }
 
+/** Thin divider between menu groups. */
 export function DropdownMenuSeparator({
   className,
   ...props
@@ -51,6 +58,7 @@ export function DropdownMenuSeparator({
   );
 }
 
+/** Non-interactive muted menu heading. */
 export function DropdownMenuLabel({
   className,
   ...props

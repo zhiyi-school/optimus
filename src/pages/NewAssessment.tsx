@@ -1,3 +1,7 @@
+/**
+ * New assessment form that registers an app and queues its automated assessment run.
+ */
+
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
@@ -57,12 +61,14 @@ const PLATFORMS: { value: Platform; label: string; review: string }[] = [
   { value: "android", label: "Android", review: "Android mobile app" },
 ];
 
+/** Shows whether a connector is available. */
 function ConnectorStatusBadge({ available }: { available: boolean }) {
   return (
     <Badge tone={available ? "success" : "neutral"}>{available ? "Available" : "Unavailable"}</Badge>
   );
 }
 
+/** Radio group for choosing the platform, with arrow-key navigation. */
 function PlatformChoice({
   value,
   onChange,
@@ -70,6 +76,7 @@ function PlatformChoice({
   value: Platform;
   onChange: (platform: Platform) => void;
 }) {
+  /** Moves the platform selection and focus with arrow keys, wrapping at either end. */
   function move(event: KeyboardEvent<HTMLButtonElement>, index: number) {
     const step = ["ArrowRight", "ArrowDown"].includes(event.key)
       ? 1
@@ -124,6 +131,7 @@ function PlatformChoice({
   );
 }
 
+/** Collects app details, contacts and a connector, then registers the app and queues its run after review. */
 export default function NewAssessment() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -148,6 +156,7 @@ export default function NewAssessment() {
     [stepOneRef, stepTwoRef, stepThreeRef],
   );
 
+  /** Scrolls to a form section, switching back from review first or opening review for the last step. */
   const goToStep = useCallback((key: number) => {
     debug("goes to step", { step: key, screen });
     if (key === 4) {
@@ -169,15 +178,18 @@ export default function NewAssessment() {
     setPendingScrollStep(null);
   }, [screen, pendingScrollStep, sectionRefs]);
 
+  /** Replaces the email contact at an index. */
   const updateEmail = useCallback((i: number, value: string) => {
     setEmails((prev) => prev.map((e, idx) => (idx === i ? value : e)));
   }, []);
 
+  /** Removes the email contact at an index. */
   const removeEmail = useCallback((i: number) => {
     debug("removes email contact", { index: i });
     setEmails((prev) => prev.filter((_, idx) => idx !== i));
   }, []);
 
+  /** Registers the app, requests its assessment run, refreshes related queries and returns to Assessments. */
   const confirm = useCallback(async () => {
     if (!name.trim()) {
       debug("rejects submission", { field: "name", rule: "required" });
@@ -201,8 +213,7 @@ export default function NewAssessment() {
       });
       debug("creates assessment", { assessmentId: assessment.id });
 
-      // The run is requested durably rather than started here, so leaving this
-      // page cannot lose it.
+      // Requested durably rather than started here, so leaving the page cannot lose the run.
       try {
         await assessmentRunRequestData.request(assessment.id);
         debug("queues assessment run", { assessmentId: assessment.id });
@@ -555,6 +566,7 @@ export default function NewAssessment() {
   );
 }
 
+/** Renders a label and value row in the review summary. */
 function Detail({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-3 border-b border-border/50 pb-2 last:border-0 last:pb-0">
@@ -564,6 +576,7 @@ function Detail({ label, value }: { label: string; value: string }) {
   );
 }
 
+/** Lists the latest assessment per app, linking completed ones to their detail page. */
 function AssessmentsMiniList() {
   const { data, isLoading } = useAssessments();
   const assessments = useMemo(() => latestAssessmentPerApp(data), [data]);

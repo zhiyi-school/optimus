@@ -1,3 +1,7 @@
+/**
+ * Conversation attachment list with per-file download and retry.
+ */
+
 import { Download, Paperclip } from "lucide-react";
 import { useAttachmentDownload } from "@/hooks/attachments";
 import { attachmentMeta } from "@/lib/attachments";
@@ -6,6 +10,7 @@ import type { RiskConversationAttachment } from "@/data/types";
 
 const debug = createDebug("component:attachments");
 
+/** Lists attachments with metadata, a download button and a retry link after a failed download. */
 export function AttachmentList({ attachments }: { attachments: RiskConversationAttachment[] }) {
   const { busy, failed, start } = useAttachmentDownload();
   if (attachments.length === 0) return null;

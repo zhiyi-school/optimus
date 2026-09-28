@@ -1,3 +1,7 @@
+/**
+ * Access guard for the Resolve workspace.
+ */
+
 import type { ReactNode } from "react";
 import { Navigate } from "react-router-dom";
 import { ShieldAlert, UserCog } from "lucide-react";
@@ -6,6 +10,7 @@ import { resolveAccess } from "@/auth/permissions";
 import { LoadingState } from "@/components/common";
 import { Card, CardContent } from "@/components/ui/card";
 
+/** Renders children only for signed-in active developers with a team, otherwise a login redirect or notice. */
 export function ResolveGuard({ children }: { children: ReactNode }) {
   const { session, profile, loading } = useAuth();
   const access = resolveAccess(profile, loading);
@@ -42,6 +47,7 @@ export function ResolveGuard({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+/** Centred card with an icon, title and explanation. */
 function Notice({ icon, title, body }: { icon: ReactNode; title: string; body: string }) {
   return (
     <Card className="mx-auto max-w-lg">

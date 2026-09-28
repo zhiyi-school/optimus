@@ -1,3 +1,7 @@
+/**
+ * Assessment workspace sidebar listing tested risks with their finding status.
+ */
+
 import { useMemo } from "react";
 import { RiskSidebar, type RiskSidebarEntry } from "@/components/risk-sidebar";
 import type { RiskDefinition } from "@/api/automation-types";
@@ -11,6 +15,7 @@ interface AssessmentSidebarProps {
   activeTestId?: string;
 }
 
+/** Maps the risk catalogue to sidebar entries linked to this assessment's test pages. */
 export function AssessmentSidebar({
   application,
   assessment,

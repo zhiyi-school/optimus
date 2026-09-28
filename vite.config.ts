@@ -1,3 +1,7 @@
+/**
+ * Vite build and dev-server config: React plugin, vendor chunking and the `@` alias.
+ */
+
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "node:path";
@@ -7,6 +11,7 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
+        /** Splits the large vendor libraries into their own chunks. */
         manualChunks(id) {
           if (!id.includes("node_modules")) return;
           if (id.includes("@supabase")) return "vendor-supabase";

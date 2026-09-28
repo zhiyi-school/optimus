@@ -1,3 +1,7 @@
+/**
+ * Admin page for managing teams, user roles and teams, and application ownership.
+ */
+
 import { useState } from "react";
 import { PageHeader, LoadingState, ErrorState, EmptyState } from "@/components/common";
 import { DataTable, type DataTableColumn, PlatformBadge } from "@/components/data-display";
@@ -46,6 +50,7 @@ const teamTypeLabels: Record<TeamType, string> = {
   management: "Management",
 };
 
+/** Shows the teams, users and applications sections with their loading and error states. */
 export default function Admin() {
   const { profile } = useAuth();
   const { data: profiles, isLoading: profilesLoading, isError: profilesError, refetch: refetchProfiles } = useProfiles();
@@ -155,6 +160,7 @@ export default function Admin() {
   );
 }
 
+/** Lists users with role editing, team assignment and an active-status toggle. */
 function UserTable({
   profiles,
   teams,
@@ -238,11 +244,13 @@ function UserTable({
   return <DataTable columns={columns} rows={profiles} />;
 }
 
+/** Edits another user's roles in a dialog, requiring at least one role and disabling self-edits. */
 function EditRolesDialog({ profile, isSelf }: { profile: Profile; isSelf: boolean }) {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<Set<UserRole>>(new Set(profile.roles));
   const updateRoles = useUpdateProfileRoles();
 
+  /** Adds or removes a role from the pending selection. */
   function toggle(role: UserRole) {
     const next = new Set(selected);
     if (next.has(role)) next.delete(role);
@@ -251,6 +259,7 @@ function EditRolesDialog({ profile, isSelf }: { profile: Profile; isSelf: boolea
     setSelected(next);
   }
 
+  /** Saves the selected roles when at least one is chosen, then closes the dialog. */
   async function onSave() {
     if (selected.size === 0) {
       debug("rejects roles", { profileId: profile.id, field: "roles", rule: "atLeastOne" });
@@ -331,6 +340,7 @@ function EditRolesDialog({ profile, isSelf }: { profile: Profile; isSelf: boolea
   );
 }
 
+/** Lists applications with developer team assignment and an edit dialog. */
 function ApplicationTable({ applications, teams }: { applications: Application[]; teams: Team[] }) {
   const updateApp = useUpdateApplication();
 
@@ -383,12 +393,14 @@ function ApplicationTable({ applications, teams }: { applications: Application[]
   return <DataTable columns={columns} rows={applications} />;
 }
 
+/** Dialog for creating a named team of a chosen type. */
 function NewTeamDialog() {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [type, setType] = useState<TeamType>("developer");
   const create = useCreateTeam();
 
+  /** Creates the team when a name is given, then resets and closes the dialog. */
   async function onSubmit() {
     if (!name.trim()) {
       debug("rejects team", { field: "name", rule: "required" });
@@ -456,6 +468,7 @@ function NewTeamDialog() {
   );
 }
 
+/** Dialog for editing an application's name, version, type and contacts. */
 function EditApplicationDialog({ application }: { application: Application }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(application.name);
@@ -467,6 +480,7 @@ function EditApplicationDialog({ application }: { application: Application }) {
   const [devEmail, setDevEmail] = useState(application.developer_contact_email ?? "");
   const update = useUpdateApplication();
 
+  /** Saves the trimmed application fields, storing blanks as null, then closes the dialog. */
   async function onSubmit() {
     debug("saves application", { applicationId: application.id });
     await update.mutateAsync({

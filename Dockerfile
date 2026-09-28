@@ -1,6 +1,4 @@
-# Builds and serves the dashboard frontend only.
-# The automation backend and Supabase are separate services — do not add
-# them to this image.
+# Builds and serves the dashboard frontend only; the automation backend and Supabase stay separate services.
 
 FROM node:20-alpine AS build
 WORKDIR /app

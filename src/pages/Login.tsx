@@ -1,3 +1,7 @@
+/**
+ * Sign-in and sign-up page, redirecting signed-in users to their role's landing route.
+ */
+
 import { useState, type FormEvent } from "react";
 import { Navigate } from "react-router-dom";
 import {
@@ -47,6 +51,7 @@ const TRUST_BADGES = [
   { icon: ShieldCheck, label: "Your data is always protected" },
 ];
 
+/** Renders the sign-in or sign-up form beside a sample conversation, redirecting once a session exists. */
 export default function Login() {
   const { session, profile, loading: authLoading, signIn, signUp } = useAuth();
   const [mode, setMode] = useState<Mode>("signin");
@@ -57,11 +62,10 @@ export default function Login() {
   const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // The landing route reads roles, so it waits for the profile rather than
-  // falling back to the dashboard while one is still being fetched.
   if (session && authLoading) return <LoadingState label="Loading your workspace…" />;
   if (session) return <Navigate to={defaultRouteFor(profile)} replace />;
 
+  /** Switches between sign-in and sign-up, clearing any error or notice. */
   function switchMode(next: Mode) {
     debug("switches mode", { from: mode, to: next });
     setMode(next);
@@ -69,6 +73,7 @@ export default function Login() {
     setNotice(null);
   }
 
+  /** Signs in or signs up, prompting for email confirmation when sign-up requires it. */
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     debug("submits credentials", { mode, hasEmail: email.length > 0, hasDisplayName: displayName.length > 0 });

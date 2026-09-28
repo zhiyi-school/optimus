@@ -1,3 +1,7 @@
+/**
+ * Hook that reuses a finding's remediation ticket or starts one on demand.
+ */
+
 import { useCallback } from "react";
 import { useRiskControls, useStartRemediation } from "@/hooks/queries/tickets";
 import {
@@ -11,7 +15,7 @@ import type { Finding } from "@/data/types";
 
 const debug = createDebug("hooks:ensure-remediation");
 
-/** The remediation a write needs: the existing one, or one opened on the spot. */
+/** Returns a callback yielding the existing ticket ID, or starting a remediation with the preferred control. */
 export function useEnsureRemediation(finding: Finding | undefined, ticketId: string | undefined) {
   const start = useStartRemediation();
   const definitions = useRiskControls(finding?.platform, finding?.test_id);

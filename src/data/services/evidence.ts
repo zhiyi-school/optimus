@@ -1,3 +1,7 @@
+/**
+ * Supabase operations on uploaded evidence rows and their storage files.
+ */
+
 import { supabase, EVIDENCE_BUCKET } from "@/data/supabase";
 import type { Evidence } from "@/data/types";
 import { createDebug } from "@/lib/debug";
@@ -6,6 +10,7 @@ import { requireUserId } from "./common";
 const debug = createDebug("data:evidence");
 
 export const evidenceData = {
+  /** Lists a finding's evidence, newest first. */
   async listForFinding(findingId: string): Promise<Evidence[]> {
     debug("listing evidence for finding", { findingId });
     const { data, error } = await supabase
@@ -25,6 +30,7 @@ export const evidenceData = {
     return data;
   },
 
+  /** Lists a ticket's evidence, newest first. */
   async listForTicket(ticketId: string): Promise<Evidence[]> {
     debug("listing evidence for ticket", { ticketId });
     const { data, error } = await supabase
@@ -44,6 +50,7 @@ export const evidenceData = {
     return data;
   },
 
+  /** Uploads a file to the evidence bucket, then records its evidence row against the finding or ticket. */
   async uploadFile(findingId: string | null, ticketId: string | null, file: File) {
     debug("uploading evidence file", {
       findingId,
@@ -85,6 +92,7 @@ export const evidenceData = {
     return data;
   },
 
+  /** Creates a one-hour signed URL for an evidence file. */
   getSignedUrl(storagePath: string) {
     debug("signing evidence path", { storagePath });
     return supabase.storage.from(EVIDENCE_BUCKET).createSignedUrl(storagePath, 3600);

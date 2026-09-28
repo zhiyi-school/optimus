@@ -1,3 +1,7 @@
+/**
+ * Call-to-action card with an icon, title and description.
+ */
+
 import { Link } from "react-router-dom";
 import { ChevronRight, type LucideIcon } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -13,6 +17,7 @@ interface CtaCardProps {
   className?: string;
 }
 
+/** Renders the card as a link when `to` is set and enabled, otherwise as a button. */
 export function CtaCard({ icon: Icon, title, description, to, onClick, disabled, className }: CtaCardProps) {
   const body = (
     <div className="flex h-full items-start gap-3 p-4">

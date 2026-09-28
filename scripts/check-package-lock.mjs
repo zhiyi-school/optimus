@@ -1,4 +1,8 @@
 #!/usr/bin/env node
+/**
+ * Checks that package-lock.json declares the same dependencies as package.json.
+ */
+
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";

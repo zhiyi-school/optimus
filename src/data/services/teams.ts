@@ -1,3 +1,7 @@
+/**
+ * Supabase operations on teams.
+ */
+
 import { supabase } from "@/data/supabase";
 import type { Team } from "@/data/types";
 import { createDebug } from "@/lib/debug";
@@ -5,6 +9,7 @@ import { createDebug } from "@/lib/debug";
 const debug = createDebug("data:teams");
 
 export const teamData = {
+  /** Lists every team by name. */
   async list(): Promise<Team[]> {
     debug("listing teams");
     const { data, error } = await supabase.from("teams").select("*").order("name");
@@ -16,6 +21,7 @@ export const teamData = {
     return data;
   },
 
+  /** Creates a team and returns the stored row. */
   async create(team: { name: string; type: Team["type"] }): Promise<Team> {
     debug("creating team", { type: team.type });
     const { data, error } = await supabase.from("teams").insert(team).select().single();

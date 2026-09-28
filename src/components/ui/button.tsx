@@ -1,3 +1,7 @@
+/**
+ * Button component with variant and size styles.
+ */
+
 import { forwardRef, type ButtonHTMLAttributes } from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
@@ -29,6 +33,7 @@ export interface ButtonProps
   extends ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {}
 
+/** Styled button forwarding its ref, with `variant` and `size` options. */
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, ...props }, ref) => (
     <button

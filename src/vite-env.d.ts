@@ -1,3 +1,7 @@
+/**
+ * Types for Vite's client and the dashboard's `import.meta.env` variables.
+ */
+
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {

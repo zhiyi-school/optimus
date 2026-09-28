@@ -1,3 +1,7 @@
+/**
+ * A small regex tokenizer for highlighting Swift and shell code blocks.
+ */
+
 export type CodeTokenKind = "plain" | "comment" | "string" | "keyword" | "number" | "flag";
 
 export interface CodeToken {
@@ -46,14 +50,12 @@ const ALIASES: Record<string, keyof typeof GRAMMARS> = {
   terminal: "shell",
 };
 
+/** The grammar name for a language alias, or undefined when it is not highlighted. */
 export function highlightedLanguage(language: string | null | undefined): string | undefined {
   return language ? ALIASES[language.trim().toLowerCase()] : undefined;
 }
 
-/**
- * Splits code into display tokens. Concatenating every `text` reproduces the
- * input exactly, so highlighting can never alter what a reader copies.
- */
+/** Splits code into display tokens whose concatenated text reproduces the input exactly. */
 export function tokenize(code: string, language: string | null | undefined): CodeToken[] {
   const grammar = GRAMMARS[highlightedLanguage(language) ?? ""];
   if (!grammar || !code) return code ? [{ text: code, kind: "plain" }] : [];

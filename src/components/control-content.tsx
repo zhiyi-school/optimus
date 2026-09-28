@@ -1,3 +1,7 @@
+/**
+ * Building blocks for rendering a playbook control: intro, steps, references, source archive and guidance.
+ */
+
 import { useState, type ReactNode } from "react";
 import { CheckCircle2, ChevronDown, Circle, Download, ExternalLink } from "lucide-react";
 import { EmptyState } from "@/components/common";
@@ -24,12 +28,14 @@ export interface ControlStepProgress {
   setStatus: (stepId: string, status: ControlProgressStatus, note?: string) => void;
 }
 
+/** Renders the control intro unless it merely repeats the summary. */
 export function ControlIntro({ control }: { control: ControlDetail }) {
   if (introRepeatsSummary(control)) return null;
   return <PlaybookContent blocks={control.intro} />;
 }
 
 
+/** Empty state for a control whose playbook lists no steps. */
 export function ControlStepsEmpty() {
   return (
     <EmptyState
@@ -39,6 +45,7 @@ export function ControlStepsEmpty() {
   );
 }
 
+/** Lists the control's external reference links. */
 export function ControlReferences({ control }: { control: ControlDetail }) {
   if (control.references.length === 0) return null;
   return (
@@ -61,6 +68,7 @@ export function ControlReferences({ control }: { control: ControlDetail }) {
   );
 }
 
+/** Download link or disabled notice for the control's reference implementation archive. */
 export function ControlSourceArchive({
   platform,
   controlId,
@@ -98,6 +106,7 @@ export function ControlSourceArchive({
   );
 }
 
+/** Renders the truthy guidance notes as paragraphs. */
 export function ControlGuidance({ notes }: { notes: (string | false | null | undefined)[] }) {
   const visible = notes.filter((note): note is string => !!note);
   if (visible.length === 0) return null;
@@ -110,6 +119,7 @@ export function ControlGuidance({ notes }: { notes: (string | false | null | und
   );
 }
 
+/** Collapsible details section with a titled summary. */
 function SupportingSection({ title, children }: { title: string; children: ReactNode }) {
   return (
     <details
@@ -130,7 +140,7 @@ function SupportingSection({ title, children }: { title: string; children: React
   );
 }
 
-/** Whole-control reference material, folded under the active step rather than stacked beside it. */
+/** Folds the control's intro, references and implementation example into collapsible sections. */
 export function ControlSupportingInfo({
   control,
   platform,
@@ -171,6 +181,7 @@ export function ControlSupportingInfo({
   );
 }
 
+/** Renders one control step with its content, completion toggle and optional developer note. */
 export function ControlStepBody({
   step,
   index,

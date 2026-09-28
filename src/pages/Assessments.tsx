@@ -1,3 +1,7 @@
+/**
+ * Security Assessments list with filters, expandable status panels and app deletion.
+ */
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { AlertTriangle, Plus, RefreshCw, SlidersHorizontal, Trash2 } from "lucide-react";
@@ -33,11 +37,12 @@ import type { Assessment, Application } from "@/data/types";
 
 const debug = createDebug("page:Assessments");
 
-/** Setup, waiting, and pre-completion failure all expose status through the row's dropdown only. */
+/** Statuses whose row expands to a status panel instead of opening the assessment. */
 const INCOMPLETE_STATUSES = ["queued", "waiting", "running", "failed"];
 
 type Row = Assessment & { application: Application | null };
 
+/** Lists the latest assessment per app with URL-held filters and expansion, and app deletion for testers. */
 export default function Assessments() {
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
@@ -51,9 +56,8 @@ export default function Assessments() {
     [applications],
   );
 
-  // The one URL-held expansion state: set by clicking a row here, or by a
-  // redirect from a direct link to an incomplete assessment (AssessmentDetail).
   const expandedId = params.get("expanded");
+  /** Toggles the URL-held expanded assessment row. */
   const toggleExpand = useCallback(
     (id: string) => {
       const next = new URLSearchParams(params);
@@ -80,6 +84,7 @@ export default function Assessments() {
   const activeFilters = [platformFilter, statusFilter, appFilter].filter(Boolean).length;
   const [filtersOpen, setFiltersOpen] = useState(activeFilters > 0);
 
+  /** Sets or clears one URL filter parameter. */
   const setParam = useCallback((key: string, value: string) => {
     debug("changes filter", { key, value });
     const next = new URLSearchParams(params);
@@ -96,8 +101,6 @@ export default function Assessments() {
     return list;
   }, [assessments, platformFilter, statusFilter, appFilter]);
 
-  // A bookmarked or stale id shouldn't linger in the URL once the data that
-  // would justify it has loaded.
   useEffect(() => {
     if (!expandedId || isLoading) return;
     if (!rows.some((r) => r.id === expandedId)) {
@@ -115,6 +118,7 @@ export default function Assessments() {
     [reports, assessments],
   );
 
+  /** Deletes the selected application, closing the dialog or showing the error. */
   const confirmDelete = useCallback(async () => {
     if (!appToDelete) return;
     debug("confirms application delete", { applicationId: appToDelete.id });

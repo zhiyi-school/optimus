@@ -1,3 +1,7 @@
+/**
+ * Axios client for the automation backend, with debug logging and AutomationApiError normalisation.
+ */
+
 import axios, { type AxiosInstance } from "axios";
 import { createDebug } from "@/lib/debug";
 
@@ -21,6 +25,7 @@ debug("client configured", {
   timeout: automationClient.defaults.timeout,
 });
 
+/** Reduces a request or response body to a size/shape summary safe for debug logs. */
 function summarizePayload(data: unknown): unknown {
   if (data === undefined || data === null) return data;
   if (Array.isArray(data)) return { items: data.length };
@@ -32,6 +37,7 @@ function summarizePayload(data: unknown): unknown {
   return typeof data;
 }
 
+/** Milliseconds since the request with this config started, if it was timed. */
 function elapsedMs(config: object | undefined): number | undefined {
   const startedAt = config ? requestStartedAt.get(config) : undefined;
   return startedAt === undefined ? undefined : Math.round(performance.now() - startedAt);
@@ -47,6 +53,7 @@ export class AutomationApiError extends Error {
   status: number | undefined;
   detail: unknown;
 
+  /** Creates an error carrying the HTTP status and the backend's `detail` payload. */
   constructor(message: string, status?: number, detail?: unknown) {
     super(message);
     this.name = "AutomationApiError";

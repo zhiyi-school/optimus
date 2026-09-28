@@ -1,3 +1,7 @@
+/**
+ * Browser file downloads that surface server refusals as user-facing errors.
+ */
+
 import { createDebug } from "@/lib/debug";
 import { UserFacingError } from "@/lib/utils";
 
@@ -5,7 +9,7 @@ const debug = createDebug("lib:download");
 
 const DISPOSITION_FILENAME = /filename\*?=(?:UTF-8''|")?([^";]+)/i;
 
-/** The server's own name for the file, when it sent one. */
+/** The file name from a Content-Disposition header, when the server sent one. */
 export function filenameFromDisposition(header: string | null): string | undefined {
   const match = header ? DISPOSITION_FILENAME.exec(header) : null;
   if (!match) return undefined;
@@ -17,6 +21,7 @@ export function filenameFromDisposition(header: string | null): string | undefin
   }
 }
 
+/** The backend's refusal detail when it sent one, else the fallback with the status code. */
 async function refusalMessage(response: Response, fallback: string): Promise<string> {
   // The backend's refusals are written for a reader and carry no host paths.
   try {
@@ -29,11 +34,7 @@ async function refusalMessage(response: Response, fallback: string): Promise<str
   return `${fallback} (${response.status})`;
 }
 
-/**
- * Save a URL to disk through a Blob, so a refusal is reported instead of being
- * written to the file the reader asked for. The object URL is revoked whether
- * or not the click succeeds.
- */
+/** Saves a URL via a Blob so a refusal is reported rather than saved as the file; always revokes the object URL. */
 export async function downloadFile(
   url: string,
   filename: string,

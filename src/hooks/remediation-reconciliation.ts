@@ -1,3 +1,7 @@
+/**
+ * Hook that persists the selected remediation approach and reconciles control progress.
+ */
+
 import { useEffect, useRef } from "react";
 import type { ControlReconciliation } from "@/data/services/controls";
 import type { TicketControl, TicketControlStep } from "@/data/types";
@@ -10,6 +14,7 @@ interface MutationWithSettled<T> {
   mutate: (value: T, options: { onSettled: () => void }) => void;
 }
 
+/** Persists the active control selection and reconciles progress to the plan, one mutation in flight at a time. */
 export function useRemediationReconciliation({
   ticketId,
   mayChangeApproach,

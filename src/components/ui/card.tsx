@@ -1,6 +1,11 @@
+/**
+ * Card container and its header, title, description, content and footer sections.
+ */
+
 import { type HTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 
+/** Bordered, rounded card surface. */
 export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
@@ -13,12 +18,14 @@ export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   );
 }
 
+/** Card header stacking title and description. */
 export function CardHeader({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div className={cn("flex flex-col gap-1 p-4 pb-2", className)} {...props} />
   );
 }
 
+/** Card heading text. */
 export function CardTitle({ className, ...props }: HTMLAttributes<HTMLHeadingElement>) {
   return (
     <h3
@@ -28,6 +35,7 @@ export function CardTitle({ className, ...props }: HTMLAttributes<HTMLHeadingEle
   );
 }
 
+/** Muted secondary text under a card title. */
 export function CardDescription({
   className,
   ...props
@@ -37,10 +45,12 @@ export function CardDescription({
   );
 }
 
+/** Padded card body. */
 export function CardContent({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return <div className={cn("p-4 pt-2", className)} {...props} />;
 }
 
+/** Right-aligned action row with a top border. */
 export function CardFooter({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div

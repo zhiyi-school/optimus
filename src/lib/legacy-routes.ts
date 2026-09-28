@@ -1,3 +1,7 @@
+/**
+ * Maps legacy finding, ticket and remediation links onto the current workspace routes.
+ */
+
 import { createDebug } from "@/lib/debug";
 
 const debug = createDebug("lib:legacy-routes");
@@ -14,12 +18,7 @@ export interface RiskAudience {
   controlId?: string;
 }
 
-/**
- * The one place old finding and ticket links are mapped onto a workspace.
- * Security wins for a mixed-role user because a finding raised against an
- * assessment is security's own record; developers reach the same risk through
- * Resolve. Returns null when the record is too unlinked to place.
- */
+/** Maps an old finding or ticket link onto Assess (security first) or Resolve; null when too unlinked to place. */
 export function canonicalRiskPath(
   location: RiskLocation,
   audience: RiskAudience,
@@ -48,11 +47,7 @@ export function canonicalRiskPath(
   return null;
 }
 
-/**
- * The Resolve workspace page a remediation belongs to. Always inside Resolve, so
- * a mixed-role user following a `/resolve/...` URL is not moved into Assess, and
- * it degrades to the application, then to Resolve itself, when links are missing.
- */
+/** The Resolve page for a remediation, degrading to the application, then Resolve, when links are missing. */
 export function resolveRiskPath(
   location: Pick<RiskLocation, "applicationId" | "riskId">,
 ): string {

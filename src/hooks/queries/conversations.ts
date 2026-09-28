@@ -1,3 +1,7 @@
+/**
+ * Query and mutation hooks for risk conversations, entries, attachments and reassessments.
+ */
+
 import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { riskConversationData } from "@/data/services/conversations";
@@ -21,12 +25,7 @@ const debug = createDebug("hooks:queries:conversations");
 const EMPTY_ENTRIES: RiskConversationEntry[] = [];
 const EMPTY_ATTACHMENTS: RiskConversationAttachment[] = [];
 
-/**
- * The conversation is keyed by application and risk, so opening the same risk
- * from a different assessment of the same application resolves to the same
- * thread. `create` is the caller's permission to open it: a read-only viewer
- * only looks one up, so no conversation is created on their behalf.
- */
+/** Finds the application-and-risk conversation, creating it only when the caller may. */
 export function useRiskConversation(
   applicationId: string | undefined,
   riskId: string | undefined,
@@ -52,6 +51,7 @@ export function useRiskConversation(
   });
 }
 
+/** Fetches one risk conversation by ID. */
 export function useRiskConversationById(conversationId: string | null | undefined) {
   return useQuery({
     queryKey: conversationKeys.detail(conversationId),
@@ -65,7 +65,7 @@ export function useRiskConversationById(conversationId: string | null | undefine
   });
 }
 
-/** One subscription per open conversation; an insert refetches the keyed list, so nothing doubles up. */
+/** Fetches a conversation's entries and refetches them on realtime changes, unsubscribing on cleanup. */
 export function useRiskConversationEntries(conversationId: string | undefined) {
   const queryClient = useQueryClient();
   const query = useQuery({
@@ -97,7 +97,7 @@ export function useRiskConversationEntries(conversationId: string | undefined) {
   return { ...query, data: query.data ?? (query.isLoading ? undefined : EMPTY_ENTRIES) };
 }
 
-/** The query itself, so a failure to load files is distinguishable from having none. */
+/** Fetches attachments for the given entries, keeping the query state so load failures stay visible. */
 export function useRiskConversationAttachments(entryIds: string[]) {
   const key = [...entryIds].sort();
   const query = useQuery({
@@ -113,6 +113,7 @@ export function useRiskConversationAttachments(entryIds: string[]) {
   return { ...query, data: query.data ?? EMPTY_ATTACHMENTS };
 }
 
+/** Records a message entry and refreshes the conversation's entries. */
 export function useSendRiskMessage(conversationId: string | undefined) {
   const invalidate = useInvalidateQueries();
   return useMutation({
@@ -131,7 +132,9 @@ export function useSendRiskMessage(conversationId: string | undefined) {
   });
 }
 
+/** Attachment save error that carries the pending upload and whether its bytes already reached storage. */
 export class ConversationAttachmentFailure extends Error {
+  /** Stores the pending attachment and upload state so a retry can reuse them. */
   constructor(
     message: string,
     readonly pending: PendingConversationAttachment,
@@ -142,6 +145,7 @@ export class ConversationAttachmentFailure extends Error {
   }
 }
 
+/** Uploads attachment bytes unless already uploaded, then saves metadata, refreshing attachments on success. */
 export function useSaveConversationAttachment() {
   const invalidate = useInvalidateQueries();
   return useMutation({
@@ -180,6 +184,7 @@ export function useSaveConversationAttachment() {
   });
 }
 
+/** Requests a reassessment from the conversation and refreshes conversation, retest, ticket and assessment keys. */
 export function useRequestReassessment(conversationId: string | undefined) {
   const invalidate = useInvalidateQueries();
   return useMutation({
@@ -226,6 +231,7 @@ export function useRequestReassessment(conversationId: string | undefined) {
   });
 }
 
+/** Withdraws a reassessment request and refreshes conversation, retest and ticket keys. */
 export function useWithdrawReassessment(conversationId: string | undefined) {
   const invalidate = useInvalidateQueries();
   return useMutation({

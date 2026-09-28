@@ -1,3 +1,7 @@
+/**
+ * Application icon with an app-type fallback.
+ */
+
 import { useEffect, useState } from "react";
 import { appTypeIcon } from "@/lib/entity-icons";
 import { applicationIconUrl, type ApplicationIconSource } from "@/lib/application-icon";
@@ -13,6 +17,7 @@ interface ApplicationIconProps {
   iconClassName?: string;
 }
 
+/** Shows the application's icon image, falling back to its app-type icon when absent or broken. */
 export function ApplicationIcon({
   application,
   className = "h-9 w-9",

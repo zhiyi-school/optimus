@@ -1,3 +1,7 @@
+/**
+ * Resolving an application's icon URL from the automation backend.
+ */
+
 import { iconApi } from "@/api/automation-services";
 import type { AutomationPlatform } from "@/api/automation-types";
 import type { Application } from "@/data/types";
@@ -8,6 +12,7 @@ export type ApplicationIconSource = Pick<
 > &
   Partial<Pick<Application, "artifact_sha256">>;
 
+/** The app's backend icon URL, or null when it is unlinked, has no icon, or extraction failed. */
 export function applicationIconUrl(
   application: ApplicationIconSource | null | undefined,
 ): string | null {

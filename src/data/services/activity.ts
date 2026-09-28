@@ -1,3 +1,7 @@
+/**
+ * Supabase operations on the activity log.
+ */
+
 import { supabase } from "@/data/supabase";
 import type { ActivityLogEntry } from "@/data/types";
 import { createDebug } from "@/lib/debug";
@@ -6,6 +10,7 @@ import { requireUserId } from "./common";
 const debug = createDebug("data:activity");
 
 export const activityData = {
+  /** Records an activity entry, attributed to the signed-in user when there is one. */
   async log(entry: {
     entity_type: string;
     entity_id: string;
@@ -36,6 +41,7 @@ export const activityData = {
     debug("logged activity", { action: entry.action, entityId: entry.entity_id });
   },
 
+  /** Lists an entity's activity entries, newest first. */
   async listForEntity(
     entityType: string,
     entityId: string,

@@ -1,3 +1,7 @@
+/**
+ * Opt-in, redacting debug logging; see docs/setup.md#debug-logging.
+ */
+
 const STORAGE_KEY = "optimus:debug";
 const SENSITIVE_KEY =
   /token|passw(?:or)?d|pwd|(?:^|[-_])pass(?:$|[-_])|secret|credential|private[-_]?key|authorization|cookie|api[-_]?key|anon[-_]?key|signed[-_]?url/i;
@@ -15,6 +19,7 @@ export function isDebugEnabled(): boolean {
   }
 }
 
+/** Deep-copies a value with sensitive-looking keys replaced, up to five levels deep. */
 export function redact(value: unknown, depth = 0): unknown {
   if (depth > 4 || value === null || typeof value !== "object") return value;
   if (value instanceof Error || value instanceof Blob) return value;
@@ -27,7 +32,7 @@ export function redact(value: unknown, depth = 0): unknown {
   );
 }
 
-/** Status, code and message only; Postgres `details` can echo row values. */
+/** Reduces an error to status, code and message, since Postgres `details` can echo row values. */
 export function errorSummary(err: unknown) {
   const { status, code, message } = (err ?? {}) as {
     status?: number;
@@ -37,6 +42,7 @@ export function errorSummary(err: unknown) {
   return { status, code, message: message ?? String(err) };
 }
 
+/** Returns a logger that writes redacted `console.debug` lines under a scope when debugging is enabled. */
 export function createDebug(scope: string): DebugLogger {
   return (message, ...details) => {
     if (!isDebugEnabled()) return;

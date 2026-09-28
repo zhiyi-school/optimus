@@ -1,3 +1,7 @@
+/**
+ * Record-then-attach submission for conversation messages, classifications and reassessments.
+ */
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ConversationAttachmentFailure,
@@ -45,8 +49,10 @@ type SubmissionState =
   | { phase: "attachment_failed"; context: RetryContext }
   | { phase: "complete" };
 
+/** Error raised when an entry was recorded but its file could not be attached. */
 export class AttachmentError extends Error {}
 
+/** Records a composer submission once, then attaches its file to that entry with retry and scope cleanup. */
 export function useConversationSubmission(input: {
   conversationId: string | undefined;
   findingId: string | undefined;
@@ -64,6 +70,7 @@ export function useConversationSubmission(input: {
   const pendingSubmission = useRef<string | null>(null);
   latestState.current = state;
 
+  /** Resets to idle and discards bytes uploaded for a failed attachment, ignoring cleanup errors. */
   const abandonAttachment = useCallback(async () => {
     const current = latestState.current;
     debug("abandons attachment", { phase: current.phase, scope: scope.current + 1 });
@@ -76,7 +83,6 @@ export function useConversationSubmission(input: {
         await conversationAttachmentData.discardUnused(current.context.pending);
       } catch (error) {
         debug("discard after abandon failed", { entryId: current.context.pending.entryId, error });
-        // Abandoning the retry must not turn storage cleanup into another user task.
       }
     }
   }, []);
@@ -100,6 +106,7 @@ export function useConversationSubmission(input: {
     };
   }, [input.conversationId]);
 
+  /** Saves an entry's attachment, keeping retry context on failure and discarding stale-scope bytes. */
   async function attach(context: RetryContext, generation: number) {
     debug("phase attaching", {
       entryId: context.pending.entryId,
@@ -152,11 +159,10 @@ export function useConversationSubmission(input: {
     }
   }
 
+  /** Retries a failed attachment on its existing entry, or records the entry and then attaches any file. */
   async function submitOnce(submission: ComposerSubmission) {
     const generation = scope.current;
-    // Held until the record lands, so a Send retried after a lost response
-    // resolves to the request that write already made; cleared afterwards so
-    // the next intentional Send is a new request.
+    // Reused until the record lands, so a Send retried after a lost response stays idempotent.
     const submissionId = (pendingSubmission.current ??= crypto.randomUUID());
     const current = latestState.current;
     if (current.phase === "attachment_failed") {
@@ -257,6 +263,7 @@ export function useConversationSubmission(input: {
     }
   }
 
+  /** Runs one submission at a time, ignoring submits while another is in flight. */
   async function submit(submission: ComposerSubmission) {
     if (inFlight.current) {
       debug("ignores submit while in flight");

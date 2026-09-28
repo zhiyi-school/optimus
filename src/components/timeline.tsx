@@ -1,3 +1,7 @@
+/**
+ * Activity log timeline.
+ */
+
 import { formatDate } from "@/lib/utils";
 import { EmptyState } from "@/components/common";
 import type { ActivityLogEntry } from "@/data/types";
@@ -19,6 +23,7 @@ const actionLabels: Record<string, string> = {
   risk_acceptance_rejected: "Risk acceptance rejected",
 };
 
+/** Label for an activity entry, including the status transition for status changes. */
 function describe(entry: ActivityLogEntry): string {
   const label = actionLabels[entry.action] ?? entry.action;
   if (entry.action === "finding_status_changed" && entry.metadata) {
@@ -29,6 +34,7 @@ function describe(entry: ActivityLogEntry): string {
   return label;
 }
 
+/** Vertical timeline of activity entries, or an empty state. */
 export function Timeline({ entries }: { entries: ActivityLogEntry[] }) {
   if (entries.length === 0) {
     return <EmptyState title="No activity recorded yet." />;

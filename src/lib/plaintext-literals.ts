@@ -1,3 +1,7 @@
+/**
+ * Extracting masked plaintext-literal findings from an app's static analysis report.
+ */
+
 import type { AutomationResultRow } from "@/api/automation-types";
 import { artifactNamed } from "@/lib/automation-evidence";
 import { createDebug } from "@/lib/debug";
@@ -35,11 +39,7 @@ export const CATEGORY_LABEL: Record<PlaintextCategory, string> = {
   sensitive_value: "Suspected sensitive value",
 };
 
-/**
- * Only detections the plaintext-literal risk is about. Package inspectability,
- * permissions, encryption metadata, scores and API-key reuse outcomes are other
- * subjects and are deliberately absent.
- */
+/** Only detections the plaintext-literal risk covers; other analyzer subjects are deliberately absent. */
 const CATEGORY_BY_MATCH: Record<string, PlaintextCategory> = {
   GOOGLE_API_KEY: "secret_key",
   AWS_ACCESS_KEY_ID: "secret_key",
@@ -65,16 +65,19 @@ const CREDENTIAL_KEY_TERMS = ["password", "passwd", "pwd", "credential", "auth",
 
 const ANALYZER_REPORT_PATHS = new Set(["mobsf_report_json"]);
 
+/** The value as a plain object, or null. */
 function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
 }
 
+/** The value as a trimmed non-empty string, or null. */
 function text(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+/** The literal category for an analyzer match type, or null when the risk does not cover it. */
 function categoryOf(matchType: string, keyPath: string | null): PlaintextCategory | null {
   const mapped = CATEGORY_BY_MATCH[matchType];
   if (mapped) return mapped;
@@ -83,7 +86,7 @@ function categoryOf(matchType: string, keyPath: string | null): PlaintextCategor
   return CREDENTIAL_KEY_TERMS.some((term) => key.includes(term)) ? "credential" : "sensitive_value";
 }
 
-/** A plist literal is what control 02 addresses; anything else in the bundle is control 01's subject. */
+/** The control a literal falls under: plist files are control 02, other bundle files control 01. */
 function controlFor(sourceKind: PlaintextSourceKind, sourcePath: string | null): string | null {
   if (sourceKind !== "bundle_file" || !sourcePath) return null;
   return sourcePath.toLowerCase().endsWith(".plist")
@@ -91,11 +94,7 @@ function controlFor(sourceKind: PlaintextSourceKind, sourcePath: string | null):
     : "ios-feature-01-risk-01-control-01";
 }
 
-/**
- * Reads the run's structured findings. `masked_value` is the only value ever
- * read: the raw and reported fields are never a fallback, so a report captured
- * with values revealed cannot leak one into the dashboard.
- */
+/** Reads plaintext-literal findings from an analysis report, using only `masked_value` so secrets never leak. */
 export function plaintextLiterals(
   document: unknown,
   runTimestamp: string,
@@ -161,6 +160,7 @@ export function plaintextLiterals(
   return { state: "ready", literals, truncated: scan?.truncated === true, provider };
 }
 
+/** The result's `ipa_analysis.json` evidence artifact. */
 export function analysisArtifact(row: AutomationResultRow | undefined) {
   return artifactNamed(row, "ipa_analysis.json");
 }

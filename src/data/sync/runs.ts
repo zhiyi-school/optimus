@@ -1,3 +1,7 @@
+/**
+ * Starting and polling automation runs, and locating active runs and a risk's progress within one.
+ */
+
 import { assessmentApi } from "@/api/automation-services";
 import type {
   AutomationPlatform,
@@ -22,6 +26,7 @@ export interface RunWaitResult {
   dashboardSyncPending: boolean;
 }
 
+/** Starts a run and polls until it finishes, the caller cancels, or the poll limit is reached. */
 export async function runAndWait(
   payload: StartRunRequest,
   onStarted?: (run: RunRecord) => unknown,
@@ -71,10 +76,12 @@ export interface ActiveRunFilter {
   riskId?: string;
 }
 
+/** Lowercases an app selector and strips everything but letters and digits. */
 function normalizeAppSelector(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+/** True when a run's CSV selection is empty or includes the wanted app or risk. */
 function selectionCovers(csv: string | null | undefined, wanted: string, appSelector: boolean): boolean {
   if (!csv) return true;
   const target = appSelector ? normalizeAppSelector(wanted) : wanted.trim();
@@ -85,10 +92,7 @@ function selectionCovers(csv: string | null | undefined, wanted: string, appSele
     .includes(target);
 }
 
-/**
- * Finds the run still executing on the automation host that covers this app (and
- * risk), so a page that was unmounted mid-run can pick the progress back up.
- */
+/** Finds the newest running run covering this app (and risk), so a remounted page can resume its progress. */
 export function findActiveRun(
   runs: RunRecord[] | undefined,
   filter: ActiveRunFilter,
@@ -105,7 +109,7 @@ export function findActiveRun(
     .sort((a, b) => (b.started_at ?? "").localeCompare(a.started_at ?? ""))[0];
 }
 
-/** Any run occupying the platform's single device, whichever app or risk it is for. */
+/** Finds any running run occupying the platform's single device, whichever app or risk it covers. */
 export function findPlatformRun(
   runs: RunRecord[] | undefined,
   platform: AutomationPlatform | undefined,
@@ -114,10 +118,7 @@ export function findPlatformRun(
   return runs?.find((run) => run.status === "running" && run.platform === platform);
 }
 
-/**
- * Where one risk stands inside a run. The device runs risks strictly one at a
- * time, so a run covering four risks has three of them merely waiting.
- */
+/** Where one risk stands in a run; the device runs risks one at a time, so the rest wait queued. */
 export type RiskRunPhase = "queued" | "running" | "done";
 
 export interface RiskRunProgress {
@@ -127,6 +128,7 @@ export interface RiskRunProgress {
   total: number;
 }
 
+/** Derives one risk's phase and the run's completed/total risk counts from its progress events. */
 export function riskProgressInRun(
   events: RunProgressEvent[] | undefined,
   run: RunRecord | undefined,
@@ -135,6 +137,7 @@ export function riskProgressInRun(
 ): RiskRunProgress | undefined {
   if (!run || !appExternalId || !riskId) return undefined;
 
+  /** True when the event is for this app and risk. */
   const mine = (event: RunProgressEvent) =>
     event.app_id === appExternalId && event.risk_id === riskId;
   const completedHere = (events ?? []).filter((e) => e.type === "risk_completed");

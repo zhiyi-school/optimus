@@ -1,3 +1,7 @@
+/**
+ * Tailwind theme mapping the CSS colour variables, radii and shadows used by the dashboard.
+ */
+
 import type { Config } from "tailwindcss";
 
 export default {

@@ -1,3 +1,7 @@
+/**
+ * Pure selection and ordering helpers for assessments.
+ */
+
 import { createDebug } from "@/lib/debug";
 import { compareByName } from "@/lib/utils";
 import type { Application, Assessment, Finding, FindingStatus } from "@/data/types";
@@ -9,10 +13,7 @@ const debug = createDebug("lib:assessments");
 /** Least reassuring first, so opening a completed assessment lands on work that still needs a decision. */
 const RISK_PRIORITY: (FindingStatus | "untested")[] = ["at_risk", "inconclusive", "untested"];
 
-/**
- * The feature-risk a completed assessment should open on. Catalogue order is the
- * tie-breaker, so the same assessment always lands on the same risk.
- */
+/** The risk a completed assessment opens on: least reassuring status first, catalogue order breaking ties. */
 export function preferredAssessmentRisk(
   catalogue: { risk_id: string }[] | undefined,
   findings: Finding[] | undefined,
@@ -36,12 +37,7 @@ export function preferredAssessmentRisk(
   return ordered[0].risk_id;
 }
 
-/**
- * One row per application. An app accumulates an assessment row per synced
- * automation run, so listing them raw shows the same app many times. Sorted
- * alphabetically by application name, so every list built from this shares
- * one order.
- */
+/** Keeps each application's most recently updated assessment, sorted by application name. */
 export function latestAssessmentPerApp(assessments: AssessmentRow[] | undefined): AssessmentRow[] {
   const latestByApp = new Map<string, AssessmentRow>();
   for (const a of assessments ?? []) {

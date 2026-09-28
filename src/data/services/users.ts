@@ -1,3 +1,7 @@
+/**
+ * Supabase operations on user profiles.
+ */
+
 import { supabase } from "@/data/supabase";
 import type { Profile } from "@/data/types";
 import { createDebug } from "@/lib/debug";
@@ -6,6 +10,7 @@ import { requireUserId } from "./common";
 const debug = createDebug("data:users");
 
 export const userData = {
+  /** Fetches the signed-in user's profile, or null when none exists. */
   async getCurrentProfile(): Promise<Profile | null> {
     const userId = await requireUserId();
     debug("fetching current profile", { userId });
@@ -22,6 +27,7 @@ export const userData = {
     return data;
   },
 
+  /** Lists every visible profile by display name. */
   async listProfiles(): Promise<Profile[]> {
     debug("listing profiles");
     const { data, error } = await supabase
@@ -36,6 +42,7 @@ export const userData = {
     return data;
   },
 
+  /** Assigns a profile to a team, or clears it with null. */
   async updateTeam(profileId: string, teamId: string | null): Promise<Profile> {
     debug("updating profile team", { profileId, teamId });
     const { data, error } = await supabase
@@ -52,6 +59,7 @@ export const userData = {
     return data;
   },
 
+  /** Activates or deactivates a profile. */
   async setActive(profileId: string, isActive: boolean): Promise<Profile> {
     debug("setting profile active state", { profileId, isActive });
     const { data, error } = await supabase
@@ -72,7 +80,7 @@ export const userData = {
     return data;
   },
 
-  /** Admin-only; the database also refuses a user changing their own roles. */
+  /** Replaces a profile's roles; admin-only, and the database refuses changing one's own roles. */
   async updateRoles(profileId: string, roles: Profile["roles"]): Promise<Profile> {
     debug("updating profile roles", { profileId, roles });
     const { data, error } = await supabase

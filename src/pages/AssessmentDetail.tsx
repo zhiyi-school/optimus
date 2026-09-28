@@ -1,3 +1,7 @@
+/**
+ * Route for a completed assessment, opening its preferred risk where one exists.
+ */
+
 import { useMemo } from "react";
 import { Navigate, useParams } from "react-router-dom";
 import { preferredAssessmentRisk } from "@/lib/assessments";
@@ -13,12 +17,7 @@ import type { Application, Finding } from "@/data/types";
 
 const debug = createDebug("page:AssessmentDetail");
 
-/**
- * A direct or bookmarked link to `/assessments/:assessmentId`. Queued,
- * waiting, running, and pre-completion failures are handled entirely on the
- * main Assessments page — this route only ever shows a completed result, or
- * redirects there.
- */
+/** Shows a completed assessment or its preferred risk; other states redirect to the Assessments page. */
 export default function AssessmentDetail() {
   const { assessmentId } = useParams<{ assessmentId: string }>();
   const { data: assessment, isLoading, isError, refetch } = useAssessment(assessmentId);
@@ -52,8 +51,6 @@ export default function AssessmentDetail() {
     return <Navigate to={`/assessments?expanded=${assessment.id}`} replace />;
   }
 
-  // A completed assessment has no setup left to narrate, so it opens straight
-  // onto a feature-risk rather than an empty pane.
   if (!riskCatalogue.isLoading) {
     const preferred = preferredAssessmentRisk(risks, findings);
     if (preferred) {

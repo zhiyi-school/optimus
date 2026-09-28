@@ -1,3 +1,7 @@
+/**
+ * Assessment setup and run progress steppers and the incomplete-assessment status panel.
+ */
+
 import { Check, HelpCircle, Loader2, Minus, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -35,11 +39,13 @@ const LIFECYCLE_TEXT_CLASS: Record<AssessmentStagePresentation["lifecycle"], str
   not_applicable: "text-muted-foreground",
 };
 
+/** Text colour for the current stage: amber for warning or danger tones, otherwise primary. */
 function currentToneTextClass(tone: AssessmentStagePresentation["tone"]): string {
   if (tone === "warning" || tone === "danger") return "text-warning";
   return "text-primary";
 }
 
+/** Icon for a stage's lifecycle: check, spinner, cross, help, dash or empty circle. */
 function StageIcon({ stage }: { stage: AssessmentStagePresentation }) {
   switch (stage.lifecycle) {
     case "complete":
@@ -78,11 +84,7 @@ function StageIcon({ stage }: { stage: AssessmentStagePresentation }) {
   }
 }
 
-/**
- * A sequential stepper: at most one stage is ever "current", so at most one
- * spinner is ever on screen. Icon shape comes strictly from `lifecycle`;
- * `tone` only tints the current stage's text (e.g. amber while waiting).
- */
+/** Sequential stepper with at most one current stage; icons follow lifecycle and tone tints current text. */
 function StageList({ stages }: { stages: AssessmentStagePresentation[] }) {
   return (
     <ol>
@@ -119,11 +121,7 @@ function StageList({ stages }: { stages: AssessmentStagePresentation[] }) {
   );
 }
 
-/**
- * Setup and run progress, normalized into one sequential stepper. See
- * `normalizeAssessmentStages` for how configuration and testing readiness —
- * two independent sources — combine into a single current stage.
- */
+/** Renders provisioning stages and run state normalized into one stepper by `normalizeAssessmentStages`. */
 export function EnvironmentSetupStages({
   configurationReady = false,
   stages: reported,
@@ -149,6 +147,7 @@ export function EnvironmentSetupStages({
   return <StageList stages={stages} />;
 }
 
+/** Stepper showing testing in progress followed by pending analysis and reporting. */
 export function TestRunStages({
   testingDescription = "Automated security testing is now in progress.",
 }: {
@@ -166,11 +165,7 @@ export function TestRunStages({
   return <StageList stages={stages} />;
 }
 
-/**
- * The expanded status panel for one incomplete assessment row. This is where
- * setup, blocker and retry information lives — not the assessment-results
- * workspace, which only opens once testing is complete.
- */
+/** Expanded status panel for an incomplete assessment with setup stages, retry and configuration links. */
 export function AssessmentStatusPanel({
   assessment,
   canRetry,
@@ -190,8 +185,7 @@ export function AssessmentStatusPanel({
     poll: unsettled,
   });
 
-  // Some backends have no live readiness endpoint; a closed provisioning
-  // ticket is the fallback signal that setup is actually done.
+  // Backends without a readiness endpoint fall back to a closed provisioning ticket.
   const { data: provisioningTickets } = useTickets(
     application?.id ? { type: "app_provisioning", applicationId: application.id } : {},
   );

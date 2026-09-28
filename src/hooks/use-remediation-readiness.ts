@@ -1,3 +1,7 @@
+/**
+ * Hook deriving remediation workflow readiness from ticket, control and retest data.
+ */
+
 import { useMemo } from "react";
 import {
   useRiskControls,
@@ -10,6 +14,7 @@ import type { Finding, RetestRun, Ticket } from "@/data/types";
 
 const debug = createDebug("hooks:remediation-readiness");
 
+/** Loads risk controls, ticket controls and steps, and computes the remediation workflow state. */
 export function useRemediationReadiness(input: {
   ticket: Ticket | null | undefined;
   finding: Finding | null | undefined;

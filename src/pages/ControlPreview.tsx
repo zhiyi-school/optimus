@@ -1,3 +1,7 @@
+/**
+ * Read-only preview of a control's remediation steps against a finding.
+ */
+
 import { useState, type ReactNode } from "react";
 import { useParams } from "react-router-dom";
 import { FileText } from "lucide-react";
@@ -19,6 +23,7 @@ import { stepCountLabel } from "@/lib/utils";
 
 const debug = createDebug("page:ControlPreview");
 
+/** Shows a control's remediation steps for a finding, with an option to start remediation using it. */
 export default function ControlPreview() {
   const { findingId, controlId } = useParams<{ findingId: string; controlId: string }>();
   const finding = useFinding(findingId);
@@ -35,6 +40,7 @@ export default function ControlPreview() {
       ? chosenStepKey
       : (definitionSteps[0]?.step_key ?? null);
 
+  /** Wraps loading and error content in an empty guided-steps frame. */
   const shell = (children: ReactNode) => (
     <GuidedSteps
       icon={FileText}

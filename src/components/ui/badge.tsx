@@ -1,3 +1,7 @@
+/**
+ * Pill badge coloured by a status tone.
+ */
+
 import { type HTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 import { toneClasses, type Tone } from "@/lib/status";
@@ -6,6 +10,7 @@ export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
   tone?: Tone;
 }
 
+/** Renders a rounded pill using the tone's colour classes. */
 export function Badge({ className, tone = "neutral", ...props }: BadgeProps) {
   return (
     <span

@@ -1,3 +1,7 @@
+/**
+ * Redirects retired Findings, Tickets and remediation links to the current risk workspaces.
+ */
+
 import { Navigate, useParams, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/auth/useAuth";
 import { LoadingState } from "@/components/common";
@@ -6,19 +10,21 @@ import { useFinding } from "@/hooks/queries/evidence";
 import { useFindingTickets, useTicket } from "@/hooks/queries/tickets";
 import { canonicalRiskPath, resolveRiskPath, type RiskLocation } from "@/lib/legacy-routes";
 
-/** Where a role's own list lives now that Findings and Tickets left the navigation. */
+/** Returns the list page a role lands on now that Findings and Tickets left the navigation. */
 function listHomeFor(can: (capability: "view_assessments" | "view_resolve") => boolean): string {
   if (can("view_assessments")) return "/assessments";
   if (can("view_resolve")) return "/resolve";
   return "/";
 }
 
+/** Redirects the retired list routes to the user's role-appropriate list page. */
 export function LegacyListRedirect() {
   const { can, loading } = useAuth();
   if (loading) return <LoadingState label="Loading…" />;
   return <Navigate to={listHomeFor(can)} replace />;
 }
 
+/** Redirects a legacy finding link to its risk workspace, or explains that it is unlinked. */
 export function LegacyFindingRedirect() {
   const { findingId, controlId } = useParams<{ findingId: string; controlId?: string }>();
   const { can, loading } = useAuth();
@@ -46,6 +52,7 @@ export function LegacyFindingRedirect() {
   return <Navigate to={target} replace />;
 }
 
+/** Redirects a legacy ticket link to its risk workspace, or to the assessment for provisioning tickets. */
 export function LegacyTicketRedirect() {
   const { ticketId, controlId } = useParams<{ ticketId: string; controlId?: string }>();
   const [params] = useSearchParams();
@@ -55,7 +62,6 @@ export function LegacyTicketRedirect() {
   if (loading || ticket.isLoading) return <LoadingState label="Opening this ticket…" />;
   if (ticket.isError || !ticket.data) return <UnlinkedNotice what="ticket" id={ticketId} />;
 
-  // Provisioning work belongs to an assessment's setup, not to a feature-risk.
   if (ticket.data.type === "app_provisioning") {
     const assessment = ticket.data.origin_assessment_id;
     return (
@@ -80,11 +86,7 @@ export function LegacyTicketRedirect() {
   return <Navigate to={target} replace />;
 }
 
-/**
- * A remediation has no page of its own: it is a section of the risk workspace.
- * This stays inside Resolve so a mixed-role user following a `/resolve/...` link
- * is not moved into the assessment workspace.
- */
+/** Redirects a Resolve ticket link to its risk workspace, staying inside Resolve for mixed-role users. */
 export function ResolveTicketRedirect() {
   const { ticketId } = useParams<{ ticketId: string }>();
   const ticket = useTicket(ticketId);
@@ -103,11 +105,7 @@ export function ResolveTicketRedirect() {
   );
 }
 
-/**
- * Legacy rows can predate risk conversations and carry no risk, assessment or
- * application. They stay reachable and are named as needing repair rather than
- * being redirected into an unrelated risk.
- */
+/** Explains that a legacy finding or ticket has no linked risk and needs administrator repair. */
 function UnlinkedNotice({ what, id }: { what: "finding" | "ticket"; id: string | undefined }) {
   return (
     <Card className="mx-auto max-w-lg">

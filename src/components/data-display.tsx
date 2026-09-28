@@ -1,3 +1,7 @@
+/**
+ * Status, severity and platform badges, a progress bar and a responsive data table.
+ */
+
 import { Fragment, type ReactNode } from "react";
 import { ChevronDown, ChevronRight, Circle, Smartphone, Apple } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -15,15 +19,18 @@ import type { FindingStatus, TicketStatus, Platform } from "@/data/types";
 
 const debug = createDebug("component:data-display");
 
+/** Badge for a finding status. */
 export function StatusBadge({ status }: { status: FindingStatus }) {
   const config = findingStatusConfig[status];
   return <Badge tone={config.tone}>{config.label}</Badge>;
 }
 
+/** Badge for a severity level. */
 export function SeverityBadge({ severity }: { severity: string | null | undefined }) {
   return <Badge tone={severityToneOf(severity)}>{severityLabelOf(severity)}</Badge>;
 }
 
+/** iOS or Android label with its platform icon. */
 export function PlatformBadge({ platform }: { platform: Platform | string }) {
   const Icon = platform === "ios" ? Apple : Smartphone;
   return (
@@ -34,16 +41,19 @@ export function PlatformBadge({ platform }: { platform: Platform | string }) {
   );
 }
 
+/** Badge for a ticket status. */
 export function TicketBadge({ status }: { status: TicketStatus }) {
   const config = ticketStatusConfig[status];
   return <Badge tone={config.tone}>{config.label}</Badge>;
 }
 
+/** Badge for a test run status, falling back to the raw status. */
 export function TestRunStatusBadge({ status }: { status: string }) {
   const config = testRunStatusConfig[status] ?? { label: status, tone: "neutral" as const };
   return <Badge tone={config.tone}>{config.label}</Badge>;
 }
 
+/** Badge for an assessment status, with a dot while running. */
 export function AssessmentStatusBadge({ status }: { status: string }) {
   const config = assessmentStatusConfig[status] ?? { label: status, tone: "neutral" as const };
   return (
@@ -54,6 +64,7 @@ export function AssessmentStatusBadge({ status }: { status: string }) {
   );
 }
 
+/** Horizontal bar and count showing value out of total. */
 export function ProgressBar({ value, total }: { value: number; total: number }) {
   const pct = total > 0 ? Math.min(100, Math.round((value / total) * 100)) : 0;
   return (
@@ -81,6 +92,7 @@ export interface DataTableColumn<T> {
 /** What the whole row does on click/Enter/Space: open results, toggle expanded status, or nothing. */
 export type DataTableRowActivation = "navigate" | "expand" | "none";
 
+/** Table whose rows navigate, expand or do nothing, rendered as cards below `md` when `renderCard` is set. */
 export function DataTable<T extends { id: string }>({
   columns,
   rows,
@@ -97,7 +109,7 @@ export function DataTable<T extends { id: string }>({
   rows: T[];
   onRowClick?: (row: T) => void;
   rowLabel?: (row: T) => string;
-  /** Per-row activation mode. Omit to navigate on every row that has `onRowClick` (the old default). */
+  /** Per-row activation mode; omit to navigate on every row that has `onRowClick`. */
   rowActivation?: (row: T) => DataTableRowActivation;
   /** Id of the row currently expanded, if any — pairs with `renderExpanded`. */
   expandedRowId?: string | null;
@@ -108,6 +120,7 @@ export function DataTable<T extends { id: string }>({
   /** Below `md` the columns stop fitting, so the same rows render as cards instead. */
   renderCard?: (row: T) => ReactNode;
 }) {
+    /** Resolves a row's activation mode, defaulting to navigate when `onRowClick` is set. */
   const activationOf = (row: T): DataTableRowActivation =>
     rowActivation ? rowActivation(row) : onRowClick ? "navigate" : "none";
   const hasTrailingColumn = !!onRowClick || !!renderExpanded || !!rowActivation;
@@ -209,6 +222,7 @@ export function DataTable<T extends { id: string }>({
             const isExpandable = activation === "expand";
             const expandedContent = isExpandable ? renderExpanded?.(row) : undefined;
             const isExpanded = isExpandable && expandedRowId === row.id;
+            /** Navigates or toggles expansion for the row according to its activation mode. */
             const activate = () => {
               debug("activates row", { rowId: row.id, activation, expanded: isExpanded });
               if (isLink) onRowClick?.(row);

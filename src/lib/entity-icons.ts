@@ -1,3 +1,7 @@
+/**
+ * Icon choices for application types and risks.
+ */
+
 import {
   Accessibility,
   AppWindow,
@@ -18,6 +22,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+/** Icon for an application type, matched on banking, wallet or payment keywords. */
 export function appTypeIcon(appType: string | null | undefined): LucideIcon {
   const t = (appType ?? "").toLowerCase();
   if (t.includes("bank")) return Landmark;
@@ -40,6 +45,7 @@ const RISK_ICON_RULES: [pattern: RegExp, icon: LucideIcon][] = [
   [/overlay/, Layers],
 ];
 
+/** Icon for a risk, matched on keywords in its name. */
 export function riskIcon(name: string): LucideIcon {
   const n = name.toLowerCase();
   for (const [pattern, icon] of RISK_ICON_RULES) {

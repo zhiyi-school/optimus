@@ -1,7 +1,12 @@
+/**
+ * Circular avatar primitives styled over Radix Avatar.
+ */
+
 import * as AvatarPrimitive from "@radix-ui/react-avatar";
 import type { ComponentProps } from "react";
 import { cn } from "@/lib/utils";
 
+/** Circular avatar container. */
 export function Avatar({ className, ...props }: ComponentProps<typeof AvatarPrimitive.Root>) {
   return (
     <AvatarPrimitive.Root
@@ -14,6 +19,7 @@ export function Avatar({ className, ...props }: ComponentProps<typeof AvatarPrim
   );
 }
 
+/** Initials shown when the avatar has no image. */
 export function AvatarFallback({
   className,
   ...props

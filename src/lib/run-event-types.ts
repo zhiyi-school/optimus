@@ -1,3 +1,7 @@
+/**
+ * Connection states of a run's live event stream.
+ */
+
 export type RunEventStreamState =
   | "idle"
   | "connecting"

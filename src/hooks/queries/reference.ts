@@ -1,3 +1,7 @@
+/**
+ * Query and mutation hooks for profiles, teams and applications.
+ */
+
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { applicationData } from "@/data/services/applications";
 import { teamData } from "@/data/services/teams";
@@ -11,6 +15,7 @@ const debug = createDebug("hooks:queries:reference");
 
 const REFERENCE_DATA_STALE_TIME_MS = 5 * 60_000;
 
+/** Fetches all user profiles, treated as fresh for five minutes. */
 export function useProfiles() {
   return useQuery({
     queryKey: referenceKeys.profiles(),
@@ -24,6 +29,7 @@ export function useProfiles() {
   });
 }
 
+/** Fetches all teams, treated as fresh for five minutes. */
 export function useTeams() {
   return useQuery({
     queryKey: referenceKeys.teams(),
@@ -37,6 +43,7 @@ export function useTeams() {
   });
 }
 
+/** Fetches all applications, treated as fresh for five minutes. */
 export function useApplications() {
   return useQuery({
     queryKey: referenceKeys.applications(),
@@ -50,6 +57,7 @@ export function useApplications() {
   });
 }
 
+/** Creates a team and refreshes the team list. */
 export function useCreateTeam() {
   const invalidate = useInvalidateQueries();
   return useMutation({
@@ -63,6 +71,7 @@ export function useCreateTeam() {
   });
 }
 
+/** Changes a profile's team and refreshes profiles. */
 export function useUpdateProfileTeam() {
   const invalidate = useInvalidateQueries();
   return useMutation({
@@ -74,6 +83,7 @@ export function useUpdateProfileTeam() {
   });
 }
 
+/** Replaces a profile's roles and refreshes profiles. */
 export function useUpdateProfileRoles() {
   const invalidate = useInvalidateQueries();
   return useMutation({
@@ -85,6 +95,7 @@ export function useUpdateProfileRoles() {
   });
 }
 
+/** Activates or deactivates a user and refreshes profiles. */
 export function useSetUserActive() {
   const invalidate = useInvalidateQueries();
   return useMutation({
@@ -96,6 +107,7 @@ export function useSetUserActive() {
   });
 }
 
+/** Updates an application and refreshes applications, assessments, findings and metrics. */
 export function useUpdateApplication() {
   const invalidate = useInvalidateQueries();
   return useMutation({
@@ -109,6 +121,7 @@ export function useUpdateApplication() {
   });
 }
 
+/** Deletes an application and refreshes applications, assessments, findings, tickets and metrics. */
 export function useDeleteApplication() {
   const invalidate = useInvalidateQueries();
   return useMutation({

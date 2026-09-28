@@ -1,5 +1,10 @@
+/**
+ * Placeholder route page for learning resources.
+ */
+
 import { PageHeader, EmptyState } from "@/components/common";
 
+/** Renders the Learn page header with an empty state until resources are added. */
 export default function Learn() {
   return (
     <div>

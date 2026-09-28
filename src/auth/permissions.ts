@@ -1,3 +1,7 @@
+/**
+ * Role capabilities and the pure access decisions built on them; the database still enforces authorization.
+ */
+
 import type { Profile, UserRole } from "@/data/types";
 import { createDebug } from "@/lib/debug";
 
@@ -63,18 +67,20 @@ export const roleCapabilities: Record<UserRole, Capability[]> = {
   admin: ["view_dashboard", "access_admin"],
 };
 
+/** True when any of the roles grants the capability. */
 export function roleCan(roles: UserRole[] | undefined, capability: Capability): boolean {
   if (!roles) return false;
   return roles.some((role) => roleCapabilities[role]?.includes(capability) ?? false);
 }
 
-/** Membership, not precedence: a mixed-role profile holds every role it lists. */
+/** True when the roles include `role`; a mixed-role profile holds every role it lists. */
 export function hasRole(roles: UserRole[] | undefined, role: UserRole): boolean {
   return roles?.includes(role) ?? false;
 }
 
 const rolePrecedence: UserRole[] = ["security", "cio", "developer", "admin"];
 
+/** The highest-precedence role held (security, cio, developer, admin), else the first listed. */
 export function primaryRole(roles: UserRole[] | undefined): UserRole | undefined {
   if (!roles || roles.length === 0) return undefined;
   return rolePrecedence.find((role) => roles.includes(role)) ?? roles[0];
@@ -84,7 +90,7 @@ export type ResolveAccess = "loading" | "unauthorized" | "inactive" | "no_team" 
 
 type ProfileLike = Pick<Profile, "roles" | "team_id"> & Partial<Pick<Profile, "is_active">>;
 
-/** `no_team` is a setup state, not a grant — it never falls back to every application. */
+/** Classifies a profile's access to Resolve; `no_team` is a setup state, never a grant to every app. */
 export function resolveAccess(profile: ProfileLike | null | undefined, loading = false): ResolveAccess {
   if (loading) {
     debug("resolve access: loading");
@@ -110,7 +116,7 @@ export function resolveAccess(profile: ProfileLike | null | undefined, loading =
   return "ready";
 }
 
-/** Post-login landing route: holding the developer role starts you in Resolve, whatever else you hold. */
+/** Post-login landing route: developers start in Resolve whatever else they hold, others at `/`. */
 export function defaultRouteFor(profile: ProfileLike | null | undefined): string {
   if (!profile) {
     debug("default route: no profile; using /");

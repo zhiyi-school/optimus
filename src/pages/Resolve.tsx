@@ -1,3 +1,7 @@
+/**
+ * Developer Resolve list summarizing remediation progress per application.
+ */
+
 import { useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { RefreshCw } from "lucide-react";
@@ -30,6 +34,7 @@ interface Row {
   summary: ApplicationRemediation;
 }
 
+/** Lists the team's applications with remediation progress and status, opening one on click. */
 export default function Resolve() {
   const navigate = useNavigate();
   const { profile } = useAuth();
@@ -52,6 +57,7 @@ export default function Resolve() {
   const liveKeys = useLiveControlKeys(risks);
   const iosCatalogue = useRiskCatalogue("ios");
   const androidCatalogue = useRiskCatalogue("android");
+  /** Returns the number of risks in the given platform's catalogue. */
   const catalogueSize = useCallback(
     (platform: string) =>
       (platform === "ios" ? iosCatalogue.data : androidCatalogue.data)?.length ?? 0,
@@ -115,8 +121,6 @@ export default function Resolve() {
     [],
   );
 
-  // Only a first load with nothing cached replaces the table; a background
-  // refetch of any of these leaves the rows on screen.
   const isLoading = rows.length === 0 && (applications.isLoading || findings.isLoading || tickets.isLoading);
   const isFetching = applications.isFetching || findings.isFetching || tickets.isFetching;
   const isError = applications.isError || findings.isError || tickets.isError;

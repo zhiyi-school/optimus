@@ -1,9 +1,14 @@
+/**
+ * Tab primitives styled over Radix Tabs.
+ */
+
 import * as TabsPrimitive from "@radix-ui/react-tabs";
 import type { ComponentProps } from "react";
 import { cn } from "@/lib/utils";
 
 export const Tabs = TabsPrimitive.Root;
 
+/** Segmented container for tab triggers. */
 export function TabsList({
   className,
   ...props
@@ -19,6 +24,7 @@ export function TabsList({
   );
 }
 
+/** Tab button highlighted while its panel is active. */
 export function TabsTrigger({
   className,
   ...props

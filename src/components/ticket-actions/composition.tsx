@@ -1,3 +1,7 @@
+/**
+ * Composes the ticket and conversation actions available to the current user.
+ */
+
 import { Button } from "@/components/ui/button";
 import type { RiskConversationContext } from "@/hooks/conversation-composer";
 import { useUpdateTicketStatus } from "@/hooks/queries/tickets";
@@ -11,6 +15,7 @@ import { ReviewRiskAcceptanceDialog } from "./acceptance";
 
 const debug = createDebug("component:ticket-actions:composition");
 
+/** Lists outstanding reassessment requests for testers, with guidance to run the risk. */
 export function RiskConversationActions({
   finding,
   application,
@@ -46,6 +51,7 @@ export function RiskConversationActions({
   );
 }
 
+/** Withdraw, resume, review, request-changes and close actions gated by capability and ticket state. */
 export function TicketActions({
   ticket,
   can,

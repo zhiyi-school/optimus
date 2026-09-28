@@ -1,3 +1,7 @@
+/**
+ * Resolve workspace display pieces: update notice, tone badge and progress bar.
+ */
+
 import { RefreshCw, X } from "lucide-react";
 import { createDebug } from "@/lib/debug";
 import { cn } from "@/lib/utils";
@@ -6,6 +10,7 @@ import type { Progress } from "@/lib/resolve";
 
 const debug = createDebug("component:resolve-display");
 
+/** Dismissible notice that the remediation instructions were updated. */
 export function PlaybookUpdatedNotice({ onDismiss }: { onDismiss: () => void }) {
   return (
     <div className="mb-4 flex items-start gap-3 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2.5">
@@ -36,6 +41,7 @@ const barTone: Record<Tone, string> = {
   info: "bg-primary",
 };
 
+/** Rounded label coloured by tone. */
 export function ToneBadge({ tone, label }: { tone: Tone; label: string }) {
   return (
     <span
@@ -49,6 +55,7 @@ export function ToneBadge({ tone, label }: { tone: Tone; label: string }) {
   );
 }
 
+/** Labelled accessible progress bar showing completed of total. */
 export function ProgressBar({
   label,
   progress,

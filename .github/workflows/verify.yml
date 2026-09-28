@@ -1,3 +1,5 @@
+# CI verification: docs and dependencies, frontend tests/lint/build, contracts and database checks.
+
 name: Verify
 
 on:

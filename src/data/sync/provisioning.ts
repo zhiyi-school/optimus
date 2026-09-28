@@ -1,3 +1,7 @@
+/**
+ * Adding an app: backend registration, dashboard rows, assessment and provisioning ticket, with rollback.
+ */
+
 import { configApi, conflictingAppId, describeAutomationError, isBackendUnavailable, provisioningApi, testApi } from "@/api/automation-services";
 import type { AppProvisioning, AutomationPlatform, RegisterAppRequest, RiskDefinition } from "@/api/automation-types";
 import type { Application, Assessment, Ticket } from "@/data/types";
@@ -10,6 +14,7 @@ import { UserFacingError } from "@/lib/utils";
 
 const debug = createDebug("data:sync:provisioning");
 
+/** Title and platform-specific setup instructions for an app's provisioning ticket. */
 function provisioningTicketCopy(
   platform: AutomationPlatform,
   appName: string,
@@ -34,6 +39,7 @@ function provisioningTicketCopy(
   };
 }
 
+/** Builds the backend registration body with every platform risk enabled. */
 function buildRegisterAppRequest(
   input: { name: string; platform: AutomationPlatform; version?: string; identifier?: string },
   risks: RiskDefinition[],
@@ -53,6 +59,7 @@ function buildRegisterAppRequest(
   return body;
 }
 
+/** Registers an app with the backend and creates its application, assessment and any provisioning ticket. */
 export async function addApp(input: {
     name: string;
     platform: AutomationPlatform;
@@ -165,6 +172,7 @@ export async function addApp(input: {
       developer_contact_email: input.developerContactEmail || null,
     };
 
+    /** Deletes the backend app when this call registered it. */
     async function rollback() {
       if (backendAppId && backendAppFreshlyRegistered) {
         debug("rolling back backend app", { backendAppId });

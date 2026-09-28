@@ -1,3 +1,7 @@
+/**
+ * Remediation section of the risk workspace: approach choice, control checklist and withdrawal.
+ */
+
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/useAuth";
@@ -47,6 +51,7 @@ import type { Finding } from "@/data/types";
 
 const debug = createDebug("page:ResolveTicket");
 
+/** Shows the remediation approach and control checklist, reconciling selection and progress for the ticket. */
 export default function ResolveTicket({ ticketId, finding: fallback }: { ticketId?: string; finding?: Finding }) {
   const { can } = useAuth();
   const ticket = useTicket(ticketId);
@@ -237,6 +242,7 @@ export default function ResolveTicket({ ticketId, finding: fallback }: { ticketI
   );
 }
 
+/** Lists alternative remediation approaches and switches to one, confirming first when progress exists. */
 function ApproachPicker({
   candidates,
   selectedControlId,
@@ -257,7 +263,7 @@ function ApproachPicker({
   const [switchingTo, setSwitchingTo] = useState<string | null>(null);
   const [failed, setFailed] = useState<{ controlId: string; message: string } | null>(null);
 
-  // The picker stays open until the write lands, so a refusal is visible where it happened.
+  /** Applies an approach, keeping the picker open until the write lands so a refusal shows in place. */
   async function apply(control: ControlDetail) {
     debug("applies approach", { controlId: control.control_id, previousControlId: selectedControlId });
     setSwitchingTo(control.control_id);
@@ -279,6 +285,7 @@ function ApproachPicker({
     setOpen(false);
   }
 
+  /** Ignores the current or busy choice, asks for confirmation when progress exists, and otherwise applies it. */
   function choose(control: ControlDetail) {
     if (control.control_id === selectedControlId || switchingTo) {
       debug("ignores approach choice", { controlId: control.control_id, switchingTo });
@@ -423,6 +430,7 @@ function ApproachPicker({
   );
 }
 
+/** Renders a titled card section. */
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>

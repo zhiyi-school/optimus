@@ -1,3 +1,7 @@
+/**
+ * Storage location, key and metadata helpers for conversation attachments.
+ */
+
 import { formatBytes } from "@/lib/utils";
 import type { RiskConversationAttachment } from "@/data/types";
 
@@ -5,14 +9,14 @@ export type AttachmentSource =
   | { provider: "supabase"; path: string }
   | { provider: "server"; key: string };
 
-/** Rows written before the provider column existed are Supabase objects. */
+/** Where an attachment's bytes live; rows predating the provider column are Supabase objects. */
 export function attachmentSource(attachment: RiskConversationAttachment): AttachmentSource {
   return attachment.storage_provider === "server"
     ? { provider: "server", key: attachment.storage_path }
     : { provider: "supabase", path: attachment.storage_path };
 }
 
-/** A storage key stays inside its own folder whatever the browser called the file. */
+/** Builds a sanitised storage key that stays in the conversation's folder whatever the file is called. */
 export function attachmentStorageKey(conversationId: string, fileName: string, now: number) {
   const safe =
     fileName
@@ -22,6 +26,7 @@ export function attachmentStorageKey(conversationId: string, fileName: string, n
   return `conversation-${conversationId}/${now}-${safe}`;
 }
 
+/** A "size · MIME type" summary line for an attachment. */
 export function attachmentMeta(attachment: RiskConversationAttachment): string {
   const parts: string[] = [];
   if (typeof attachment.size_bytes === "number" && attachment.size_bytes >= 0) {

@@ -1,3 +1,7 @@
+/**
+ * Row types for the Supabase schema used across the dashboard.
+ */
+
 export type UserRole = "developer" | "security" | "cio" | "admin";
 
 export type TeamType = "developer" | "security" | "management";

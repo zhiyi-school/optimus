@@ -1,3 +1,7 @@
+/**
+ * Transport types for playbook controls, steps, content blocks and playbook status.
+ */
+
 import type { AutomationPlatform } from "@/api/automation-types";
 
 export type ControlStatus = "active" | "deprecated" | "deprioritized";

@@ -1,3 +1,7 @@
+/**
+ * Query hooks for assessments and their automation run requests.
+ */
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { assessmentData, assessmentRunRequestData } from "@/data/services/assessments";
 import { isTransitionalRunState } from "@/lib/status";
@@ -8,6 +12,7 @@ import { createDebug } from "@/lib/debug";
 
 const debug = createDebug("hooks:queries:assessments");
 
+/** Fetches all assessments with their applications. */
 export function useAssessments() {
   return useQuery({
     queryKey: assessmentKeys.all(),
@@ -20,11 +25,7 @@ export function useAssessments() {
   });
 }
 
-/**
- * The list already holds this row, so the detail page renders from it while
- * the authoritative record loads. Placeholder rather than initial data: the
- * detail fetch always still runs, and its answer replaces this.
- */
+/** Fetches one assessment, using its cached list row as placeholder data while the detail loads. */
 export function useAssessment(id: string | undefined) {
   const queryClient = useQueryClient();
   return useQuery({
@@ -50,12 +51,7 @@ export function useAssessment(id: string | undefined) {
 
 const RUN_REQUEST_POLL_INTERVAL_MS = 10_000;
 
-/**
- * Polls while the assessment is still moving, and stops once it settles —
- * a completed or permanently failed request only changes through a mutation,
- * which invalidates this key. Configuration reporting `ready` is not a reason
- * to stop: device readiness is decided separately and may still be unresolved.
- */
+/** Fetches an assessment's run request, polling every 10 seconds while the run is transitional. */
 export function useAssessmentRunRequest(
   assessmentId: string | undefined,
   assessment: Pick<Assessment, "status"> | null | undefined,
@@ -80,6 +76,7 @@ export function useAssessmentRunRequest(
   });
 }
 
+/** Requests an automation run and refreshes the assessment's run request, detail and list. */
 export function useRequestAssessmentRun(assessmentId: string | undefined) {
   const invalidate = useInvalidateQueries();
   return useMutation({

@@ -1,3 +1,7 @@
+/**
+ * Supabase storage and metadata operations for risk conversation attachments.
+ */
+
 import { supabase, ATTACHMENTS_BUCKET } from "@/data/supabase";
 import { insertAttachmentWithCompatibility } from "@/data/compatibility/workflow";
 import { attachmentStorageKey } from "@/lib/attachments";
@@ -14,6 +18,7 @@ export interface PendingConversationAttachment {
   storagePath: string;
 }
 
+/** Pairs a file with its conversation entry and a fresh storage path. */
 export function createPendingConversationAttachment(
   conversationId: string,
   entryId: string,
@@ -28,6 +33,7 @@ export function createPendingConversationAttachment(
 }
 
 export const conversationAttachmentData = {
+  /** Uploads the attachment's bytes to its storage path. */
   async uploadBytes(pending: PendingConversationAttachment): Promise<void> {
     debug("uploading attachment bytes", {
       conversationId: pending.conversationId,
@@ -49,6 +55,7 @@ export const conversationAttachmentData = {
     debug("uploaded attachment bytes", { storagePath: pending.storagePath });
   },
 
+  /** Finds the attachment row recorded for a storage path, or null. */
   async findByStoragePath(storagePath: string): Promise<RiskConversationAttachment | null> {
     debug("finding attachment by storage path", { storagePath });
     const result = await supabase
@@ -68,6 +75,7 @@ export const conversationAttachmentData = {
     return result.data;
   },
 
+  /** Records the attachment row, reusing one already written for the same storage path. */
   async saveMetadata(
     pending: PendingConversationAttachment,
   ): Promise<RiskConversationAttachment> {
@@ -104,6 +112,7 @@ export const conversationAttachmentData = {
     }
   },
 
+  /** Deletes uploaded bytes that no attachment row references. */
   async discardUnused(pending: PendingConversationAttachment): Promise<void> {
     debug("discarding unused attachment", { storagePath: pending.storagePath });
     const existing = await conversationAttachmentData.findByStoragePath(pending.storagePath);
@@ -122,6 +131,7 @@ export const conversationAttachmentData = {
     debug("discarded attachment bytes", { storagePath: pending.storagePath });
   },
 
+  /** Creates a one-hour signed URL for an attachment. */
   getSignedUrl(storagePath: string) {
     debug("signing attachment path", { storagePath });
     return supabase.storage.from(ATTACHMENTS_BUCKET).createSignedUrl(storagePath, 3600);

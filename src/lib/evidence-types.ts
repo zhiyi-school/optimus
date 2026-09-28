@@ -1,3 +1,7 @@
+/**
+ * The evidence item shape shared by evidence lists and viewers.
+ */
+
 export interface EvidenceItem {
   id: string;
   name: string;

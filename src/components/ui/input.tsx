@@ -1,3 +1,7 @@
+/**
+ * Styled text input, textarea and select controls.
+ */
+
 import {
   forwardRef,
   type InputHTMLAttributes,
@@ -6,6 +10,7 @@ import {
 } from "react";
 import { cn } from "@/lib/utils";
 
+/** Styled single-line input forwarding its ref. */
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
   ({ className, ...props }, ref) => (
     <input
@@ -20,6 +25,7 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
 );
 Input.displayName = "Input";
 
+/** Styled multi-line textarea forwarding its ref. */
 export const Textarea = forwardRef<
   HTMLTextAreaElement,
   TextareaHTMLAttributes<HTMLTextAreaElement>
@@ -35,6 +41,7 @@ export const Textarea = forwardRef<
 ));
 Textarea.displayName = "Textarea";
 
+/** Styled native select forwarding its ref. */
 export const Select = forwardRef<
   HTMLSelectElement,
   SelectHTMLAttributes<HTMLSelectElement>

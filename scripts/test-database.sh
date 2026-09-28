@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Runs the migration and SQL test suite against a disposable Docker Postgres container.
+
 set -euo pipefail
 shopt -s nullglob
 

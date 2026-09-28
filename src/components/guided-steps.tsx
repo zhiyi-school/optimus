@@ -1,3 +1,7 @@
+/**
+ * Full-screen guided walk-through shell with a step timeline, content panel and footer navigation.
+ */
+
 import { useEffect, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, ArrowRight, Check, Clock, Info, X, type LucideIcon } from "lucide-react";
@@ -41,6 +45,7 @@ interface GuidedStepsProps {
   children: ReactNode;
 }
 
+/** Modal step-by-step guide that locks body scroll and offers previous, next and finish navigation. */
 export function GuidedSteps({
   icon: Icon,
   title,
@@ -62,7 +67,6 @@ export function GuidedSteps({
   const index = steps.findIndex((step) => step.id === activeId);
   const onFirst = index <= 0;
   const onLast = index === steps.length - 1;
-  // Loading, error and step-less controls keep the shell; only the walk-through goes.
   const guided = steps.length > 0;
 
   useEffect(() => {
@@ -245,6 +249,7 @@ export function GuidedSteps({
   );
 }
 
+/** Aside card showing an estimated completion time on large screens. */
 export function EstimatedTime({ value }: { value: ReactNode }) {
   return (
     <div

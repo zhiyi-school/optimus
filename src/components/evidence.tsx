@@ -1,3 +1,7 @@
+/**
+ * Evidence lists and viewers with view and download actions.
+ */
+
 import { useId, useState } from "react";
 import {
   Download,
@@ -20,17 +24,19 @@ const debug = createDebug("component:evidence");
 /** How many rail items are shown before the reader asks for the rest. */
 export const RAIL_COLLAPSED_ITEMS = 5;
 
+/** Icon for an evidence kind: image, text-like or generic file. */
 function iconFor(kind: string) {
   if (kind === "image") return ImageIcon;
   if (kind === "text" || kind === "log" || kind === "json") return FileText;
   return FileIcon;
 }
 
-/** Saves through a Blob, so a refused request is reported rather than written to disk. */
+/** Tracks evidence downloads through a Blob so a refused request is reported, not saved. */
 function useDownload() {
   const [busy, setBusy] = useState<string | null>(null);
   const [failed, setFailed] = useState<{ id: string; message: string } | null>(null);
 
+  /** Downloads the item and records which item is busy or failed. */
   async function start(item: EvidenceItem) {
     if (!item.url) return;
     debug("downloads evidence", {
@@ -57,6 +63,7 @@ function useDownload() {
   return { busy, failed, start };
 }
 
+/** Download button for an evidence item with a URL, optionally icon-only. */
 function DownloadButton({
   item,
   busy,
@@ -83,7 +90,7 @@ function DownloadButton({
   );
 }
 
-/** The rail lists evidence in one narrow column; the full-width view keeps the two-up grid. */
+/** Narrow evidence list for the rail, collapsed to the first few items until expanded. */
 export function EvidenceList({ items }: { items: EvidenceItem[] }) {
   const { busy, failed, start } = useDownload();
   const [expanded, setExpanded] = useState(false);
@@ -178,6 +185,7 @@ export function EvidenceList({ items }: { items: EvidenceItem[] }) {
   );
 }
 
+/** Two-column grid of evidence cards with image previews, text excerpts and downloads. */
 export function EvidenceViewer({ items }: { items: EvidenceItem[] }) {
   const { busy, failed, start } = useDownload();
 

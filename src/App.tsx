@@ -1,3 +1,7 @@
+/**
+ * Top-level routes and their authentication and capability guards.
+ */
+
 import { Navigate, Route, Routes } from "react-router-dom";
 import { lazy, Suspense, type ReactNode } from "react";
 import { useAuth } from "@/auth/useAuth";
@@ -29,6 +33,7 @@ const Settings = lazy(() => import("@/pages/Settings"));
 const Admin = lazy(() => import("@/pages/Admin"));
 const Learn = lazy(() => import("@/pages/Learn"));
 
+/** Renders children once signed in with a profile; otherwise loading, the login redirect or a retryable error. */
 function RequireAuth({ children }: { children: ReactNode }) {
   const { session, loading, profile, profileError, refreshProfile } = useAuth();
   if (loading) return <LoadingState label="Loading…" />;
@@ -44,7 +49,7 @@ function RequireAuth({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-/** The index is whatever `defaultRouteFor` says, so no page owns a competing rule. */
+/** Index route: the dashboard, or a redirect to whatever `defaultRouteFor` picks for the profile. */
 function RoleHome() {
   const { profile, loading } = useAuth();
   if (loading) return <LoadingState label="Loading…" />;
@@ -52,7 +57,7 @@ function RoleHome() {
   return home === "/" ? <Dashboard /> : <Navigate to={home} replace />;
 }
 
-/** Any one of the listed capabilities admits: RLS still scopes what is visible. */
+/** Renders children when the user holds any listed capability, else redirects home; RLS still scopes data. */
 function RequireCapability({
   capability,
   children,
@@ -66,7 +71,7 @@ function RequireCapability({
   return <>{children}</>;
 }
 
-/** The main application component. */
+/** The route table, with auth and capability guards around each workspace page. */
 export default function App() {
   return (
     <Routes>

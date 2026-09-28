@@ -1,3 +1,7 @@
+/**
+ * Developer risk workspace combining remediation, evidence and the risk conversation.
+ */
+
 import { useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { useAuth } from "@/auth/useAuth";
@@ -47,11 +51,13 @@ import { riskIcon } from "@/lib/entity-icons";
 
 const debug = createDebug("page:ResolveRisk");
 
+/** Remounts the risk page whenever the route's risk changes so per-risk state resets. */
 export default function ResolveRisk() {
   const { riskId } = useParams<{ riskId: string }>();
   return <RiskPage key={riskId} />;
 }
 
+/** Shows a risk's finding, evidence, remediation and conversation, with a sidebar of raised risks. */
 function RiskPage() {
   const { applicationId, riskId } = useParams<{ applicationId: string; riskId: string }>();
   const { profile, can } = useAuth();
@@ -122,8 +128,6 @@ function RiskPage() {
     can,
   });
 
-  // Only the risks security has actually raised, in the catalogue's own order so
-  // the list reads the same here as it does under Assess.
   const sidebarRisks = useMemo<RiskSidebarEntry[]>(
     () =>
       developerRiskOrder(risks, findings.data).map((finding) => {
@@ -146,8 +150,6 @@ function RiskPage() {
     [findings.data, risks],
   );
 
-  // The application is the page's identity: once it is known — usually from the
-  // already-cached list — the shell renders and findings fill in beneath it.
   if (!application && applications.isLoading) return <LoadingState label="Loading…" />;
   if (applications.isError || !application) {
     return (

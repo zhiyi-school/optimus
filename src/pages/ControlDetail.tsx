@@ -1,3 +1,7 @@
+/**
+ * Remediation control page where developers work through and record control steps.
+ */
+
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams } from "react-router-dom";
 import { FileText } from "lucide-react";
@@ -28,13 +32,13 @@ import { stepCountLabel } from "@/lib/utils";
 
 const debug = createDebug("page:ControlDetail");
 
+/** Shows a ticket's control steps with progress tracking, flagging steps changed since completion. */
 export default function ControlDetail() {
   const { ticketId, controlId } = useParams<{ ticketId: string; controlId: string }>();
   const { can } = useAuth();
 
   const ticket = useTicket(ticketId);
   const platform = ticket.data?.finding?.platform ?? ticket.data?.application?.platform;
-  // Closing returns to the risk page that holds the conversation, never to a ticket page.
   const backTo = ticket.data
     ? resolveRiskPath({
         applicationId: ticket.data.application_id,
@@ -95,6 +99,7 @@ export default function ControlDetail() {
       ? chosenStepKey
       : (definitionSteps[0]?.step_key ?? null);
 
+  /** Wraps loading and error content in an empty guided-steps frame. */
   const shell = (children: ReactNode) => (
     <GuidedSteps
       icon={FileText}

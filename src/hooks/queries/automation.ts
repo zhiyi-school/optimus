@@ -1,3 +1,7 @@
+/**
+ * Query hooks for the automation backend: risks, runs, reports, sync, events and playbook revisions.
+ */
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueries, useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { assessmentApi, configApi, provisioningApi, syncApi, testApi } from "@/api/automation-services";
@@ -16,6 +20,7 @@ export type { RunEventStreamState } from "@/lib/run-event-types";
 
 const debug = createDebug("hooks:queries:automation");
 
+/** Fetches a platform's risk catalogue from the automation backend. */
 export function useRiskCatalogue(platform: AutomationPlatform | undefined) {
   return useQuery({
     queryKey: automationKeys.riskCatalogue(platform),
@@ -29,6 +34,7 @@ export function useRiskCatalogue(platform: AutomationPlatform | undefined) {
   });
 }
 
+/** Fetches the apps configured for a platform on the automation backend. */
 export function useConfiguredApps(platform: AutomationPlatform | undefined) {
   return useQuery({
     queryKey: automationKeys.configuredApps(platform),
@@ -44,7 +50,7 @@ export function useConfiguredApps(platform: AutomationPlatform | undefined) {
 
 const PROVISIONING_POLL_INTERVAL_MS = 30_000;
 
-/** Resolves to `null` when the backend has no provisioning support; callers fall back. */
+/** Fetches an app's provisioning state, optionally polling; resolves to null when the backend lacks support. */
 export function useAppProvisioning(
   platform: AutomationPlatform | undefined,
   appId: string | null | undefined,
@@ -64,6 +70,7 @@ export function useAppProvisioning(
   });
 }
 
+/** Fetches all automation runs, polling every five seconds. */
 export function useAutomationRuns() {
   return useQuery({
     queryKey: automationKeys.runs(),
@@ -79,10 +86,7 @@ export function useAutomationRuns() {
 
 const ACTIVE_RUN_POLL_INTERVAL_MS = 5000;
 
-/**
- * Re-derives the in-flight run from the automation host so navigating away and
- * back does not lose the progress a component was showing.
- */
+/** Derives the app's in-flight run and any run holding the platform's device from polled run lists. */
 export function useActiveRun(filter: ActiveRunFilter) {
   const enabled = !!filter.platform && !!filter.appExternalId;
   const { data } = useQuery({
@@ -103,11 +107,11 @@ export function useActiveRun(filter: ActiveRunFilter) {
   });
   return {
     run: findActiveRun(data, filter),
-    /** Any run holding the platform's device — it blocks starting another one. */
     platformRun: findPlatformRun(data, filter.platform),
   };
 }
 
+/** Fetches automation report timestamps, optionally filtered by status. */
 export function useAutomationReports(status?: string) {
   return useQuery({
     queryKey: [...automationKeys.reports(), status ?? null],
@@ -120,6 +124,7 @@ export function useAutomationReports(status?: string) {
   });
 }
 
+/** Fetches a run's status, polling every two seconds while it runs when polling is requested. */
 export function useRunStatus(runId: string | undefined, opts: { poll?: boolean } = {}) {
   return useQuery({
     queryKey: automationKeys.runStatus(runId),
@@ -138,6 +143,7 @@ export function useRunStatus(runId: string | undefined, opts: { poll?: boolean }
   });
 }
 
+/** Polls a run's dashboard sync status and invalidates dashboard data once the sync completes. */
 export function useRunSyncStatus(runId: string | undefined, opts: { enabled?: boolean } = {}) {
   const queryClient = useQueryClient();
   const query = useQuery({
@@ -174,6 +180,7 @@ export function useRunSyncStatus(runId: string | undefined, opts: { enabled?: bo
   return query;
 }
 
+/** Requests a run resync and stores the returned sync status. */
 export function useResyncRun(runId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -187,6 +194,7 @@ export function useResyncRun(runId: string | undefined) {
   });
 }
 
+/** Fetches the dashboard sync worker status, optionally polling. */
 export function useDashboardSyncWorker(opts: { poll?: boolean } = {}) {
   return useQuery({
     queryKey: automationKeys.syncWorker(),
@@ -201,6 +209,7 @@ export function useDashboardSyncWorker(opts: { poll?: boolean } = {}) {
   });
 }
 
+/** Builds a deduplication key from a run event's identifying fields. */
 function runEventKey(event: RunProgressEvent) {
   return [
     event.timestamp ?? "",
@@ -213,6 +222,7 @@ function runEventKey(event: RunProgressEvent) {
   ].join("|");
 }
 
+/** Streams a running run's events over SSE, deduplicating them and refreshing run status when done. */
 export function useRunEvents(runId: string | undefined, enabled: boolean) {
   const queryClient = useQueryClient();
   const seenRef = useRef<Set<string>>(new Set());
@@ -287,6 +297,7 @@ export function useRunEvents(runId: string | undefined, enabled: boolean) {
   return { events, streamState };
 }
 
+/** Fetches a report's summary. */
 export function useReportSummary(runTimestamp: string | undefined) {
   return useQuery({
     queryKey: automationKeys.reportSummary(runTimestamp),
@@ -300,6 +311,7 @@ export function useReportSummary(runTimestamp: string | undefined) {
   });
 }
 
+/** Fetches a completed run's results from its report summary. */
 export function useRunResults(runTimestamp: string | undefined, enabled = true) {
   return useQuery({
     queryKey: automationKeys.runResults(runTimestamp),
@@ -313,6 +325,7 @@ export function useRunResults(runTimestamp: string | undefined, enabled = true) 
   });
 }
 
+/** Fetches an app's run history for one test. */
 export function useTestRunHistory(appExternalId: string | undefined, testId: string | undefined) {
   return useQuery({
     queryKey: automationKeys.testHistory(appExternalId, testId),
@@ -326,7 +339,7 @@ export function useTestRunHistory(appExternalId: string | undefined, testId: str
   });
 }
 
-/** One run's structured analysis document, fetched through the evidence endpoint. */
+/** Fetches one run's structured analysis document through the evidence endpoint. */
 export function useIpaAnalysis(runTimestamp: string | undefined, ref: string | undefined) {
   return useQuery({
     queryKey: automationKeys.ipaAnalysis(runTimestamp, ref),
@@ -347,7 +360,7 @@ export function useIpaAnalysis(runTimestamp: string | undefined, ref: string | u
 
 const PLAYBOOK_POLL_INTERVAL_MS = 45_000;
 
-/** The revision seen on arrival is kept in session memory only, never written to the database. */
+/** Polls the playbook revision and invalidates control queries once it changes from the session's first one. */
 export function usePlaybookRevisionWatch(
   platform: AutomationPlatform | undefined,
   enabled: boolean,
@@ -395,7 +408,7 @@ export function usePlaybookRevisionWatch(
   };
 }
 
-/** `undefined` while unknown, so an unreachable backend degrades to counting every stored row. */
+/** Collects live control IDs and step keys per risk; undefined until every risk's controls load. */
 export function useLiveControlKeys(risks: { platform: AutomationPlatform; riskId: string }[]) {
   const unique = [...new Map(risks.map((r) => [`${r.platform}/${r.riskId}`, r])).values()].sort(
     (a, b) => `${a.platform}/${a.riskId}`.localeCompare(`${b.platform}/${b.riskId}`),

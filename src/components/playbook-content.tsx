@@ -1,3 +1,7 @@
+/**
+ * Renders playbook content blocks: text, lists, code, tables and expandable screenshots.
+ */
+
 import { useMemo, useState, type ReactNode } from "react";
 import { ImageOff } from "lucide-react";
 import { automationAssetUrl } from "@/api/automation-client";
@@ -16,11 +20,7 @@ const figureSize = {
   wide: "h-auto max-h-[26rem] w-auto max-w-[min(100%,40rem)] object-contain",
 };
 
-/**
- * The one screenshot treatment, shared by playbook blocks and manual test
- * steps: never upscaled past its own size, capped small enough to sit beside
- * its siblings, and expandable to full size on click.
- */
+/** Size-capped screenshot that opens full size in a dialog, or an unavailable placeholder. */
 export function PlaybookFigure({
   url,
   caption,
@@ -84,6 +84,7 @@ export function PlaybookFigure({
   );
 }
 
+/** Table block using its declared columns or the first row's keys. */
 function PlaybookTable({ block }: { block: PlaybookTableBlock }) {
   const columns = useMemo(
     () => (block.columns?.length ? block.columns : Object.keys(block.rows?.[0] ?? {})),
@@ -118,6 +119,7 @@ function PlaybookTable({ block }: { block: PlaybookTableBlock }) {
   );
 }
 
+/** Renders one playbook block by type. */
 export function PlaybookBlockView({ block }: { block: PlaybookBlock }) {
   switch (block.type) {
     case "heading":
@@ -161,11 +163,12 @@ export function PlaybookBlockView({ block }: { block: PlaybookBlock }) {
   }
 }
 
-/** Neighbouring screenshots read as one illustration, so they lay out as a row rather than a stack. */
+/** Wrapping row that lays neighbouring screenshots out side by side. */
 export function PlaybookGallery({ children }: { children: ReactNode }) {
   return <div className="flex flex-wrap items-start gap-3">{children}</div>;
 }
 
+/** Renders renderable blocks, laying consecutive images out as a gallery row. */
 export function PlaybookContent({
   blocks,
   className = "space-y-3",
@@ -193,6 +196,7 @@ export function PlaybookContent({
   );
 }
 
+/** Groups consecutive image blocks into arrays and leaves other blocks as they are. */
 function groupImages(blocks: PlaybookBlock[]): (PlaybookBlock | PlaybookBlock[])[] {
   const groups: (PlaybookBlock | PlaybookBlock[])[] = [];
   for (const block of blocks) {

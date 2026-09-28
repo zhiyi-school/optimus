@@ -1,3 +1,7 @@
+/**
+ * Supabase operations on applications.
+ */
+
 import { supabase } from "@/data/supabase";
 import type { Application } from "@/data/types";
 import { createDebug } from "@/lib/debug";
@@ -6,6 +10,7 @@ import { activityData } from "./activity";
 const debug = createDebug("data:applications");
 
 export const applicationData = {
+  /** Lists every visible application by name. */
   async list(): Promise<Application[]> {
     debug("listing applications");
     const { data, error } = await supabase
@@ -20,6 +25,7 @@ export const applicationData = {
     return data;
   },
 
+  /** Fetches one application, or null. */
   async get(id: string): Promise<Application | null> {
     debug("fetching application", { id });
     const { data, error } = await supabase
@@ -35,6 +41,7 @@ export const applicationData = {
     return data;
   },
 
+  /** Inserts or updates an application keyed on its backend `external_id`. */
   async upsertByExternalId(
     app: Partial<Application> & { external_id: string },
   ): Promise<Application> {
@@ -59,13 +66,7 @@ export const applicationData = {
     return data;
   },
 
-  /**
-   * Finds a manually-created application row (e.g. via "Add App") that's
-   * never been linked to a backend app yet (`external_id is null`), matched
-   * by name + platform. Used to adopt that row on first real sync instead
-   * of creating a second, permanently-duplicate application — see
-   * docs/DATABASE.md#manual-assessment-creation.
-   */
+  /** Finds a never-linked (`external_id` null) app by name and platform so the first sync adopts it. */
   async findUnlinkedByNameAndPlatform(
     name: string,
     platform: Application["platform"],
@@ -92,7 +93,7 @@ export const applicationData = {
     return data;
   },
 
-  /** Any existing application with this name + platform, linked or not — used to block accidental duplicate creation. */
+  /** Finds any app with this name and platform, linked or not, to block duplicate creation. */
   async findByNameAndPlatform(
     name: string,
     platform: Application["platform"],
@@ -118,6 +119,7 @@ export const applicationData = {
     return data;
   },
 
+  /** Creates an application row. */
   async create(
     app: Partial<Application> & { name: string; platform: Application["platform"] },
   ): Promise<Application> {
@@ -131,6 +133,7 @@ export const applicationData = {
     return data;
   },
 
+  /** Applies a partial update to an application. */
   async update(applicationId: string, patch: Partial<Application>): Promise<Application> {
     debug("updating application", { applicationId, fields: Object.keys(patch) });
     const { data, error } = await supabase
@@ -151,7 +154,7 @@ export const applicationData = {
     return data;
   },
 
-  /** Cascades to every assessment/finding/ticket (and their messages/history/evidence) for this app. */
+  /** Deletes an app, cascading to its assessments, findings and tickets, and logs the deletion. */
   async remove(applicationId: string, applicationName: string): Promise<void> {
     debug("deleting application", { applicationId });
     const { error } = await supabase.from("applications").delete().eq("id", applicationId);

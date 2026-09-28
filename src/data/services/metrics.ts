@@ -1,3 +1,7 @@
+/**
+ * Dashboard overview metrics from the `dashboard_metrics` RPC, with a per-table count fallback.
+ */
+
 import { supabase } from "@/data/supabase";
 import type { AssessmentStatus, FindingStatus, TicketStatus, TicketType } from "@/data/types";
 import { createDebug } from "@/lib/debug";
@@ -19,6 +23,7 @@ export interface DashboardMetrics {
 }
 
 export const metricsData = {
+  /** Returns dashboard metrics from the RPC, or from per-table counts when the RPC is unavailable. */
   async getOverview(): Promise<DashboardMetrics> {
     debug("rpc dashboard_metrics");
     const startedAt = performance.now();
@@ -53,6 +58,7 @@ export const metricsData = {
       closed: 0,
     } as Record<TicketStatus, number>;
 
+    /** Counts every application. */
     const countApplications = async () => {
       const { count, error } = await supabase
         .from("applications")
@@ -64,6 +70,7 @@ export const metricsData = {
       debug("counted applications", { count });
       return count ?? 0;
     };
+    /** Counts assessments, optionally with one status. */
     const countAssessments = async (status?: AssessmentStatus) => {
       let query = supabase.from("assessments").select("*", { count: "exact", head: true });
       if (status) query = query.eq("status", status);
@@ -75,6 +82,7 @@ export const metricsData = {
       debug("counted assessments", { status, count });
       return count ?? 0;
     };
+    /** Counts findings matching an optional status and severity. */
     const countFindings = async (filter: { status?: FindingStatus; severity?: string }) => {
       let query = supabase.from("findings").select("*", { count: "exact", head: true });
       if (filter.status) query = query.eq("status", filter.status);
@@ -87,6 +95,7 @@ export const metricsData = {
       debug("counted findings", { ...filter, count });
       return count ?? 0;
     };
+    /** Counts tickets matching the type and status filters. */
     const countTickets = async (filter: {
       status?: TicketStatus;
       type?: TicketType;

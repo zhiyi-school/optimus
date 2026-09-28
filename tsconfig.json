@@ -1,3 +1,5 @@
+// Solution-style root that builds the app and Node tsconfig project references.
+
 {
   "files": [],
   "references": [

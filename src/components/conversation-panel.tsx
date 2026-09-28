@@ -1,3 +1,7 @@
+/**
+ * Risk conversation panel: message and event feed, automated test runs and the message composer.
+ */
+
 import {
   forwardRef,
   useCallback,
@@ -87,6 +91,7 @@ export interface RiskConversationPanelProps {
   actions?: ReactNode;
 }
 
+/** Scrollable conversation feed with unread tracking and a composer for messages, files and actions. */
 export function RiskConversationPanel({
   title = "Conversation",
   items,
@@ -124,6 +129,7 @@ export function RiskConversationPanel({
 
   const list = items ?? [];
 
+  /** Scrolls the feed to the newest item and clears the unread indicator. */
   const scrollToLatest = useCallback(() => {
     const feed = feedRef.current;
     if (!feed) return;
@@ -151,6 +157,7 @@ export function RiskConversationPanel({
     }
   }, [highlightRunTimestamp, list.length]);
 
+  /** Tracks whether the feed is pinned near the bottom so new items auto-scroll. */
   function handleFeedScroll(event: UIEvent<HTMLDivElement>) {
     const feed = event.currentTarget;
     const nearBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80;
@@ -164,7 +171,7 @@ export function RiskConversationPanel({
     action?.kind === "classification" ? !!message : action?.kind === "reassessment" || !!message;
   const retryingAttachment = !!attachmentRetry;
 
-  /** Adding or removing an action never touches the draft or the chosen file. */
+  /** Selects an offered action with a default status, leaving the draft and file untouched. */
   function selectOffer(offer: ComposerActionOffer) {
     debug("selects action", { kind: offer.kind });
     setAction(
@@ -179,7 +186,7 @@ export function RiskConversationPanel({
     );
   }
 
-  /** Enter sends through the form itself; Shift+Enter stays a newline. */
+  /** Submits the form on Enter while Shift+Enter inserts a newline. */
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key !== "Enter" || event.shiftKey) return;
     // An IME uses Enter to accept a candidate, which must never send.
@@ -190,6 +197,7 @@ export function RiskConversationPanel({
     event.currentTarget.form?.requestSubmit();
   }
 
+  /** Submits the message, file and action, clearing the composer only on success. */
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     if (!ready && !retryingAttachment) {
@@ -216,6 +224,7 @@ export function RiskConversationPanel({
     scrollToLatest();
   }
 
+  /** Abandons the pending attachment retry and clears the composer. */
   async function abandonAttachment() {
     debug("abandons attachment retry", { fileName: attachmentRetry?.fileName });
     await onAbandonAttachment?.();
@@ -472,7 +481,7 @@ export function RiskConversationPanel({
   );
 }
 
-/** The optional actions this reader may add to a message, and why one is unavailable. */
+/** Buttons for the actions this reader may add, each showing why it is blocked. */
 function ComposerOfferBar({
   offers,
   selected,
@@ -522,6 +531,7 @@ function ComposerOfferBar({
   );
 }
 
+/** Chip for the chosen composer action, with a classification picker and a remove button. */
 function ComposerActionChip({
   action,
   offer,
@@ -575,6 +585,7 @@ function ComposerActionChip({
   );
 }
 
+/** Chat bubble for a message entry with author, role, time and attachments. */
 function MessageEntry({
   entry,
   attachments,
@@ -612,6 +623,7 @@ function MessageEntry({
   );
 }
 
+/** Dashed card for a workflow event entry with its summary, author and attachments. */
 function EventEntry({
   entry,
   attachments,
@@ -649,6 +661,7 @@ function EventEntry({
   );
 }
 
+/** Automated test run entry with verdict, run details and evidence; outlined when highlighted. */
 const TestRunEntry = forwardRef<
   HTMLLIElement,
   {

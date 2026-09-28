@@ -1,3 +1,7 @@
+/**
+ * Modal dialog primitives styled over Radix Dialog.
+ */
+
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import type { ComponentProps } from "react";
@@ -6,6 +10,7 @@ import { cn } from "@/lib/utils";
 export const Dialog = DialogPrimitive.Root;
 export const DialogTrigger = DialogPrimitive.Trigger;
 
+/** Centred dialog panel with overlay and a close button, rendered in a portal. */
 export function DialogContent({
   className,
   children,
@@ -30,10 +35,12 @@ export function DialogContent({
   );
 }
 
+/** Dialog header stacking title and description. */
 export function DialogHeader({ className, ...props }: ComponentProps<"div">) {
   return <div className={cn("mb-4 flex flex-col gap-1", className)} {...props} />;
 }
 
+/** Dialog heading text. */
 export function DialogTitle({
   className,
   ...props
@@ -46,6 +53,7 @@ export function DialogTitle({
   );
 }
 
+/** Muted dialog description text. */
 export function DialogDescription({
   className,
   ...props
@@ -58,6 +66,7 @@ export function DialogDescription({
   );
 }
 
+/** Right-aligned dialog action row. */
 export function DialogFooter({ className, ...props }: ComponentProps<"div">) {
   return (
     <div

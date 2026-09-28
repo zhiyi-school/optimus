@@ -1,3 +1,7 @@
+/**
+ * Pure Resolve workspace rules: status labels, approach selection, progress and reassessment queueing.
+ */
+
 import type {
   ControlDetail,
   ControlStatus,
@@ -35,6 +39,7 @@ export const developerTicketLabels: Record<TicketStatus, { label: string; tone: 
   withdrawn: { label: "Withdrawn by developer", tone: "neutral" },
 };
 
+/** The developer-facing label and tone for a ticket status. */
 export function developerTicketLabel(status: TicketStatus | undefined) {
   return status ? developerTicketLabels[status] : undefined;
 }
@@ -77,18 +82,12 @@ export const APPROACH_SELECTABLE_FROM: TicketStatus[] = [
 
 export const REMEDIATION_EDITABLE_FROM: TicketStatus[] = ["open", "in_progress", "rejected"];
 
-/**
- * Mirrors `requestable_from` in enforce_retest_request_permissions. `fix_submitted`
- * is there only so a remediation recorded before the submission step was retired
- * is not stranded; nothing puts a ticket into it any more.
- */
+/** Mirrors `requestable_from` in enforce_retest_request_permissions; legacy `fix_submitted` is checked apart. */
 export const REASSESSMENT_REQUESTABLE_FROM: TicketStatus[] = [
   "open",
   "in_progress",
   "rejected",
-  // Another request may be submitted while earlier ones are outstanding or a
-  // run has just finished. This set gates reassessment only — progress editing,
-  // approach changes and withdrawal keep their own narrower sets.
+  // Requests may stack while earlier ones are outstanding; other actions keep narrower sets.
   "retest_requested",
   "retest_in_progress",
   "under_review",
@@ -100,6 +99,7 @@ export interface Progress {
   ratio: number;
 }
 
+/** A completed/total progress value with its ratio (0 when total is 0). */
 function progress(completed: number, total: number): Progress {
   return { completed, total, ratio: total === 0 ? 0 : completed / total };
 }
@@ -117,12 +117,14 @@ export interface LiveControl {
   progress: Progress;
 }
 
+/** The playbook controls a developer may choose as a remediation approach. */
 export function selectableControls(
   definitions: ControlDetail[] | undefined,
 ): ControlDetail[] {
   return (definitions ?? []).filter(isRemediationControl);
 }
 
+/** The stored approach when still selectable, else the first candidate, else null. */
 export function effectiveSelectedControlId(
   storedControlId: string | null | undefined,
   candidates: ControlDetail[],
@@ -132,6 +134,7 @@ export function effectiveSelectedControlId(
   return candidates[0]?.control_id ?? null;
 }
 
+/** The candidate control with this id. */
 export function selectedControl(
   candidates: ControlDetail[],
   selectedControlId: string | null,
@@ -139,6 +142,7 @@ export function selectedControl(
   return candidates.find((control) => control.control_id === selectedControlId);
 }
 
+/** True when the stored approach is no longer among the selectable controls. */
 export function selectionWasReplaced(
   storedControlId: string | null | undefined,
   candidates: ControlDetail[],
@@ -148,6 +152,7 @@ export function selectionWasReplaced(
   return !candidates.some((control) => control.control_id === stored);
 }
 
+/** Joins control definitions with their stored rows and step progress. */
 export function liveControls(
   definitions: ControlDetail[] | undefined,
   controls: TicketControl[],
@@ -179,6 +184,7 @@ export function liveControls(
   });
 }
 
+/** A control's status derived from its row and step rows; `needs_changes` on the row wins. */
 export function liveControlStatus(
   row: TicketControl | undefined,
   steps: (TicketControlStep | undefined)[],
@@ -190,12 +196,14 @@ export function liveControlStatus(
   return "not_started";
 }
 
+/** Step progress summed across controls. */
 export function controlProgress(live: LiveControl[]): Progress {
   const total = live.reduce((sum, control) => sum + control.progress.total, 0);
   const completed = live.reduce((sum, control) => sum + control.progress.completed, 0);
   return progress(completed, total);
 }
 
+/** The live progress of the selected approach, if it is selectable. */
 export function selectedControlProgress(
   definitions: ControlDetail[] | undefined,
   selectedControlId: string | null,
@@ -208,7 +216,7 @@ export function selectedControlProgress(
   return liveControls([chosen], controls, steps)[0];
 }
 
-/** Any completed automated test counts, whatever the verdict. */
+/** Tested risks out of the catalogue; any completed automated test counts, whatever the verdict. */
 export function testingProgress(findings: Finding[], catalogueSize: number): Progress {
   const tested = new Set(
     findings.filter((finding) => finding.test_id).map((finding) => finding.test_id as string),
@@ -216,6 +224,7 @@ export function testingProgress(findings: Finding[], catalogueSize: number): Pro
   return progress(tested.size, Math.max(catalogueSize, tested.size));
 }
 
+/** Reduced-risk findings out of those that are at risk or reduced risk. */
 export function findingProgress(findings: Finding[]): Progress {
   const actionable = findings.filter(
     (finding) => finding.status === "at_risk" || finding.status === "reduced_risk",
@@ -263,6 +272,7 @@ export interface LivePlaybookKeys {
   stepKeys: Set<string>;
 }
 
+/** Summarises an app's findings, remediation tickets and selected-approach step progress. */
 export function summarizeApplication(
   applicationId: string,
   findings: Finding[],
@@ -279,8 +289,7 @@ export function summarizeApplication(
   const activeTicketIds = new Set(
     ownTickets.filter((ticket) => ticket.status !== "withdrawn").map((ticket) => ticket.id),
   );
-  // Only the approach each active ticket is following counts; alternatives and
-  // approaches abandoned by a switch stay as history.
+  // Only each active ticket's selected approach counts; alternatives and abandoned approaches stay history.
   const selectedByTicket = new Map(
     ownTickets
       .filter((ticket) => activeTicketIds.has(ticket.id) && ticket.selected_control_id)
@@ -332,6 +341,7 @@ export function summarizeApplication(
   };
 }
 
+/** The app's overall remediation status from its findings and open tickets. */
 function remediationStatus(findings: Finding[], openTickets: Ticket[]): RemediationStatus {
   const actionable = findings.filter(
     (finding) => finding.status === "at_risk" || finding.status === "reduced_risk",
@@ -345,10 +355,12 @@ function remediationStatus(findings: Finding[], openTickets: Ticket[]): Remediat
   return "action_required";
 }
 
+/** True for an active, required control. */
 export function isRemediationControl(control: ControlSummary | ControlDetail): boolean {
   return control.status === "active" && control.required;
 }
 
+/** The control and step keys the selected approach needs stored. */
 export function selectedControlReconciliationPlan(
   control: ControlDetail | undefined,
 ): ControlReconciliation[] {
@@ -358,6 +370,7 @@ export function selectedControlReconciliationPlan(
   ];
 }
 
+/** True when every planned control and step has a stored row. */
 export function isReconciled(
   plan: ControlReconciliation[],
   controls: TicketControl[],
@@ -374,26 +387,26 @@ export function isReconciled(
   });
 }
 
+/** True when a remediation's progress may be edited in its current status. */
 export function canEditRemediation(ticket: Ticket | null | undefined): boolean {
   if (!ticket || ticket.type !== "remediation") return false;
   return REMEDIATION_EDITABLE_FROM.includes(ticket.status);
 }
 
+/** True when the approach has steps and all are completed. */
 export function selectedApproachComplete(control: LiveControl | undefined): boolean {
   if (!control) return false;
   const { completed, total } = control.progress;
   return total > 0 && completed >= total;
 }
 
-/**
- * Whether the approach may still be changed. Wider than `canEditRemediation`:
- * the database also allows a switch on a legacy `fix_submitted` remediation.
- */
+/** Whether the approach may change; wider than `canEditRemediation`, as legacy `fix_submitted` may switch too. */
 export function canSelectApproach(ticket: Ticket | null | undefined): boolean {
   if (!ticket || ticket.type !== "remediation") return false;
   return APPROACH_SELECTABLE_FROM.includes(ticket.status) || isHistoricalFixSubmitted(ticket.status);
 }
 
+/** The message explaining why the approach cannot change, or null when it can. */
 export function approachChangeBlockedReason(
   ticket: Ticket | null | undefined,
   mayEdit: boolean,
@@ -407,6 +420,7 @@ export function approachChangeBlockedReason(
   return remediationBlockMessage(block);
 }
 
+/** True when a remediation's status allows requesting a reassessment. */
 export function canRequestReassessment(ticket: Ticket | null | undefined): boolean {
   if (!ticket || ticket.type !== "remediation") return false;
   return REASSESSMENT_REQUESTABLE_FROM.includes(ticket.status) || isHistoricalFixSubmitted(ticket.status);
@@ -419,35 +433,36 @@ function byQueueOrder(a: RetestRun, b: RetestRun): number {
   return left === right ? a.id.localeCompare(b.id) : left.localeCompare(right);
 }
 
+/** The reassessment currently running, if any. */
 export function runningReassessment(retests: RetestRun[] | undefined): RetestRun | undefined {
   return (retests ?? []).find((retest) => retest.status === "running");
 }
 
+/** Queued reassessments in queue order. */
 export function queuedReassessments(retests: RetestRun[] | undefined): RetestRun[] {
   return (retests ?? []).filter((retest) => retest.status === "queued").sort(byQueueOrder);
 }
 
-/** The one security may start next: nothing may be running, and order decides which. */
+/** The queued reassessment security may start next, or none while one is running. */
 export function nextReassessment(retests: RetestRun[] | undefined): RetestRun | undefined {
   return runningReassessment(retests) ? undefined : queuedReassessments(retests)[0];
 }
 
+/** Queued and running reassessments in queue order. */
 export function outstandingReassessments(retests: RetestRun[] | undefined): RetestRun[] {
   return (retests ?? [])
     .filter((retest) => retest.status === "queued" || retest.status === "running")
     .sort(byQueueOrder);
 }
 
+/** Any queued or running reassessment. */
 export function activeReassessment(retests: RetestRun[] | undefined): RetestRun | undefined {
   return (retests ?? []).find(
     (retest) => retest.status === "queued" || retest.status === "running",
   );
 }
 
-/**
- * Withdrawal is the requester's own action on a queued request, and only while
- * its remediation is still the one waiting for it.
- */
+/** True when the requester may withdraw their queued request while its remediation still awaits it. */
 export function canWithdrawReassessment(
   retest: RetestRun | null | undefined,
   ticket: Ticket | null | undefined,
@@ -460,16 +475,19 @@ export function canWithdrawReassessment(
   return ticket.status === "retest_requested";
 }
 
+/** True when a remediation's status allows withdrawing it. */
 export function canWithdrawTicket(ticket: Ticket | null | undefined): boolean {
   if (!ticket || ticket.type !== "remediation") return false;
   return WITHDRAWABLE_FROM.includes(ticket.status) || isHistoricalFixSubmitted(ticket.status);
 }
 
+/** True for a withdrawn remediation. */
 export function canResumeTicket(ticket: Ticket | null | undefined): boolean {
   if (!ticket || ticket.type !== "remediation") return false;
   return ticket.status === "withdrawn";
 }
 
+/** The finding's non-terminal remediation ticket, if any. */
 export function activeRemediationTicket(
   findingId: string,
   tickets: Ticket[] | undefined,
@@ -482,6 +500,7 @@ export function activeRemediationTicket(
   );
 }
 
+/** The finding's most recently updated withdrawn remediation, if any. */
 export function resumableRemediationTicket(
   findingId: string,
   tickets: Ticket[] | undefined,
@@ -497,12 +516,7 @@ export function resumableRemediationTicket(
     .at(-1);
 }
 
-/**
- * The application's raised risks in the playbook catalogue's own order, so
- * Resolve lists them exactly as Assess does. A finding whose risk the catalogue
- * does not list — an older run, or an unreachable backend — keeps its place at
- * the end rather than disappearing.
- */
+/** Orders an app's risk findings as the catalogue does; risks it does not list keep their order at the end. */
 export function developerRiskOrder(
   risks: { risk_id: string }[] | undefined,
   findings: Finding[] | undefined,
@@ -516,11 +530,7 @@ export function developerRiskOrder(
   });
 }
 
-/**
- * The risk a developer should land on when they open an application: the first
- * finding still needing action, else one they are already remediating, else the
- * first finding at all. Returns null when there is nothing to open.
- */
+/** The risk a developer lands on: first needing action, else one being remediated, else the first; null if none. */
 export function preferredDeveloperRisk(
   findings: Finding[] | undefined,
   tickets: Ticket[] | undefined,
@@ -539,6 +549,7 @@ export function preferredDeveloperRisk(
   return riskId;
 }
 
+/** Keys of completed steps whose content changed since the hashes were captured. */
 export function changedSinceCompleted(
   live: LiveStep[],
   hashesAtLoad: Map<string, string> | undefined,
@@ -556,15 +567,18 @@ export function changedSinceCompleted(
   return changed;
 }
 
+/** Each step's content hash by step key. */
 export function contentHashes(steps: ControlStep[]): Map<string, string> {
   return new Map(steps.map((step) => [step.step_key, step.content_hash]));
 }
 
+/** A control's summary when it adds something beyond the title. */
 export function controlSummary(control: ControlDetail): string | undefined {
   const summary = (control.summary ?? "").trim();
   return summary && summary !== control.title.trim() ? summary : undefined;
 }
 
+/** True when a control's intro is empty or just its summary paragraph. */
 export function introRepeatsSummary(control: ControlDetail): boolean {
   if (control.intro.length === 0) return true;
   if (control.intro.length > 1) return false;

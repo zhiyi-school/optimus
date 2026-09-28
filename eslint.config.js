@@ -1,3 +1,7 @@
+/**
+ * ESLint flat config for the TypeScript and React sources.
+ */
+
 import js from "@eslint/js";
 import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";

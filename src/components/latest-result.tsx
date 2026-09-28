@@ -1,3 +1,7 @@
+/**
+ * Panel summarizing the latest automated result for a risk.
+ */
+
 import { Card, CardContent } from "@/components/ui/card";
 import { StatusBadge } from "@/components/data-display";
 import { mapVerdictToFindingStatus } from "@/data/sync";
@@ -12,6 +16,7 @@ const STATUS_LABELS: Record<string, string> = {
   TRAFFIC_INTERCEPTION_NOT_OBSERVED: "Traffic interception not observed",
 };
 
+/** Label and value pair in a description list. */
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
@@ -21,6 +26,7 @@ function Field({ label, value }: { label: string; value: string }) {
   );
 }
 
+/** Shows the latest verdict, summary and run details, or nothing when there is no result. */
 export function LatestResultPanel({ result }: { result: LatestResultDetail | undefined }) {
   if (!result) return null;
   return (

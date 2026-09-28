@@ -1,3 +1,7 @@
+/**
+ * Recognized legacy-schema fallbacks for classification, attachment metadata and reassessment RPCs.
+ */
+
 import { supabase } from "@/data/supabase";
 import type {
   Finding,
@@ -24,6 +28,7 @@ interface ClassificationInput {
   reason: string;
 }
 
+/** Classifies via `classify_risk_entry`, falling back to legacy `classify_risk` only when it is missing. */
 export async function classifyRiskWithCompatibility(
   input: ClassificationInput,
 ): Promise<ClassificationResult> {
@@ -88,6 +93,7 @@ export interface AttachmentInsertResult {
   capability: AttachmentMetadataCapability;
 }
 
+/** Inserts attachment metadata, retrying without provider columns only when those columns are missing. */
 export async function insertAttachmentWithCompatibility(
   row: AttachmentMetadataRow,
 ): Promise<AttachmentInsertResult> {
@@ -140,12 +146,14 @@ export async function insertAttachmentWithCompatibility(
   return { attachment: legacy.data, capability: "legacy_supabase" };
 }
 
+/** True when a PostgREST error means the called RPC does not exist. */
 function isMissingFunction(error: unknown): boolean {
   const code = (error as { code?: unknown })?.code;
   const message = String((error as { message?: unknown })?.message ?? "");
   return code === "PGRST202" || /could not find the function/i.test(message);
 }
 
+/** True when an error means the attachment provider metadata columns do not exist. */
 function isMissingAttachmentMetadataColumn(error: unknown): boolean {
   const code = (error as { code?: unknown })?.code;
   const message = String((error as { message?: unknown })?.message ?? "");
@@ -163,11 +171,7 @@ export interface ReassessmentRequestResult {
   capability: ReassessmentCapability;
 }
 
-/**
- * One submission, one request. The RPC is atomic and deduplicates on the
- * submission id, so a retry after a lost response resolves to the request that
- * write already made rather than queueing another.
- */
+/** Queues a reassessment via the atomic RPC, deduplicated on submission id; null when the RPC is missing. */
 export async function requestReassessmentWithCompatibility(input: {
   conversationId: string;
   findingId: string;
@@ -189,8 +193,7 @@ export async function requestReassessmentWithCompatibility(input: {
     p_message: input.message,
     p_submission_id: input.submissionId,
   });
-  // Only a database without migration 0030 falls back; a permission, validation
-  // or network failure keeps its own meaning.
+  // Only a missing function (pre-0030) falls back; permission, validation and network errors rethrow.
   if (error) {
     if (isMissingFunction(error)) {
       debug("request_reassessment_entry missing; caller uses legacy path", { code: error.code });

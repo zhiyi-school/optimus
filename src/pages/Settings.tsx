@@ -1,3 +1,7 @@
+/**
+ * Settings page showing the user's profile, roles, team and automation config paths.
+ */
+
 import type { ReactNode } from "react";
 import { useAuth } from "@/auth/useAuth";
 import { PageHeader } from "@/components/common";
@@ -13,6 +17,7 @@ const roleLabels: Record<string, string> = {
   admin: "Admin",
 };
 
+/** Renders profile details and, for users who can run tests, the backend's default config paths. */
 export default function Settings() {
   const { profile, can } = useAuth();
   const { data: teams } = useTeams();
@@ -69,6 +74,7 @@ export default function Settings() {
   );
 }
 
+/** Renders a label and its value on one row. */
 function Row({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="flex items-center justify-between text-sm">

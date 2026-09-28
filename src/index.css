@@ -1,3 +1,5 @@
+/* Tailwind layers and the dashboard's theme colour variables and base styles. */
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

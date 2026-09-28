@@ -1,3 +1,7 @@
+/**
+ * Transport types for the automation backend's runs, reports, apps, provisioning and sync status.
+ */
+
 import type { ControlSummary } from "@/api/playbook-types";
 
 export type AutomationPlatform = "ios" | "android";

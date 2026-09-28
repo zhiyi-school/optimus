@@ -1,3 +1,7 @@
+/**
+ * Automation backend endpoints for playbook controls, their source archives and playbook status.
+ */
+
 import { automationAssetUrl, automationClient } from "@/api/automation-client";
 import { isBackendUnavailable } from "@/api/automation-services";
 import type { AutomationPlatform } from "@/api/automation-types";
@@ -13,6 +17,7 @@ const debug = createDebug("api:playbook");
 const encode = encodeURIComponent;
 
 export const playbookApi = {
+  /** Lists the playbook controls that mitigate a risk on a platform. */
   async listRiskControls(
     platform: AutomationPlatform,
     riskId: string,
@@ -25,6 +30,7 @@ export const playbookApi = {
     return data;
   },
 
+  /** Fetches one control with its steps and content. */
   async getControl(platform: AutomationPlatform, controlId: string): Promise<ControlDetail> {
     debug("fetching control", { platform, controlId });
     const { data } = await automationClient.get(
@@ -34,6 +40,7 @@ export const playbookApi = {
     return data;
   },
 
+  /** Fetches a control's source archive metadata, or null when the backend lacks the endpoint. */
   async getControlSource(
     platform: AutomationPlatform,
     controlId: string,
@@ -55,13 +62,14 @@ export const playbookApi = {
     }
   },
 
+  /** Absolute URL for downloading a control's source archive. */
   sourceDownloadUrl(platform: AutomationPlatform, controlId: string): string {
     return automationAssetUrl(
       `/platforms/${encode(platform)}/controls/${encode(controlId)}/source/download`,
     );
   },
 
-  /** `null` when the backend predates the playbook endpoints, so callers can degrade. */
+  /** Fetches the platform's playbook status, or null when the backend predates the playbook endpoints. */
   async getStatus(platform: AutomationPlatform): Promise<PlaybookStatus | null> {
     debug("fetching playbook status", { platform });
     try {
@@ -85,6 +93,7 @@ export const playbookApi = {
     }
   },
 
+  /** Asks the backend to re-read the platform's playbook and returns the new status. */
   async reload(platform: AutomationPlatform): Promise<PlaybookStatus> {
     debug("reloading playbook", { platform });
     const { data } = await automationClient.post(`/platforms/${encode(platform)}/playbook/reload`);

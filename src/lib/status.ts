@@ -1,3 +1,7 @@
+/**
+ * Labels, tones and state derivations for finding, ticket, conversation and assessment statuses.
+ */
+
 import type {
   Assessment,
   AssessmentRunRequest,
@@ -38,11 +42,13 @@ export const severityConfig: Record<string, { label: string; tone: Tone }> = {
   info: { label: "Info", tone: "neutral" },
 };
 
+/** The tone for a severity, neutral when unknown or missing. */
 export function severityToneOf(severity: string | null | undefined): Tone {
   if (!severity) return "neutral";
   return severityConfig[severity.toLowerCase()]?.tone ?? "neutral";
 }
 
+/** The label for a severity, capitalising unknown values; "Unrated" when missing. */
 export function severityLabelOf(severity: string | null | undefined): string {
   if (!severity) return "Unrated";
   return (
@@ -106,7 +112,7 @@ export const conversationEventConfig: Record<
   fix_submitted: { label: "Fix submitted for review", tone: "info" },
 };
 
-/** Renders an event from its own recorded values, never by showing the stored metadata. */
+/** Summarises a conversation event from its recorded status values, never by showing raw metadata. */
 export function conversationEventSummary(
   kind: ConversationEventKind,
   metadata: Record<string, unknown> | null | undefined,
@@ -120,6 +126,7 @@ export function conversationEventSummary(
     : `Classification set to ${to}`;
 }
 
+/** The label of a known finding status, or null. */
 function findingStatusLabelOf(value: unknown): string | null {
   if (typeof value !== "string") return null;
   return findingStatusConfig[value as FindingStatus]?.label ?? null;
@@ -171,10 +178,7 @@ export interface AssessmentRunState {
   needsConfiguration: boolean;
 }
 
-/**
- * What to tell someone about an assessment that has not finished, combining the
- * assessment's own status with its durable execution request.
- */
+/** Describes an unfinished assessment's run state from its status and its durable execution request. */
 export function assessmentRunState(
   assessment: Pick<Assessment, "status"> | null | undefined,
   request: AssessmentRunRequest | null | undefined,
@@ -241,11 +245,10 @@ export function assessmentRunState(
   if (assessment.status === "waiting") {
     return { ...idle, label: "Waiting to start", tone: "warning", canRetry: true };
   }
-  // Queued with no request yet: nothing has been asked of the worker.
   return { ...idle, label: "Queued for automated testing", tone: "neutral", canRetry: true };
 }
 
-/** Statuses a page should keep polling while it is open. */
+/** True while the assessment or its run request is in a state a page should keep polling. */
 export function isTransitionalRunState(
   assessment: Pick<Assessment, "status"> | null | undefined,
   request: AssessmentRunRequest | null | undefined,
@@ -282,13 +285,7 @@ export interface AssessmentStagePresentation {
   tone?: Tone;
 }
 
-/**
- * Places an ordered set of stages into a sequential stepper: every stage
- * before the first unresolved one is "complete", that one stage alone is
- * "current" (or "failed"/"unknown"), and everything after it is "future" —
- * regardless of what a later stage's own raw state happens to report. A
- * stepper never shows step 3 done while step 1 is still spinning.
- */
+/** Sequences stages: done ones before the first unresolved stage, that stage current, every later one future. */
 export function sequenceAssessmentStages(raw: RawStageInput[]): AssessmentStagePresentation[] {
   let resolved = true;
   return raw.map((stage): AssessmentStagePresentation => {
@@ -320,13 +317,7 @@ export interface AssessmentStageContext {
   assessment: Pick<Assessment, "status" | "completed_tests" | "total_tests"> | null | undefined;
 }
 
-/**
- * The whole setup-and-run workflow as one sequence: three configuration
- * stages, automated testing, then analysis. Configuration and testing are
- * normalized from separate sources (provisioning readiness vs. the durable
- * run request) and only combined here, so a device or platform blocker on
- * testing can never make configuration look unfinished, or vice versa.
- */
+/** Builds the setup, testing and analysis stepper, keeping configuration and testing sources independent. */
 export function normalizeAssessmentStages(ctx: AssessmentStageContext): AssessmentStagePresentation[] {
   const setup: RawStageInput[] = ctx.provisioningStages?.length
     ? ctx.provisioningStages

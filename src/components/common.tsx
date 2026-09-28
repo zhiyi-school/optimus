@@ -1,3 +1,7 @@
+/**
+ * Shared page building blocks: headers, stat cards, loading, error and empty states, search and banners.
+ */
+
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { AlertTriangle, Inbox, Loader2, Search } from "lucide-react";
@@ -6,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
+/** Page title with optional description and action buttons. */
 export function PageHeader({
   title,
   description,
@@ -28,6 +33,7 @@ export function PageHeader({
   );
 }
 
+/** Card showing a labelled metric in a tone colour, optionally linking elsewhere. */
 export function StatCard({
   label,
   value,
@@ -67,6 +73,7 @@ export function StatCard({
   return <Card>{body}</Card>;
 }
 
+/** Centred spinner with a label. */
 export function LoadingState({ label = "Loading…" }: { label?: string }) {
   return (
     <div className="flex flex-col items-center justify-center gap-2 py-16 text-muted-foreground">
@@ -76,6 +83,7 @@ export function LoadingState({ label = "Loading…" }: { label?: string }) {
   );
 }
 
+/** Error message panel with an optional retry button. */
 export function ErrorState({
   message = "Something went wrong.",
   onRetry,
@@ -96,6 +104,7 @@ export function ErrorState({
   );
 }
 
+/** Dashed placeholder panel with a title, description and optional action. */
 export function EmptyState({
   title,
   description,
@@ -117,6 +126,7 @@ export function EmptyState({
   );
 }
 
+/** Text input with a search icon that reports its value on change. */
 export function SearchInput({
   value,
   onChange,
@@ -139,12 +149,14 @@ export function SearchInput({
   );
 }
 
+/** Wrapping row for filter controls. */
 export function FilterBar({ children }: { children: ReactNode }) {
   return (
     <div className="mb-4 flex flex-wrap items-center gap-2">{children}</div>
   );
 }
 
+/** Info or success banner with an optional action and a dismiss button. */
 export function DismissibleBanner({
   message,
   action,

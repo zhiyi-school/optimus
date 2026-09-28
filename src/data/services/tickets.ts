@@ -1,3 +1,7 @@
+/**
+ * Supabase operations on tickets, reassessment (retest) runs and risk acceptance.
+ */
+
 import { supabase } from "@/data/supabase";
 import type { Application, Finding, RetestRun, RiskAcceptance, RiskAcceptanceDecision, Ticket, TicketStatus, TicketType } from "@/data/types";
 import { requireUserId } from "./common";
@@ -18,6 +22,7 @@ export interface TicketFilters {
 }
 
 export const ticketData = {
+  /** Lists tickets matching the filters, most recently updated first. */
   async list(filters: TicketFilters = {}): Promise<Ticket[]> {
     debug("listing tickets", filters);
     let query = supabase.from("tickets").select("*");
@@ -40,6 +45,7 @@ export const ticketData = {
     return data;
   },
 
+  /** Fetches one ticket, or null. */
   async get(id: string): Promise<Ticket | null> {
     debug("fetching ticket", { id });
     const { data, error } = await supabase
@@ -55,6 +61,7 @@ export const ticketData = {
     return data;
   },
 
+  /** Lists filtered tickets with their finding and application joined. */
   async listWithRelations(
     filters: TicketFilters = {},
   ): Promise<(Ticket & { finding: Finding | null; application: Application | null })[]> {
@@ -82,6 +89,7 @@ export const ticketData = {
     })[];
   },
 
+  /** Fetches one ticket with its finding and application joined, or null. */
   async getWithRelations(
     id: string,
   ): Promise<
@@ -103,6 +111,7 @@ export const ticketData = {
       | null;
   },
 
+  /** Lists the tickets raised against any of the findings. */
   async listByFindingIds(findingIds: string[]): Promise<Ticket[]> {
     if (findingIds.length === 0) {
       debug("no findings; skipping ticket query");
@@ -121,6 +130,7 @@ export const ticketData = {
     return data;
   },
 
+  /** Creates an open remediation ticket and records its start in the risk conversation. */
   async createRemediationTicket(input: {
     finding_id: string;
     application_id: string;
@@ -185,6 +195,7 @@ export const ticketData = {
     return data;
   },
 
+  /** Creates a risk acceptance ticket under review with its pending acceptance request. */
   async createRiskAcceptanceTicket(input: {
     finding_id: string;
     application_id: string;
@@ -245,6 +256,7 @@ export const ticketData = {
     return ticket;
   },
 
+  /** Creates an open app provisioning ticket. */
   async createAppProvisioningTicket(input: {
     application_id: string;
     title: string;
@@ -279,6 +291,7 @@ export const ticketData = {
     return data;
   },
 
+  /** Sets a ticket's status, stamping `closed_at` on close; withdrawal must use `withdraw()`. */
   async updateStatus(ticketId: string, status: TicketStatus): Promise<Ticket> {
     debug("updating ticket status", { ticketId, status });
     if (status === "withdrawn") {
@@ -310,12 +323,7 @@ export const ticketData = {
     return data;
   },
 
-  /**
-   * The caller has already checked the id against the controls the backend
-   * currently offers; Supabase cannot validate against the playbook catalogue.
-   * The status filter makes initialisation idempotent across tabs — a second
-   * writer sees the selection already stored and returns it unchanged.
-   */
+  /** Sets the remediation approach; the caller must validate the id against the backend's live controls. */
   async setSelectedControl(ticketId: string, controlId: string): Promise<Ticket> {
     const trimmed = controlId.trim();
     debug("selecting remediation control", { ticketId, controlId: trimmed });
@@ -358,6 +366,7 @@ export const ticketData = {
     return data;
   },
 
+  /** Withdraws a remediation with a required reason and records it in the conversation. */
   async withdraw(ticketId: string, reason: string): Promise<Ticket> {
     const trimmed = reason.trim();
     debug("withdrawing remediation", { ticketId, reasonLength: trimmed.length });
@@ -400,6 +409,7 @@ export const ticketData = {
     return data;
   },
 
+  /** Moves a remediation back to in progress and logs the resumption. */
   async resume(ticketId: string): Promise<Ticket> {
     debug("resuming remediation", { ticketId });
     const { data, error } = await supabase
@@ -423,6 +433,7 @@ export const ticketData = {
 };
 
 export const retestData = {
+  /** Lists a finding's retest runs, newest first. */
   async listForFinding(findingId: string): Promise<RetestRun[]> {
     debug("listing retest runs", { findingId });
     const { data, error } = await supabase
@@ -438,6 +449,7 @@ export const retestData = {
     return data;
   },
 
+  /** Finds the conversation's newest queued or running retest, or null. */
   async findActiveForConversation(conversationId: string): Promise<RetestRun | null> {
     debug("finding active retest", { conversationId });
     const { data, error } = await supabase
@@ -456,12 +468,7 @@ export const retestData = {
     return data;
   },
 
-  /**
-   * With migration 0030 the whole request is one atomic call keyed on the
-   * submission. The path below is the pre-0030 fallback, where the database
-   * still allows only one active reassessment per risk and a retry therefore
-   * completes the half-finished attempt instead of duplicating it.
-   */
+  /** Queues a reassessment once per submission, via the 0030 RPC or the pre-0030 single-active fallback. */
   async requestRetest(input: {
     conversationId: string;
     findingId: string;
@@ -556,10 +563,7 @@ export const retestData = {
     return { run, entryId: entry.id };
   },
 
-  /**
-   * Claims the queued request before any automation starts, so a run can never
-   * begin against a request the developer withdrew a moment earlier.
-   */
+  /** Claims a queued reassessment before automation starts, so a just-withdrawn request never runs. */
   async startRun(id: string): Promise<RetestRun> {
     debug("rpc start_reassessment", { retestId: id });
     const { data, error } = await supabase.rpc("start_reassessment", { p_retest_id: id });
@@ -574,6 +578,7 @@ export const retestData = {
     return data as RetestRun;
   },
 
+  /** Withdraws a queued reassessment with a required reason, restoring the ticket's prior status. */
   async withdraw(retestId: string, reason: string): Promise<RetestRun> {
     const trimmed = reason.trim();
     debug("withdrawing reassessment", { retestId, reasonLength: trimmed.length });
@@ -604,6 +609,7 @@ export const retestData = {
     return run;
   },
 
+  /** Links a retest to its automation run and records the start in the conversation once. */
   async markRunning(id: string, externalTestRunId: string): Promise<RetestRun> {
     debug("marking retest running", { retestId: id, externalTestRunId });
     const { data, error } = await supabase
@@ -629,6 +635,7 @@ export const retestData = {
     return data;
   },
 
+  /** Records a retest's result and final status. */
   async complete(id: string, result: string, status: "completed" | "failed") {
     debug("completing retest", { retestId: id, status, resultLength: result.length });
     const { data, error } = await supabase
@@ -647,6 +654,7 @@ export const retestData = {
 };
 
 export const riskAcceptanceData = {
+  /** Fetches a ticket's risk acceptance request, or null. */
   async getForTicket(ticketId: string): Promise<RiskAcceptance | null> {
     debug("fetching risk acceptance", { ticketId });
     const { data, error } = await supabase
@@ -662,6 +670,7 @@ export const riskAcceptanceData = {
     return data;
   },
 
+  /** Lists risk acceptance requests awaiting a decision, newest first. */
   async listPending(): Promise<RiskAcceptance[]> {
     debug("listing pending risk acceptances");
     const { data, error } = await supabase
@@ -677,6 +686,7 @@ export const riskAcceptanceData = {
     return data;
   },
 
+  /** Records a risk acceptance decision and moves the ticket to accepted or rejected. */
   async review(
     id: string,
     decision: RiskAcceptanceDecision,

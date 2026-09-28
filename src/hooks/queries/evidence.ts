@@ -1,3 +1,7 @@
+/**
+ * Query and mutation hooks for findings and their finding or ticket evidence.
+ */
+
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { evidenceData } from "@/data/services/evidence";
 import { findingData, type FindingFilters } from "@/data/services/findings";
@@ -7,6 +11,7 @@ import { createDebug } from "@/lib/debug";
 
 const debug = createDebug("hooks:queries:evidence");
 
+/** Fetches findings with their applications, filtered as given. */
 export function useFindings(filters: FindingFilters = {}) {
   return useQuery({
     queryKey: evidenceKeys.findings(filters),
@@ -19,6 +24,7 @@ export function useFindings(filters: FindingFilters = {}) {
   });
 }
 
+/** Fetches one finding with its application. */
 export function useFinding(id: string | undefined) {
   return useQuery({
     queryKey: evidenceKeys.finding(id),
@@ -32,6 +38,7 @@ export function useFinding(id: string | undefined) {
   });
 }
 
+/** Fetches a finding's status history. */
 export function useFindingHistory(findingId: string | undefined) {
   return useQuery({
     queryKey: evidenceKeys.findingHistory(findingId),
@@ -45,6 +52,7 @@ export function useFindingHistory(findingId: string | undefined) {
   });
 }
 
+/** Fetches a finding's raw evidence rows. */
 export function useFindingEvidence(findingId: string | undefined) {
   return useQuery({
     queryKey: evidenceKeys.findingEvidence(findingId),
@@ -58,6 +66,7 @@ export function useFindingEvidence(findingId: string | undefined) {
   });
 }
 
+/** Fetches a finding's evidence as display items, signing storage paths or using external URLs. */
 export function useFindingEvidenceItems(findingId: string | undefined) {
   return useQuery({
     queryKey: evidenceKeys.findingItems(findingId),
@@ -90,6 +99,7 @@ export function useFindingEvidenceItems(findingId: string | undefined) {
   });
 }
 
+/** Fetches a ticket's evidence as display items, signing storage paths or using external URLs. */
 export function useTicketEvidenceItems(ticketId: string | undefined) {
   return useQuery({
     queryKey: evidenceKeys.ticketItems(ticketId),
@@ -122,6 +132,7 @@ export function useTicketEvidenceItems(ticketId: string | undefined) {
   });
 }
 
+/** Uploads a file as ticket evidence and refreshes the ticket's evidence and activity. */
 export function useUploadTicketEvidence(ticketId: string | undefined) {
   const invalidate = useInvalidateQueries();
   return useMutation({

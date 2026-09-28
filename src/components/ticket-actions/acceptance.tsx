@@ -1,3 +1,7 @@
+/**
+ * Dialogs for requesting and reviewing risk acceptance.
+ */
+
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -9,6 +13,7 @@ import type { Finding } from "@/data/types";
 
 const debug = createDebug("component:ticket-actions:acceptance");
 
+/** Button and dialog for requesting risk acceptance of a finding. */
 export function AcceptRiskButton({ finding }: { finding: Finding }) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
@@ -18,6 +23,7 @@ export function AcceptRiskButton({ finding }: { finding: Finding }) {
   const navigate = useNavigate();
   const create = useCreateRiskAcceptanceTicket();
 
+  /** Creates the risk acceptance ticket, then closes the dialog and opens the finding. */
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     debug("requests risk acceptance", {
@@ -112,6 +118,7 @@ export function AcceptRiskButton({ finding }: { finding: Finding }) {
 }
 
 
+/** Dialog for accepting or rejecting a risk acceptance request with an optional comment. */
 export function ReviewRiskAcceptanceDialog({
   ticketId,
   riskAcceptanceId,
@@ -123,6 +130,7 @@ export function ReviewRiskAcceptanceDialog({
   const [comment, setComment] = useState("");
   const review = useReviewRiskAcceptance();
 
+  /** Records the review decision and closes the dialog. */
   async function decide(decision: "accepted" | "rejected") {
     debug("reviews risk acceptance", {
       ticketId,
@@ -176,5 +184,3 @@ export function ReviewRiskAcceptanceDialog({
     </Dialog>
   );
 }
-
-/** A conversation-owned retest has no ticket to move, so the ticket is optional. */

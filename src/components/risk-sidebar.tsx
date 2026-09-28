@@ -1,3 +1,7 @@
+/**
+ * Risk list sidebar shared by the security and developer risk workspaces.
+ */
+
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
@@ -33,10 +37,7 @@ interface RiskSidebarProps {
   heading?: string;
 }
 
-/**
- * The master column both roles share. Security passes the assessment's risk
- * catalogue; the developer passes the risks their findings cover.
- */
+/** App summary, progress and navigable risk list, collapsing to an accordion below `lg`. */
 export function RiskSidebar({
   backTo,
   backLabel,
@@ -91,7 +92,6 @@ export function RiskSidebar({
           </div>
         </div>
 
-        {/* Below lg the list is an accordion, so the detail pane is not pushed off-screen. */}
         <button
           type="button"
           onClick={() => {

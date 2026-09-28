@@ -1,3 +1,7 @@
+/**
+ * Security test page for one assessment risk: running automation, evidence and the conversation.
+ */
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
@@ -65,12 +69,13 @@ import { retestData } from "@/data/services/tickets";
 
 const debug = createDebug("page:TestDetail");
 
+/** Keys the test page on :testId so the routes sharing this element remount it per test. */
 export default function TestDetail() {
-  // Both routes share this element, so :testId changes without remounting.
   const { testId } = useParams<{ testId: string }>();
   return <TestPage key={testId} />;
 }
 
+/** Shows a risk's test controls, run progress, evidence and conversation within its assessment. */
 function TestPage() {
   const { assessmentId, testId, runId } = useParams<{
     assessmentId: string;
@@ -79,7 +84,6 @@ function TestPage() {
   }>();
   const queryClient = useQueryClient();
   const { profile, can } = useAuth();
-  // Security reads the outcome from the conversation's run history instead.
   const isSecurity = hasRole(profile?.roles, "security");
 
   const assessmentQuery = useAssessment(assessmentId);
@@ -175,14 +179,12 @@ function TestPage() {
   const resync = useResyncRun(watchedRunId);
 
   const progress = riskProgressInRun(runEvents, adoptedRun, appExternalId, testId);
-  // The device runs one risk at a time: being inside the run is not being executed by it.
   const executing = watching || progress?.phase === "running";
   const queued = progress?.phase === "queued";
   // The device takes one run at a time, so any run at all blocks starting this test.
   const deviceBusy = !executing && !queued && !!platformRun;
   const busy = executing || queued || deviceBusy;
 
-  // A run this tab only observed still has to refresh the page once this risk is done.
   const observedPhaseRef = useRef<RiskRunPhase | undefined>();
   useEffect(() => {
     const previous = observedPhaseRef.current;
@@ -194,6 +196,7 @@ function TestPage() {
     void queryClient.invalidateQueries({ queryKey: evidenceKeys.findings() });
   }, [progress?.phase, refetch, queryClient, assessmentId]);
 
+  /** Runs this risk's automated test, claiming any pending reassessment, and refreshes results when it ends. */
   async function runTest() {
     if (!platform || !appExternalId || !testId) {
       debug("cannot run test", { hasPlatform: !!platform, hasAppExternalId: !!appExternalId, testId });
@@ -252,6 +255,7 @@ function TestPage() {
     }
   }
 
+  /** Stops waiting on the current run while leaving it running on the automation host. */
   function stopWaiting() {
     debug("stops waiting for run", { runId: activeRunId });
     cancelRef.current.cancelled = true;
@@ -260,8 +264,7 @@ function TestPage() {
     setWatching(false);
   }
 
-  // RLS hides an assessment outside the viewer's application scope, so an empty
-  // result here is a permission answer rather than a slow load.
+  // RLS hides out-of-scope assessments, so an empty success is a permission answer, not a slow load.
   if (assessmentQuery.isSuccess && !assessment) {
     return <ErrorState message="You do not have access to this assessment." />;
   }

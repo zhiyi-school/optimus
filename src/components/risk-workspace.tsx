@@ -1,9 +1,14 @@
+/**
+ * Layout pieces for risk workspaces: page grid, detail grid, header, evidence rail and sections.
+ */
+
 import { type ReactNode } from "react";
 import { Paperclip, type LucideIcon } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { plainText } from "@/lib/inline-markdown";
 import { cn } from "@/lib/utils";
 
+/** Two-column layout with the sidebar beside the main content. */
 export function RiskWorkspace({
   sidebar,
   children,
@@ -19,6 +24,7 @@ export function RiskWorkspace({
   );
 }
 
+/** Content grid with an optional right-hand rail on extra-wide screens. */
 export function RiskDetailGrid({ rail, children }: { rail?: ReactNode; children: ReactNode }) {
   return (
     <div className={cn("grid grid-cols-1 gap-4", rail && "xl:grid-cols-[minmax(0,1fr)_17rem]")}>
@@ -28,6 +34,7 @@ export function RiskDetailGrid({ rail, children }: { rail?: ReactNode; children:
   );
 }
 
+/** Risk title row with its icon, badges, description and metadata. */
 export function RiskHeader({
   icon: Icon,
   name,
@@ -62,6 +69,7 @@ export function RiskHeader({
   );
 }
 
+/** Sticky evidence card with a title and item count. */
 export function EvidenceRail({
   title = "Evidence",
   count,
@@ -89,6 +97,7 @@ export function EvidenceRail({
   );
 }
 
+/** Titled section with an optional aside beside the heading. */
 export function WorkspaceSection({
   title,
   aside,

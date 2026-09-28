@@ -1,3 +1,7 @@
+/**
+ * Supabase operations on assessments and assessment run requests.
+ */
+
 import { supabase } from "@/data/supabase";
 import type {
   Application,
@@ -9,6 +13,7 @@ import { createDebug } from "@/lib/debug";
 const debug = createDebug("data:assessments");
 
 export const assessmentData = {
+  /** Lists assessments, most recently updated first. */
   async list(): Promise<Assessment[]> {
     debug("listing assessments");
     const { data, error } = await supabase
@@ -23,6 +28,7 @@ export const assessmentData = {
     return data;
   },
 
+  /** Fetches one assessment, or null. */
   async get(id: string): Promise<Assessment | null> {
     debug("fetching assessment", { id });
     const { data, error } = await supabase
@@ -38,6 +44,7 @@ export const assessmentData = {
     return data;
   },
 
+  /** Inserts or updates an assessment keyed on its `external_id`. */
   async upsertByExternalId(
     assessment: Partial<Assessment> & { external_id: string },
   ): Promise<Assessment> {
@@ -62,6 +69,7 @@ export const assessmentData = {
     return data;
   },
 
+  /** Finds the assessment with this `external_id`, or null. */
   async findByExternalId(externalId: string): Promise<Assessment | null> {
     debug("finding assessment by external id", { externalId });
     const { data, error } = await supabase
@@ -81,7 +89,7 @@ export const assessmentData = {
     return data;
   },
 
-  /** The placeholder row created from the dashboard, before any run has been linked to it. */
+  /** Finds the app's dashboard-created `manual::` placeholder assessment, before any run is linked. */
   async findPlaceholderForApplication(applicationId: string): Promise<Assessment | null> {
     debug("finding placeholder assessment", { applicationId });
     const { data, error } = await supabase
@@ -104,6 +112,7 @@ export const assessmentData = {
     return data;
   },
 
+  /** Applies a partial update to an assessment. */
   async update(assessmentId: string, patch: Partial<Assessment>): Promise<Assessment> {
     debug("updating assessment", { assessmentId, fields: Object.keys(patch) });
     const { data, error } = await supabase
@@ -120,6 +129,7 @@ export const assessmentData = {
     return data;
   },
 
+  /** Links a run to a placeholder assessment; null when it is no longer a `manual::` placeholder. */
   async claimPlaceholderForRun(
     assessmentId: string,
     patch: Partial<Assessment> & { external_id: string },
@@ -144,6 +154,7 @@ export const assessmentData = {
     return data;
   },
 
+  /** Finds any one assessment for the application, or null. */
   async findForApplication(applicationId: string): Promise<Assessment | null> {
     debug("finding assessment for application", { applicationId });
     const { data, error } = await supabase
@@ -164,6 +175,7 @@ export const assessmentData = {
     return data;
   },
 
+  /** Creates an assessment row. */
   async create(
     assessment: Partial<Assessment> & { external_id: string; application_id: string },
   ): Promise<Assessment> {
@@ -185,6 +197,7 @@ export const assessmentData = {
     return data;
   },
 
+  /** Lists assessments with their application joined, most recently updated first. */
   async listWithApplications(): Promise<
     (Assessment & { application: Application | null })[]
   > {
@@ -204,6 +217,7 @@ export const assessmentData = {
     return data as (Assessment & { application: Application | null })[];
   },
 
+  /** Fetches one assessment with its application joined, or null. */
   async getWithApplication(
     id: string,
   ): Promise<(Assessment & { application: Application | null }) | null> {
@@ -227,7 +241,7 @@ export const assessmentData = {
 };
 
 export const assessmentRunRequestData = {
-  /** The one active request, or the most recent if none is active. */
+  /** Fetches the assessment's latest run request: the active one, or else the most recent. */
   async findForAssessment(assessmentId: string): Promise<AssessmentRunRequest | null> {
     debug("finding run request", { assessmentId });
     const { data, error } = await supabase
@@ -245,10 +259,7 @@ export const assessmentRunRequestData = {
     return data;
   },
 
-  /**
-   * Idempotent by design: the database returns the request already in flight
-   * rather than opening a second one, so a double click cannot queue two runs.
-   */
+  /** Requests a run; idempotent, since the database returns any request already in flight. */
   async request(assessmentId: string): Promise<AssessmentRunRequest> {
     debug("rpc request_assessment_run", { assessmentId });
     const { data, error } = await supabase.rpc("request_assessment_run", {

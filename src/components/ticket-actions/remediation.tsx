@@ -1,3 +1,7 @@
+/**
+ * Remediation ticket actions: start, resume, withdraw, withdrawal notice and request changes.
+ */
+
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/useAuth";
@@ -20,6 +24,7 @@ import type { Application, Finding, Ticket } from "@/data/types";
 
 const debug = createDebug("component:ticket-actions:remediation");
 
+/** Starts, continues or resumes remediation of a finding depending on its existing tickets. */
 export function WorkOnRiskButton({
   finding,
   application,
@@ -43,6 +48,7 @@ export function WorkOnRiskButton({
   const active = activeRemediationTicket(finding.id, tickets);
   const withdrawn = resumableRemediationTicket(finding.id, tickets);
   const resume = useResumeTicket(withdrawn?.id ?? "", finding.id);
+  /** Path to the remediation workspace, ticket or finding page, depending on access. */
   const ticketPath = (id: string) =>
     can("view_resolve") && finding.test_id
       ? `/resolve/applications/${finding.application_id}/risks/${encodeURIComponent(finding.test_id)}`
@@ -50,6 +56,7 @@ export function WorkOnRiskButton({
         ? `/resolve/tickets/${id}`
         : `/findings/${finding.id}`;
 
+  /** Starts remediation with the initial selected control and opens the resulting page. */
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     const candidates = selectableControls(definitions.data);
@@ -195,6 +202,7 @@ export function WorkOnRiskButton({
 }
 
 
+/** Dialog for withdrawing a remediation ticket with a required reason. */
 export function WithdrawRemediationDialog({
   ticket,
   size = "sm",
@@ -206,6 +214,7 @@ export function WithdrawRemediationDialog({
   const [reason, setReason] = useState("");
   const withdraw = useWithdrawTicket(ticket.id, ticket.finding_id);
 
+  /** Withdraws the ticket with the reason, then closes and clears the dialog. */
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     debug("withdraws remediation", { ticketId: ticket.id, reasonLength: reason.trim().length });
@@ -274,6 +283,7 @@ export function WithdrawRemediationDialog({
   );
 }
 
+/** Button that resumes a withdrawn remediation ticket. */
 export function ResumeRemediationButton({
   ticket,
   size = "sm",
@@ -303,6 +313,7 @@ export function ResumeRemediationButton({
   );
 }
 
+/** Shows who withdrew a remediation, when and why. */
 export function WithdrawalNotice({
   ticket,
   actorName,
@@ -331,6 +342,7 @@ export function WithdrawalNotice({
 }
 
 
+/** Dialog for security to send a ticket back with a comment. */
 export function RequestChangesDialog({
   ticketId,
   conversationId,
@@ -343,6 +355,7 @@ export function RequestChangesDialog({
   const updateStatus = useUpdateTicketStatus(ticketId);
   const sendMessage = useSendRiskMessage(conversationId ?? undefined);
 
+  /** Posts the comment to the conversation if any, then marks the ticket rejected. */
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     debug("requests changes", { ticketId, conversationId, commentLength: comment.trim().length });

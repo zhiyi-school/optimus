@@ -1,3 +1,7 @@
+/**
+ * Button that downloads a run's SARIF report export.
+ */
+
 import { useState } from "react";
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,6 +12,7 @@ import { errorMessage } from "@/lib/utils";
 
 const debug = createDebug("component:download-sarif-button");
 
+/** Renders the SARIF download button when an export is available for the run. */
 export function DownloadSarifButton({
   runTimestamp,
   available,
@@ -20,6 +25,7 @@ export function DownloadSarifButton({
 
   if (!available || !runTimestamp) return null;
 
+  /** Fetches the SARIF blob and saves it via a temporary link, reporting missing or failed exports. */
   async function download() {
     if (!runTimestamp) return;
     debug("downloads SARIF", { runTimestamp });

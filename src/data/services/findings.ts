@@ -1,3 +1,7 @@
+/**
+ * Supabase operations on findings, their history and risk classification.
+ */
+
 import { supabase } from "@/data/supabase";
 import type { Application, Finding, FindingHistory, FindingStatus } from "@/data/types";
 import { requireUserId } from "./common";
@@ -7,6 +11,7 @@ import { createDebug } from "@/lib/debug";
 
 const debug = createDebug("data:findings");
 
+/** Finding filters for debug logs, with the search text reduced to its length. */
 function filterSummary(filters: FindingFilters) {
   return { ...filters, search: filters.search?.length };
 }
@@ -20,6 +25,7 @@ export interface FindingFilters {
 }
 
 export const findingData = {
+  /** Lists findings matching the filters, newest first. */
   async list(filters: FindingFilters = {}): Promise<Finding[]> {
     debug("listing findings", filterSummary(filters));
     let query = supabase.from("findings").select("*");
@@ -40,6 +46,7 @@ export const findingData = {
     return data;
   },
 
+  /** Fetches one finding, or null. */
   async get(id: string): Promise<Finding | null> {
     debug("fetching finding", { id });
     const { data, error } = await supabase
@@ -55,6 +62,7 @@ export const findingData = {
     return data;
   },
 
+  /** Lists filtered findings with their application joined, newest first. */
   async listWithApplication(
     filters: FindingFilters = {},
   ): Promise<(Finding & { application: Application | null })[]> {
@@ -78,6 +86,7 @@ export const findingData = {
     return data as (Finding & { application: Application | null })[];
   },
 
+  /** Fetches one finding with its application joined, or null. */
   async getWithApplication(
     id: string,
   ): Promise<(Finding & { application: Application | null }) | null> {
@@ -99,6 +108,7 @@ export const findingData = {
     return data as (Finding & { application: Application | null }) | null;
   },
 
+  /** Lists a finding's status history, newest first. */
   async history(findingId: string): Promise<FindingHistory[]> {
     debug("listing finding history", { findingId });
     const { data, error } = await supabase
@@ -114,6 +124,7 @@ export const findingData = {
     return data;
   },
 
+  /** Inserts or updates a finding keyed on its backend `external_id`. */
   async upsertByExternalId(
     finding: Partial<Finding> & { external_id: string },
   ): Promise<Finding> {
@@ -138,6 +149,7 @@ export const findingData = {
     return data;
   },
 
+  /** Updates a finding's status, then records history (best effort) and an activity entry. */
   async updateStatus(
     findingId: string,
     newStatus: FindingStatus,
@@ -184,13 +196,7 @@ export const findingData = {
     return data;
   },
 
-  /**
-   * The risk classification is the finding's status. One database function
-   * writes the status, its history row and the conversation event together, so
-   * the decision can never land without the record of who made it and why. It
-   * also refuses a finding that belongs to a different application risk than
-   * the conversation it was requested from.
-   */
+  /** Sets a finding's classification with a required reason; one RPC writes status, history and event together. */
   async classify(input: {
     findingId: string;
     conversationId: string;

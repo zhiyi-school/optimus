@@ -1,3 +1,7 @@
+/**
+ * List of a risk's playbook control definitions.
+ */
+
 import { Link } from "react-router-dom";
 import { ArrowRight, BookOpen } from "lucide-react";
 import { EmptyState } from "@/components/common";
@@ -6,6 +10,7 @@ import { ToneBadge } from "@/components/resolve-display";
 import { isRemediationControl, playbookControlStatusLabels } from "@/lib/resolve";
 import type { ControlDetail } from "@/api/playbook-types";
 
+/** Lists playbook controls as cards with status, step count and whether they are an offered approach. */
 export function ControlDefinitionList({
   controls,
   linkTo,

@@ -1,3 +1,7 @@
+/**
+ * Checklist of a risk's remediation controls with status and step progress.
+ */
+
 import { Link } from "react-router-dom";
 import { AlertTriangle, ArrowRight, CheckCircle2, Circle, CircleDot } from "lucide-react";
 import { EmptyState } from "@/components/common";
@@ -23,6 +27,7 @@ const iconTone: Record<ControlProgressStatus, string> = {
   needs_changes: "text-danger",
 };
 
+/** Lists controls as cards linking or opening their steps, or an unavailable/empty state. */
 export function ControlChecklist({
   controls,
   linkTo,

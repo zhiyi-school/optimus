@@ -1,3 +1,7 @@
+/**
+ * Automation run detail page with live events, dashboard sync status and results.
+ */
+
 import { useParams } from "react-router-dom";
 import { PageHeader, LoadingState, ErrorState, EmptyState } from "@/components/common";
 import { Card, CardContent } from "@/components/ui/card";
@@ -19,6 +23,7 @@ import { errorMessage, formatDate, formatDuration } from "@/lib/utils";
 
 const debug = createDebug("page:RunDetail");
 
+/** Shows a run's metadata and sync status, streaming events while running and results once finished. */
 export default function RunDetail() {
   const { runTimestamp: runId } = useParams<{ runTimestamp: string }>();
   const { data: run, isLoading, isError, refetch } = useRunStatus(runId, { poll: true });
@@ -161,6 +166,7 @@ export default function RunDetail() {
   );
 }
 
+/** Renders a labelled, truncated metadata value. */
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div>

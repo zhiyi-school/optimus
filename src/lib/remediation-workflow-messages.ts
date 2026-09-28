@@ -1,5 +1,10 @@
+/**
+ * User-facing messages for remediation workflow blocks.
+ */
+
 import type { RemediationBlock } from "@/lib/remediation-workflow";
 
+/** The message explaining why a remediation action is blocked, or null when it is not. */
 export function remediationBlockMessage(block: RemediationBlock | null): string | null {
   if (!block) return null;
   switch (block.code) {
