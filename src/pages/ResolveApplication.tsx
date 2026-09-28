@@ -5,7 +5,10 @@ import { PlatformBadge } from "@/components/data-display";
 import { useApplications } from "@/hooks/queries/reference";
 import { useFindings } from "@/hooks/queries/evidence";
 import { useTickets } from "@/hooks/queries/tickets";
+import { createDebug } from "@/lib/debug";
 import { preferredDeveloperRisk } from "@/lib/resolve";
+
+const debug = createDebug("page:ResolveApplication");
 
 /**
  * There is no application overview in the developer flow: opening an application
@@ -30,6 +33,7 @@ export default function ResolveApplication() {
       <ErrorState
         message="Unable to load this application."
         onRetry={() => {
+          debug("retries application load", { applicationId });
           void applications.refetch();
           void findings.refetch();
         }}

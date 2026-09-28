@@ -1,7 +1,10 @@
 import { RefreshCw, X } from "lucide-react";
+import { createDebug } from "@/lib/debug";
 import { cn } from "@/lib/utils";
 import { toneClasses, type Tone } from "@/lib/status";
 import type { Progress } from "@/lib/resolve";
+
+const debug = createDebug("component:resolve-display");
 
 export function PlaybookUpdatedNotice({ onDismiss }: { onDismiss: () => void }) {
   return (
@@ -12,7 +15,10 @@ export function PlaybookUpdatedNotice({ onDismiss }: { onDismiss: () => void }) 
       </p>
       <button
         type="button"
-        onClick={onDismiss}
+        onClick={() => {
+          debug("dismisses playbook update notice");
+          onDismiss();
+        }}
         aria-label="Dismiss the update notice"
         className="shrink-0 rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
       >

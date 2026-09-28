@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Copy, TriangleAlert } from "lucide-react";
 import { tokenize, type CodeTokenKind } from "@/lib/code-highlight";
+import { createDebug } from "@/lib/debug";
+
+const debug = createDebug("component:code-block");
 
 const FEEDBACK_MS = 1500;
 
@@ -31,12 +34,15 @@ export function CodeBlock({ code, language }: { code: string; language?: string 
 
   async function copy() {
     clearTimeout(timer.current);
+    debug("copies code", { language: label, length: code.length });
     let next: CopyState = "failed";
     try {
       if (typeof navigator.clipboard?.writeText !== "function") throw new Error("unavailable");
       await navigator.clipboard.writeText(code);
       next = "copied";
-    } catch {
+      debug("copied code", { language: label });
+    } catch (error) {
+      debug("copy fails", { language: label }, error);
       next = "failed";
     }
     setState(next);

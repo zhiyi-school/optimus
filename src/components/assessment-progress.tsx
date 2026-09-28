@@ -7,12 +7,15 @@ import {
   normalizeAssessmentStages,
   type AssessmentStagePresentation,
 } from "@/lib/status";
+import { createDebug } from "@/lib/debug";
 import { cn, errorMessage, formatDate } from "@/lib/utils";
 import { useAssessmentRunRequest, useRequestAssessmentRun } from "@/hooks/queries/assessments";
 import { useAppProvisioning } from "@/hooks/queries/automation";
 import { useTickets } from "@/hooks/queries/tickets";
 import type { ProvisioningStage } from "@/api/automation-types";
 import type { Application, Assessment } from "@/data/types";
+
+const debug = createDebug("component:assessment-progress");
 
 const LIFECYCLE_LINE_CLASS: Record<AssessmentStagePresentation["lifecycle"], string> = {
   complete: "bg-primary/40",
@@ -232,7 +235,10 @@ export function AssessmentStatusPanel({
             size="sm"
             variant="outline"
             disabled={requestRun.isPending}
-            onClick={() => requestRun.mutate()}
+            onClick={() => {
+              debug("retries assessment run", { assessmentId: assessment.id, state: runState.label });
+              requestRun.mutate();
+            }}
           >
             {requestRun.isPending ? "Retrying…" : "Retry now"}
           </Button>
@@ -240,6 +246,7 @@ export function AssessmentStatusPanel({
         {runState.needsConfiguration && application && (
           <Link
             to={`/settings?app=${application.id}`}
+            onClick={() => debug("opens app configuration", { applicationId: application.id })}
             className="text-xs font-medium text-primary hover:underline"
           >
             Review the app configuration →
@@ -248,6 +255,7 @@ export function AssessmentStatusPanel({
         {provisioningTicket && !configurationReady && (
           <Link
             to={`/settings?app=${application?.id ?? ""}`}
+            onClick={() => debug("opens app provisioning", { applicationId: application?.id })}
             className="text-xs font-medium text-primary hover:underline"
           >
             Open app provisioning setup →

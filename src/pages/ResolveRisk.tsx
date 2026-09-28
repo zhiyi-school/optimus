@@ -33,6 +33,7 @@ import { useApplications, useProfiles } from "@/hooks/queries/reference";
 import { assessmentApi } from "@/api/automation-services";
 import { conversationTimeline } from "@/lib/conversation-timeline";
 import { combinedEvidence, latestResult } from "@/lib/automation-evidence";
+import { createDebug } from "@/lib/debug";
 import { PlaintextLiteralsCard } from "@/components/plaintext-literals";
 import { analysisArtifact, plaintextLiterals } from "@/lib/plaintext-literals";
 import {
@@ -43,6 +44,8 @@ import {
   testingProgress,
 } from "@/lib/resolve";
 import { riskIcon } from "@/lib/entity-icons";
+
+const debug = createDebug("page:ResolveRisk");
 
 export default function ResolveRisk() {
   const { riskId } = useParams<{ riskId: string }>();
@@ -151,6 +154,7 @@ function RiskPage() {
       <ErrorState
         message="Unable to load this application."
         onRetry={() => {
+          debug("retries application load", { applicationId });
           void applications.refetch();
           void findings.refetch();
         }}
@@ -182,7 +186,10 @@ function RiskPage() {
       ) : findings.isError ? (
         <ErrorState
           message="Unable to load findings for this application."
-          onRetry={() => void findings.refetch()}
+          onRetry={() => {
+            debug("retries findings load", { applicationId });
+            void findings.refetch();
+          }}
         />
       ) : !finding ? (
         <EmptyState
@@ -213,7 +220,10 @@ function RiskPage() {
                 ) : history.isError ? (
                   <ErrorState
                     message="The automation backend could not provide this risk's results."
-                    onRetry={() => void history.refetch()}
+                    onRetry={() => {
+                      debug("retries evidence load", { applicationId, riskId });
+                      void history.refetch();
+                    }}
                   />
                 ) : (
                   <EvidenceList items={railEvidence} />
@@ -226,7 +236,10 @@ function RiskPage() {
                 analysis={literals}
                 isLoading={analysis.isLoading}
                 isError={analysis.isError}
-                onRetry={() => void analysis.refetch()}
+                onRetry={() => {
+                  debug("retries plaintext analysis", { runTimestamp: newest?.run_timestamp });
+                  void analysis.refetch();
+                }}
                 controlHref={(controlId) =>
                   `/resolve/findings/${finding.id}/controls/${encodeURIComponent(controlId)}`
                 }
@@ -242,14 +255,21 @@ function RiskPage() {
                 isLoading={conversation.isLoading || entries.isLoading || history.isLoading}
                 isError={conversation.isError || entries.isError}
                 onRetry={() => {
+                  debug("retries conversation load", { conversationId: conversation.data?.id, riskId });
                   void conversation.refetch();
                   void entries.refetch();
                 }}
                 historyError={history.isError}
-                onRetryHistory={() => void history.refetch()}
+                onRetryHistory={() => {
+                  debug("retries conversation history", { riskId });
+                  void history.refetch();
+                }}
                 attachmentsByEntry={attachmentsByEntry}
                 attachmentsError={attachments.isError}
-                onRetryAttachments={() => void attachments.refetch()}
+                onRetryAttachments={() => {
+                  debug("retries attachments load", { entryCount: entries.data?.length ?? 0 });
+                  void attachments.refetch();
+                }}
                 evidenceUrl={assessmentApi.evidenceFileUrl}
                 currentProfileId={profile?.id}
                 profileMap={profileMap}

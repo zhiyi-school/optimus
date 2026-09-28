@@ -4,7 +4,10 @@ import { EmptyState } from "@/components/common";
 import { Card, CardContent } from "@/components/ui/card";
 import { ProgressBar, ToneBadge } from "@/components/resolve-display";
 import type { ControlProgressStatus } from "@/data/types";
+import { createDebug } from "@/lib/debug";
 import { controlStatusLabels, type LiveControl } from "@/lib/resolve";
+
+const debug = createDebug("component:control-checklist");
 
 const statusIcon: Record<ControlProgressStatus, typeof Circle> = {
   not_started: Circle,
@@ -90,14 +93,22 @@ export function ControlChecklist({
             {onOpen ? (
               <button
                 type="button"
-                onClick={() => onOpen(definition.control_id)}
+                onClick={() => {
+                  debug("opens control", { controlId: definition.control_id });
+                  onOpen(definition.control_id);
+                }}
                 aria-label={`View steps for ${definition.title}`}
                 className={openClassName}
               >
                 {body}
               </button>
             ) : (
-              <Link to={href} aria-label={`View steps for ${definition.title}`} className={openClassName}>
+              <Link
+                to={href}
+                aria-label={`View steps for ${definition.title}`}
+                onClick={() => debug("opens control", { controlId: definition.control_id })}
+                className={openClassName}
+              >
                 {body}
               </Link>
             )}

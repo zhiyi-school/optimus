@@ -39,8 +39,6 @@ export function StatCard({
   value: ReactNode;
   hint?: string;
   tone?: "neutral" | "danger" | "success" | "warning" | "info";
-  /** When set, the whole card links there — e.g. a finding-status count
-   *  linking to that filtered view on the Findings page. */
   to?: string;
 }) {
   const valueTone: Record<string, string> = {

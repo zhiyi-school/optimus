@@ -4,11 +4,19 @@ import { isTransitionalRunState } from "@/lib/status";
 import type { Application, Assessment } from "@/data/types";
 import { useInvalidateQueries } from "./invalidation";
 import { assessmentKeys } from "@/hooks/query-keys";
+import { createDebug } from "@/lib/debug";
+
+const debug = createDebug("hooks:queries:assessments");
 
 export function useAssessments() {
   return useQuery({
     queryKey: assessmentKeys.all(),
-    queryFn: assessmentData.listWithApplications,
+    queryFn: async () => {
+      debug("fetches assessments");
+      const rows = await assessmentData.listWithApplications();
+      debug("fetched assessments", { count: rows.length });
+      return rows;
+    },
   });
 }
 
@@ -21,14 +29,21 @@ export function useAssessment(id: string | undefined) {
   const queryClient = useQueryClient();
   return useQuery({
     queryKey: assessmentKeys.detail(id),
-    queryFn: () => assessmentData.getWithApplication(id as string),
+    queryFn: async () => {
+      debug("fetches assessment", { assessmentId: id });
+      const assessment = await assessmentData.getWithApplication(id as string);
+      debug("fetched assessment", { assessmentId: id, found: Boolean(assessment), status: assessment?.status });
+      return assessment;
+    },
     enabled: !!id,
     placeholderData: () => {
       if (!id) return undefined;
       const cached = queryClient.getQueryData<
         (Assessment & { application: Application | null })[]
       >(assessmentKeys.all());
-      return cached?.find((row) => row.id === id);
+      const placeholder = cached?.find((row) => row.id === id);
+      debug("assessment placeholder", { assessmentId: id, fromList: Boolean(placeholder) });
+      return placeholder;
     },
   });
 }
@@ -47,7 +62,16 @@ export function useAssessmentRunRequest(
 ) {
   return useQuery({
     queryKey: assessmentKeys.runRequest(assessmentId),
-    queryFn: () => assessmentRunRequestData.findForAssessment(assessmentId as string),
+    queryFn: async () => {
+      debug("fetches run request", { assessmentId });
+      const request = await assessmentRunRequestData.findForAssessment(assessmentId as string);
+      debug("fetched run request", {
+        assessmentId,
+        found: Boolean(request),
+        keepsPolling: isTransitionalRunState(assessment, request ?? null),
+      });
+      return request;
+    },
     enabled: !!assessmentId,
     refetchInterval: (query) =>
       isTransitionalRunState(assessment, query.state.data ?? null)
@@ -60,11 +84,15 @@ export function useRequestAssessmentRun(assessmentId: string | undefined) {
   const invalidate = useInvalidateQueries();
   return useMutation({
     mutationFn: () => assessmentRunRequestData.request(assessmentId as string),
-    onSuccess: () =>
-      invalidate([
+    onMutate: () => debug("requests assessment run", { assessmentId }),
+    onError: (error) => debug("request assessment run failed", { assessmentId, error }),
+    onSuccess: () => {
+      debug("requested assessment run", { assessmentId });
+      return invalidate([
         assessmentKeys.runRequest(assessmentId),
         assessmentKeys.detail(assessmentId),
         assessmentKeys.all(),
-      ]),
+      ]);
+    },
   });
 }

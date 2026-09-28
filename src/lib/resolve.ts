@@ -18,6 +18,9 @@ import type { Tone } from "@/lib/status";
 import { isHistoricalFixSubmitted } from "@/data/compatibility/capabilities";
 import { remediationBlockMessage } from "@/lib/remediation-workflow-messages";
 import type { RemediationBlock } from "@/lib/remediation-workflow";
+import { createDebug } from "@/lib/debug";
+
+const debug = createDebug("lib:resolve");
 
 export const developerTicketLabels: Record<TicketStatus, { label: string; tone: Tone }> = {
   open: { label: "Action required", tone: "danger" },
@@ -302,6 +305,15 @@ export function summarizeApplication(
     .sort()
     .at(-1) ?? null;
 
+  debug("summarizes application", {
+    applicationId,
+    findingCount: own.length,
+    ticketCount: ownTickets.length,
+    openTicketCount: openTickets.length,
+    completedSteps,
+    stepCount: ownSteps.length,
+    liveKeysKnown: Boolean(liveKeys),
+  });
   return {
     applicationId,
     affectedFindings: own.filter(
@@ -518,7 +530,13 @@ export function preferredDeveloperRisk(
     (finding) => finding.status === "at_risk" && !activeRemediationTicket(finding.id, tickets),
   );
   const inProgress = linked.find((finding) => activeRemediationTicket(finding.id, tickets));
-  return (needsAction ?? inProgress ?? linked[0])?.test_id ?? null;
+  const riskId = (needsAction ?? inProgress ?? linked[0])?.test_id ?? null;
+  debug("prefers developer risk", {
+    riskId,
+    reason: needsAction ? "needs_action" : inProgress ? "in_progress" : linked[0] ? "first" : "none",
+    linkedCount: linked.length,
+  });
+  return riskId;
 }
 
 export function changedSinceCompleted(
@@ -534,6 +552,7 @@ export function changedSinceCompleted(
       changed.add(entry.step.step_key);
     }
   }
+  if (changed.size > 0) debug("completed steps changed since load", { stepKeys: [...changed] });
   return changed;
 }
 

@@ -15,11 +15,19 @@ import {
   ticketLifecycleInvalidationKeys,
 } from "./invalidation-rules";
 import { automationKeys, ticketKeys } from "@/hooks/query-keys";
+import { createDebug } from "@/lib/debug";
+
+const debug = createDebug("hooks:queries:tickets");
 
 export function useFindingRetests(findingId: string | undefined) {
   return useQuery({
     queryKey: ticketKeys.findingRetests(findingId),
-    queryFn: () => retestData.listForFinding(findingId as string),
+    queryFn: async () => {
+      debug("fetches finding retests", { findingId });
+      const rows = await retestData.listForFinding(findingId as string);
+      debug("fetched finding retests", { findingId, count: rows.length });
+      return rows;
+    },
     enabled: !!findingId,
   });
 }
@@ -27,7 +35,12 @@ export function useFindingRetests(findingId: string | undefined) {
 export function useFindingTickets(findingId: string | undefined) {
   return useQuery({
     queryKey: ticketKeys.byFinding(findingId),
-    queryFn: () => ticketData.list({ findingId }),
+    queryFn: async () => {
+      debug("fetches finding tickets", { findingId });
+      const rows = await ticketData.list({ findingId });
+      debug("fetched finding tickets", { findingId, count: rows.length });
+      return rows;
+    },
     enabled: !!findingId,
   });
 }
@@ -35,7 +48,12 @@ export function useFindingTickets(findingId: string | undefined) {
 export function useTicketsByFindingIds(findingIds: string[]) {
   return useQuery({
     queryKey: ticketKeys.byFindingIds(findingIds),
-    queryFn: () => ticketData.listByFindingIds(findingIds),
+    queryFn: async () => {
+      debug("fetches tickets by finding ids", { findingCount: findingIds.length });
+      const rows = await ticketData.listByFindingIds(findingIds);
+      debug("fetched tickets by finding ids", { findingCount: findingIds.length, count: rows.length });
+      return rows;
+    },
     enabled: findingIds.length > 0,
   });
 }
@@ -43,14 +61,24 @@ export function useTicketsByFindingIds(findingIds: string[]) {
 export function useTickets(filters: TicketFilters = {}) {
   return useQuery({
     queryKey: ticketKeys.withRelations(filters),
-    queryFn: () => ticketData.listWithRelations(filters),
+    queryFn: async () => {
+      debug("fetches tickets", { filters });
+      const rows = await ticketData.listWithRelations(filters);
+      debug("fetched tickets", { count: rows.length });
+      return rows;
+    },
   });
 }
 
 export function useTicket(id: string | undefined) {
   return useQuery({
     queryKey: ticketKeys.detail(id),
-    queryFn: () => ticketData.getWithRelations(id as string),
+    queryFn: async () => {
+      debug("fetches ticket", { ticketId: id });
+      const ticket = await ticketData.getWithRelations(id as string);
+      debug("fetched ticket", { ticketId: id, found: Boolean(ticket), status: ticket?.status });
+      return ticket;
+    },
     enabled: !!id,
   });
 }
@@ -58,7 +86,12 @@ export function useTicket(id: string | undefined) {
 export function useRiskAcceptance(ticketId: string | undefined) {
   return useQuery({
     queryKey: ticketKeys.acceptance(ticketId),
-    queryFn: () => riskAcceptanceData.getForTicket(ticketId as string),
+    queryFn: async () => {
+      debug("fetches risk acceptance", { ticketId });
+      const acceptance = await riskAcceptanceData.getForTicket(ticketId as string);
+      debug("fetched risk acceptance", { ticketId, found: Boolean(acceptance) });
+      return acceptance;
+    },
     enabled: !!ticketId,
   });
 }
@@ -66,26 +99,47 @@ export function useRiskAcceptance(ticketId: string | undefined) {
 export function usePendingRiskAcceptance() {
   return useQuery({
     queryKey: ticketKeys.pendingAcceptance(),
-    queryFn: riskAcceptanceData.listPending,
+    queryFn: async () => {
+      debug("fetches pending risk acceptances");
+      const rows = await riskAcceptanceData.listPending();
+      debug("fetched pending risk acceptances", { count: rows.length });
+      return rows;
+    },
   });
 }
 
 export function useActivity(entityType: string, entityId: string | undefined) {
   return useQuery({
     queryKey: ticketKeys.activity(entityType, entityId),
-    queryFn: () => activityData.listForEntity(entityType, entityId as string),
+    queryFn: async () => {
+      debug("fetches activity", { entityType, entityId });
+      const rows = await activityData.listForEntity(entityType, entityId as string);
+      debug("fetched activity", { entityType, entityId, count: rows.length });
+      return rows;
+    },
     enabled: !!entityId,
   });
 }
 
 export function useDashboardMetrics() {
-  return useQuery({ queryKey: ticketKeys.metrics(), queryFn: metricsData.getOverview });
+  return useQuery({
+    queryKey: ticketKeys.metrics(),
+    queryFn: async () => {
+      debug("fetches dashboard metrics");
+      const metrics = await metricsData.getOverview();
+      debug("fetched dashboard metrics");
+      return metrics;
+    },
+  });
 }
 
 export function useCreateRemediationTicket() {
   const invalidate = useInvalidateQueries();
   return useMutation({
     mutationFn: ticketData.createRemediationTicket,
+    onMutate: (variables) => debug("creates remediation ticket", { findingId: variables.finding_id }),
+    onError: (error, variables) =>
+      debug("create remediation ticket failed", { findingId: variables.finding_id, error }),
     onSuccess: (_data, variables) =>
       invalidate([
         ["ticketsWithRelations"],
@@ -109,6 +163,12 @@ export function useStartRemediation() {
       plan: ControlReconciliation[];
       risk?: { applicationId: string; riskId: string; originAssessmentId?: string | null } | null;
     }) => {
+      debug("starts remediation", {
+        findingId: input.ticket.finding_id,
+        selectedControlId: input.ticket.selected_control_id,
+        planSize: input.plan.length,
+        hasRisk: Boolean(input.risk),
+      });
       let conversationId: string | null = null;
       if (input.risk) {
         const conversation = await riskConversationData.getOrCreate({
@@ -118,17 +178,21 @@ export function useStartRemediation() {
           originAssessmentId: input.risk.originAssessmentId,
         });
         conversationId = conversation.id;
+        debug("resolved remediation conversation", { conversationId, riskId: input.risk.riskId });
       }
       const ticket = await ticketData.createRemediationTicket({
         ...input.ticket,
         risk_conversation_id: conversationId,
         origin_assessment_id: input.risk?.originAssessmentId ?? null,
       });
+      debug("created remediation ticket", { ticketId: ticket.id, conversationId });
       if (input.plan.length > 0) {
         await controlProgressData.reconcile(ticket.id, input.plan);
+        debug("seeded remediation progress", { ticketId: ticket.id, planSize: input.plan.length });
       }
       return ticket;
     },
+    onError: (error, input) => debug("start remediation failed", { findingId: input.ticket.finding_id, error }),
     onSuccess: (ticket) =>
       invalidate([
         ...ticketLifecycleInvalidationKeys(ticket.id, ticket.finding_id),
@@ -143,7 +207,12 @@ export function useWithdrawTicket(ticketId: string, findingId: string | null | u
   const invalidate = useInvalidateQueries();
   return useMutation({
     mutationFn: (reason: string) => ticketData.withdraw(ticketId, reason),
-    onSuccess: () => invalidate(ticketLifecycleInvalidationKeys(ticketId, findingId)),
+    onMutate: (reason) => debug("withdraws ticket", { ticketId, reasonLength: reason.length }),
+    onError: (error) => debug("withdraw ticket failed", { ticketId, error }),
+    onSuccess: () => {
+      debug("withdrew ticket", { ticketId });
+      return invalidate(ticketLifecycleInvalidationKeys(ticketId, findingId));
+    },
   });
 }
 
@@ -151,7 +220,12 @@ export function useResumeTicket(ticketId: string, findingId: string | null | und
   const invalidate = useInvalidateQueries();
   return useMutation({
     mutationFn: () => ticketData.resume(ticketId),
-    onSuccess: () => invalidate(ticketLifecycleInvalidationKeys(ticketId, findingId)),
+    onMutate: () => debug("resumes ticket", { ticketId }),
+    onError: (error) => debug("resume ticket failed", { ticketId, error }),
+    onSuccess: () => {
+      debug("resumed ticket", { ticketId });
+      return invalidate(ticketLifecycleInvalidationKeys(ticketId, findingId));
+    },
   });
 }
 
@@ -159,6 +233,9 @@ export function useCreateRiskAcceptanceTicket() {
   const invalidate = useInvalidateQueries();
   return useMutation({
     mutationFn: ticketData.createRiskAcceptanceTicket,
+    onMutate: (variables) => debug("creates risk acceptance ticket", { findingId: variables.finding_id }),
+    onError: (error, variables) =>
+      debug("create risk acceptance ticket failed", { findingId: variables.finding_id, error }),
     onSuccess: (_data, variables) =>
       invalidate([
         ["ticketsWithRelations"],
@@ -172,6 +249,8 @@ export function useUpdateTicketStatus(ticketId: string) {
   const invalidate = useInvalidateQueries();
   return useMutation({
     mutationFn: (status: TicketStatus) => ticketData.updateStatus(ticketId, status),
+    onMutate: (status) => debug("updates ticket status", { ticketId, status }),
+    onError: (error, status) => debug("update ticket status failed", { ticketId, status, error }),
     onSuccess: () =>
       invalidate([
         ["ticket", ticketId],
@@ -193,6 +272,9 @@ export function useClassifyRisk(findingId: string | undefined, conversationId: s
         status: input.status,
         reason: input.reason,
       }),
+    onMutate: (input) =>
+      debug("classifies risk", { findingId, conversationId, status: input.status, reasonLength: input.reason.length }),
+    onError: (error, input) => debug("classify risk failed", { findingId, status: input.status, error }),
     onSuccess: () =>
       invalidate([
         ["finding", findingId],
@@ -220,6 +302,10 @@ export function useReviewRiskAcceptance() {
       decision: RiskAcceptanceDecision;
       comment?: string;
     }) => riskAcceptanceData.review(id, decision, comment),
+    onMutate: (variables) =>
+      debug("reviews risk acceptance", { id: variables.id, ticketId: variables.ticketId, decision: variables.decision }),
+    onError: (error, variables) =>
+      debug("review risk acceptance failed", { id: variables.id, ticketId: variables.ticketId, error }),
     onSuccess: (_data, variables) =>
       invalidate([
         ["ticket", variables.ticketId],
@@ -238,7 +324,12 @@ export function useRiskControls(
 ) {
   return useQuery({
     queryKey: automationKeys.riskControls(platform, riskId),
-    queryFn: () => playbookApi.listRiskControls(platform as AutomationPlatform, riskId as string),
+    queryFn: async () => {
+      debug("fetches risk controls", { platform, riskId });
+      const controls = await playbookApi.listRiskControls(platform as AutomationPlatform, riskId as string);
+      debug("fetched risk controls", { platform, riskId, count: controls.length });
+      return controls;
+    },
     enabled: !!platform && !!riskId,
     staleTime: 5 * 60_000,
     retry: false,
@@ -251,7 +342,12 @@ export function useControlDetail(
 ) {
   return useQuery({
     queryKey: automationKeys.control(platform, controlId),
-    queryFn: () => playbookApi.getControl(platform as AutomationPlatform, controlId as string),
+    queryFn: async () => {
+      debug("fetches control", { platform, controlId });
+      const control = await playbookApi.getControl(platform as AutomationPlatform, controlId as string);
+      debug("fetched control", { platform, controlId });
+      return control;
+    },
     enabled: !!platform && !!controlId,
     staleTime: 5 * 60_000,
     retry: false,
@@ -264,7 +360,12 @@ export function useControlSource(
 ) {
   return useQuery({
     queryKey: automationKeys.controlSource(platform, controlId),
-    queryFn: () => playbookApi.getControlSource(platform as AutomationPlatform, controlId as string),
+    queryFn: async () => {
+      debug("fetches control source", { platform, controlId });
+      const source = await playbookApi.getControlSource(platform as AutomationPlatform, controlId as string);
+      debug("fetched control source", { platform, controlId });
+      return source;
+    },
     enabled: !!platform && !!controlId,
     retry: false,
   });
@@ -273,7 +374,12 @@ export function useControlSource(
 export function useTicketControls(ticketId: string | undefined) {
   return useQuery({
     queryKey: ticketKeys.controls(ticketId),
-    queryFn: () => controlProgressData.listForTicket(ticketId as string),
+    queryFn: async () => {
+      debug("fetches ticket controls", { ticketId });
+      const rows = await controlProgressData.listForTicket(ticketId as string);
+      debug("fetched ticket controls", { ticketId, count: rows.length });
+      return rows;
+    },
     enabled: !!ticketId,
   });
 }
@@ -281,7 +387,12 @@ export function useTicketControls(ticketId: string | undefined) {
 export function useTicketControlSteps(ticketId: string | undefined) {
   return useQuery({
     queryKey: ticketKeys.controlSteps(ticketId),
-    queryFn: () => controlProgressData.listStepsForTicket(ticketId as string),
+    queryFn: async () => {
+      debug("fetches ticket control steps", { ticketId });
+      const rows = await controlProgressData.listStepsForTicket(ticketId as string);
+      debug("fetched ticket control steps", { ticketId, count: rows.length });
+      return rows;
+    },
     enabled: !!ticketId,
   });
 }
@@ -290,14 +401,24 @@ export function useControlProgressForTickets(ticketIds: string[]) {
   const key = [...ticketIds].sort();
   const controls = useQuery({
     queryKey: ticketKeys.controlsBulk(key),
-    queryFn: () => controlProgressData.listForTicketIds(key),
+    queryFn: async () => {
+      debug("fetches bulk controls", { ticketCount: key.length });
+      const rows = await controlProgressData.listForTicketIds(key);
+      debug("fetched bulk controls", { ticketCount: key.length, count: rows.length });
+      return rows;
+    },
     enabled: key.length > 0,
   });
 
   const controlRowIds = (controls.data ?? []).map((control) => control.id).sort();
   const steps = useQuery({
     queryKey: ticketKeys.controlStepsBulk(controlRowIds),
-    queryFn: () => controlProgressData.listStepsForControlIds(controlRowIds),
+    queryFn: async () => {
+      debug("fetches bulk control steps", { controlCount: controlRowIds.length });
+      const rows = await controlProgressData.listStepsForControlIds(controlRowIds);
+      debug("fetched bulk control steps", { controlCount: controlRowIds.length, count: rows.length });
+      return rows;
+    },
     enabled: controlRowIds.length > 0,
   });
 
@@ -324,6 +445,7 @@ export function useSelectRemediationControl(
     mutationFn: (controlId: string) =>
       ticketData.setSelectedControl(ticketId as string, controlId),
     onMutate: async (controlId: string) => {
+      debug("selects remediation control optimistically", { ticketId, controlId });
       await queryClient.cancelQueries({ queryKey: key });
       const previous = queryClient.getQueryData(key);
       queryClient.setQueryData(key, (current: unknown) =>
@@ -331,7 +453,8 @@ export function useSelectRemediationControl(
       );
       return { previous };
     },
-    onError: (_error, _controlId, context) => {
+    onError: (error, controlId, context) => {
+      debug("select remediation control failed, rolls back", { ticketId, controlId, restored: Boolean(context), error });
       if (context) queryClient.setQueryData(key, context.previous);
     },
     onSuccess: () =>
@@ -347,6 +470,8 @@ export function useReconcileTicketControls(ticketId: string | undefined) {
   return useMutation({
     mutationFn: (plan: ControlReconciliation[]) =>
       controlProgressData.reconcile(ticketId as string, plan),
+    onMutate: (plan) => debug("reconciles ticket controls", { ticketId, planSize: plan.length }),
+    onError: (error) => debug("reconcile ticket controls failed", { ticketId, error }),
     onSuccess: () => invalidate(controlProgressInvalidationKeys(ticketId as string)),
   });
 }
@@ -361,6 +486,9 @@ export function useSetControlStepStatus(ticketId: string | undefined) {
         input.status,
         input.note,
       ),
+    onMutate: (input) =>
+      debug("sets step status", { ticketId, stepId: input.stepId, status: input.status, hasNote: Boolean(input.note) }),
+    onError: (error, input) => debug("set step status failed", { ticketId, stepId: input.stepId, error }),
     onSuccess: () => invalidate(controlProgressInvalidationKeys(ticketId as string)),
   });
 }
@@ -379,6 +507,14 @@ export function useSetControlStatus(ticketId: string | undefined) {
         input.status,
         input.note,
       ),
+    onMutate: (input) =>
+      debug("sets control status", {
+        ticketId,
+        controlRowId: input.controlRowId,
+        status: input.status,
+        hasNote: Boolean(input.note),
+      }),
+    onError: (error, input) => debug("set control status failed", { ticketId, controlRowId: input.controlRowId, error }),
     onSuccess: () => invalidate(controlProgressInvalidationKeys(ticketId as string)),
   });
 }

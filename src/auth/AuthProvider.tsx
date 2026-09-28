@@ -22,9 +22,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profileRefreshing, setProfileRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
-
-  // `requestSeq` discards a response that a newer load — or a sign-out —
-  // has already superseded, so no previous account's profile can land late.
   const requestSeqRef = useRef(0);
   const pendingUserRef = useRef<string | null>(null);
   const loadedUserRef = useRef<string | null>(null);
@@ -40,16 +37,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const current = await userData.getCurrentProfile();
         if (seq !== requestSeqRef.current) return;
-        // `roles` can be missing if the DB is on an older migration than this
-        // build expects — fall back to [] rather than crash every page.
+        
         setProfile(current && { ...current, roles: current.roles ?? [] });
         loadedUserRef.current = current ? userId : null;
         setProfileError(null);
       } catch (err) {
         if (seq !== requestSeqRef.current) return;
+
         setProfileError(err instanceof Error ? err.message : "Could not load your profile.");
-        // Only an initial load has nothing to fall back to; a refresh keeps
-        // the profile and permissions already on screen.
+        
         if (blocking) {
           setProfile(null);
           loadedUserRef.current = null;
@@ -75,9 +71,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [queryClient]);
 
   useEffect(() => {
-    // supabase-js emits INITIAL_SESSION on subscribe, so this listener is the
-    // whole initialization path: calling getSession() here as well would load
-    // the profile twice.
     const { data: listener } = supabase.auth.onAuthStateChange((event, nextSession) => {
       setSession(nextSession);
       const userId = nextSession?.user?.id ?? null;

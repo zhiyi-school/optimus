@@ -7,6 +7,10 @@ import type {
   TicketType,
 } from "@/data/types";
 
+import { createDebug } from "@/lib/debug";
+
+const debug = createDebug("lib:status");
+
 export type Tone = "danger" | "success" | "warning" | "neutral" | "info";
 
 export const toneClasses: Record<Tone, string> = {
@@ -195,6 +199,13 @@ export function assessmentRunState(
   const detail = request?.last_error ?? null;
   const needsConfiguration =
     blocker === "configuration_incomplete" || blocker === "no_tests_enabled";
+  debug("maps run state", {
+    assessmentStatus: assessment.status,
+    requestStatus: request?.status ?? null,
+    blocker,
+    nonRetryable,
+    needsConfiguration,
+  });
 
   if (assessment.status === "running" || request?.status === "running") {
     return { ...idle, label: "Automated tests are running", tone: "info" };

@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 import { appTypeIcon } from "@/lib/entity-icons";
 import { applicationIconUrl, type ApplicationIconSource } from "@/lib/application-icon";
+import { createDebug } from "@/lib/debug";
 import { cn } from "@/lib/utils";
 import type { Application } from "@/data/types";
+
+const debug = createDebug("component:application-icon");
 
 interface ApplicationIconProps {
   application: (ApplicationIconSource & Pick<Application, "app_type" | "name">) | null | undefined;
@@ -37,7 +40,10 @@ export function ApplicationIcon({
           loading="lazy"
           decoding="async"
           className="h-full w-full object-cover"
-          onError={() => setFailed(true)}
+          onError={() => {
+            debug("falls back after icon load fails", { application: application?.name });
+            setFailed(true);
+          }}
         />
       ) : (
         <FallbackIcon className={cn("text-foreground", iconClassName)} />

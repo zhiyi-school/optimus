@@ -49,6 +49,7 @@ import {
 } from "@/data/sync";
 import { useAuth } from "@/auth/useAuth";
 import { hasRole } from "@/auth/permissions";
+import { createDebug } from "@/lib/debug";
 import { riskIcon } from "@/lib/entity-icons";
 import { hasAutomation } from "@/lib/risk-automation";
 import { conversationTimeline } from "@/lib/conversation-timeline";
@@ -61,6 +62,8 @@ import { cn, errorMessage, formatDate } from "@/lib/utils";
 import type { Application, Finding } from "@/data/types";
 import { assessmentKeys, automationKeys, evidenceKeys, ticketKeys } from "@/hooks/query-keys";
 import { retestData } from "@/data/services/tickets";
+
+const debug = createDebug("page:TestDetail");
 
 export default function TestDetail() {
   // Both routes share this element, so :testId changes without remounting.
@@ -163,7 +166,10 @@ function TestPage() {
   // Latched: the run outlives its /runs "running" entry, and its sync outlives the run.
   const [watchedRunId, setWatchedRunId] = useState<string | undefined>();
   useEffect(() => {
-    if (activeRunId) setWatchedRunId(activeRunId);
+    if (activeRunId) {
+      debug("watches run", { runId: activeRunId });
+      setWatchedRunId(activeRunId);
+    }
   }, [activeRunId]);
   const { data: sync } = useRunSyncStatus(watchedRunId, { enabled: !watching && !adoptedRun });
   const resync = useResyncRun(watchedRunId);
@@ -182,13 +188,18 @@ function TestPage() {
     const previous = observedPhaseRef.current;
     observedPhaseRef.current = progress?.phase;
     if (previous !== "running" || progress?.phase === "running") return;
+    debug("refreshes after observed risk finishes", { previous, phase: progress?.phase ?? null });
     void refetch();
     void queryClient.invalidateQueries({ queryKey: assessmentKeys.detail(assessmentId) });
     void queryClient.invalidateQueries({ queryKey: evidenceKeys.findings() });
   }, [progress?.phase, refetch, queryClient, assessmentId]);
 
   async function runTest() {
-    if (!platform || !appExternalId || !testId) return;
+    if (!platform || !appExternalId || !testId) {
+      debug("cannot run test", { hasPlatform: !!platform, hasAppExternalId: !!appExternalId, testId });
+      return;
+    }
+    debug("runs test", { platform, appExternalId, testId, findingId: currentFinding?.id });
     setWatching(true);
     setStartedRunId(undefined);
     setStoppedWatchingRunId(undefined);
@@ -197,10 +208,14 @@ function TestPage() {
     cancelRef.current = { cancelled: false };
     const claim = nextReassessment(retests);
     try {
-      if (claim) await retestData.startRun(claim.id);
+      if (claim) {
+        debug("claims reassessment", { retestId: claim.id });
+        await retestData.startRun(claim.id);
+      }
       const { run, outcome } = await syncService.runAndWait(
         { platform, config_path: defaultConfigPath(platform), apps: appExternalId, risks: testId },
         (started) => {
+          debug("starts run", { runId: started.run_id, retestId: claim?.id });
           setStartedRunId(started.run_id);
           return Promise.all([
             claim ? retestData.markRunning(claim.id, started.run_id) : Promise.resolve(),
@@ -209,6 +224,7 @@ function TestPage() {
         },
         cancelRef.current,
       );
+      debug("finishes run", { runId: run.run_id, status: run.status, outcome });
 
       if (outcome === "failed") {
         setRunError(run.error ?? `Run ended with status "${run.status}".`);
@@ -229,6 +245,7 @@ function TestPage() {
         queryClient.invalidateQueries({ queryKey: ticketKeys.findingRetests(currentFinding?.id) }),
       ]);
     } catch (err) {
+      debug("fails to run test", { testId, error: err });
       setRunError(errorMessage(err, "Unable to run this test."));
     } finally {
       setWatching(false);
@@ -236,6 +253,7 @@ function TestPage() {
   }
 
   function stopWaiting() {
+    debug("stops waiting for run", { runId: activeRunId });
     cancelRef.current.cancelled = true;
     setStoppedWatchingRunId(activeRunId);
     setStartedRunId(undefined);
@@ -297,7 +315,10 @@ function TestPage() {
             ) : isError ? (
               <ErrorState
                 message="The automation backend could not provide this risk's results."
-                onRetry={() => void refetch()}
+                onRetry={() => {
+                  debug("retries evidence load", { testId });
+                  void refetch();
+                }}
               />
             ) : (
               <EvidenceList items={railEvidence} />
@@ -386,7 +407,10 @@ function TestPage() {
             analysis={literals}
             isLoading={analysis.isLoading}
             isError={analysis.isError}
-            onRetry={() => void analysis.refetch()}
+            onRetry={() => {
+              debug("retries plaintext analysis", { runTimestamp: newest?.run_timestamp });
+              void analysis.refetch();
+            }}
             controlHref={(controlId) =>
               currentFinding
                 ? `/resolve/findings/${currentFinding.id}/controls/${encodeURIComponent(controlId)}`
@@ -400,7 +424,10 @@ function TestPage() {
             <CardContent className="py-4">
               <button
                 type="button"
-                onClick={() => setProgressOpen((o) => !o)}
+                onClick={() => {
+                  debug("toggles run progress", { open: !progressOpen });
+                  setProgressOpen((o) => !o);
+                }}
                 className="flex w-full items-center justify-between gap-2"
               >
                 <span className="text-sm font-semibold text-foreground">
@@ -441,7 +468,13 @@ function TestPage() {
 
         <DashboardSyncNotice
           sync={sync}
-          onRetry={() => resync.mutate()}
+          onRetry={() => {
+            debug("requests run resync", { runId: watchedRunId });
+            resync.mutate(undefined, {
+              onSuccess: (data) => debug("resyncs run", { runId: watchedRunId, status: data?.status }),
+              onError: (error) => debug("fails to resync run", { runId: watchedRunId, error }),
+            });
+          }}
           retrying={resync.isPending}
           retryError={resync.isError ? errorMessage(resync.error, "Could not start the sync.") : null}
         />
@@ -453,14 +486,21 @@ function TestPage() {
             isLoading={conversation.isLoading || entries.isLoading || isLoading}
             isError={conversation.isError || entries.isError}
             onRetry={() => {
+              debug("retries conversation load", { conversationId: conversation.data?.id, testId });
               void conversation.refetch();
               void entries.refetch();
             }}
             historyError={isError}
-            onRetryHistory={() => void refetch()}
+            onRetryHistory={() => {
+              debug("retries conversation history", { testId });
+              void refetch();
+            }}
             attachmentsByEntry={attachmentsByEntry}
             attachmentsError={attachments.isError}
-            onRetryAttachments={() => void attachments.refetch()}
+            onRetryAttachments={() => {
+              debug("retries attachments load", { entryCount: entries.data?.length ?? 0 });
+              void attachments.refetch();
+            }}
             evidenceUrl={assessmentApi.evidenceFileUrl}
             highlightRunTimestamp={runId}
             currentProfileId={profile?.id}

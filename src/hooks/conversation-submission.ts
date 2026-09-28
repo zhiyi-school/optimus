@@ -11,8 +11,11 @@ import {
   createPendingConversationAttachment,
   type PendingConversationAttachment,
 } from "@/data/services/conversation-attachments";
+import { createDebug } from "@/lib/debug";
 import { errorMessage } from "@/lib/utils";
 import type { FindingStatus } from "@/data/types";
+
+const debug = createDebug("hooks:conversation-submission");
 
 export type ComposerAction =
   | { kind: "classification"; status: FindingStatus }
@@ -63,13 +66,16 @@ export function useConversationSubmission(input: {
 
   const abandonAttachment = useCallback(async () => {
     const current = latestState.current;
+    debug("abandons attachment", { phase: current.phase, scope: scope.current + 1 });
     scope.current += 1;
     setState({ phase: "idle" });
     setFailure(null);
     if (current.phase === "attachment_failed" && current.context.bytesUploaded) {
+      debug("discards uploaded bytes", { entryId: current.context.pending.entryId });
       try {
         await conversationAttachmentData.discardUnused(current.context.pending);
-      } catch {
+      } catch (error) {
+        debug("discard after abandon failed", { entryId: current.context.pending.entryId, error });
         // Abandoning the retry must not turn storage cleanup into another user task.
       }
     }
@@ -78,28 +84,42 @@ export function useConversationSubmission(input: {
   useEffect(() => {
     const generation = scope.current + 1;
     scope.current = generation;
+    debug("resets for conversation", { conversationId: input.conversationId, generation });
     setState({ phase: "idle" });
     setFailure(null);
     return () => {
       if (scope.current !== generation) return;
       scope.current += 1;
       const current = latestState.current;
+      debug("cleans up conversation scope", { conversationId: input.conversationId, phase: current.phase });
       if (current.phase === "attachment_failed" && current.context.bytesUploaded) {
-        void conversationAttachmentData.discardUnused(current.context.pending).catch(() => undefined);
+        void conversationAttachmentData.discardUnused(current.context.pending).catch((error: unknown) => {
+          debug("discard on cleanup failed", { entryId: current.context.pending.entryId, error });
+        });
       }
     };
   }, [input.conversationId]);
 
   async function attach(context: RetryContext, generation: number) {
+    debug("phase attaching", {
+      entryId: context.pending.entryId,
+      fileName: context.pending.file.name,
+      size: context.pending.file.size,
+      bytesUploaded: context.bytesUploaded,
+    });
     setState({ phase: "attaching", context });
     try {
       await saveAttachment.mutateAsync({
         pending: context.pending,
         bytesUploaded: context.bytesUploaded,
       });
+      debug("attachment saved", { entryId: context.pending.entryId, fileName: context.pending.file.name });
       if (scope.current === generation) {
         setFailure(null);
         setState({ phase: "complete" });
+        debug("phase complete", { entryId: context.pending.entryId });
+      } else {
+        debug("ignores attachment result from stale scope", { generation, scope: scope.current });
       }
     } catch (error) {
       const attachmentFailure = error as ConversationAttachmentFailure;
@@ -112,11 +132,21 @@ export function useConversationSubmission(input: {
           "That was recorded, but the file could not be attached. Send again to retry the file only.",
         ),
       };
+      debug("attachment failed", {
+        entryId: next.pending.entryId,
+        fileName: next.pending.file.name,
+        bytesUploaded: next.bytesUploaded,
+        error: attachmentFailure.cause ?? error,
+      });
       if (scope.current === generation) {
         setState({ phase: "attachment_failed", context: next });
         setFailure(new AttachmentError(next.error));
+        debug("phase attachment_failed", { entryId: next.pending.entryId, retryable: next.retryable });
       } else if (next.bytesUploaded) {
-        void conversationAttachmentData.discardUnused(next.pending).catch(() => undefined);
+        debug("discards bytes from stale scope", { entryId: next.pending.entryId });
+        void conversationAttachmentData.discardUnused(next.pending).catch((discardError: unknown) => {
+          debug("discard from stale scope failed", { entryId: next.pending.entryId, error: discardError });
+        });
       }
       throw new AttachmentError(next.error);
     }
@@ -130,10 +160,21 @@ export function useConversationSubmission(input: {
     const submissionId = (pendingSubmission.current ??= crypto.randomUUID());
     const current = latestState.current;
     if (current.phase === "attachment_failed") {
+      debug("retries attachment on existing entry", {
+        entryId: current.context.pending.entryId,
+        fileName: current.context.pending.file.name,
+        retryable: current.context.retryable,
+      });
       if (!current.context.retryable) throw new AttachmentError(current.context.error);
       return attach(current.context, generation);
     }
 
+    debug("phase recording", {
+      submissionId,
+      action: submission.action?.kind ?? "message",
+      messageLength: submission.message.length,
+      hasFile: Boolean(submission.file),
+    });
     setFailure(null);
     setState({ phase: "recording" });
     sendMessage.reset();
@@ -161,13 +202,19 @@ export function useConversationSubmission(input: {
       }
 
       pendingSubmission.current = null;
+      debug("entry recorded", { submissionId, entryId, action: submission.action?.kind ?? "message" });
 
-      if (scope.current !== generation) return;
+      if (scope.current !== generation) {
+        debug("ignores recording from stale scope", { generation, scope: scope.current });
+        return;
+      }
       if (!submission.file) {
         setState({ phase: "complete" });
+        debug("phase complete without attachment", { entryId });
         return;
       }
       if (!entryId) {
+        debug("cannot attach without entry id", { fileName: submission.file.name });
         const context: RetryContext = {
           pending: createPendingConversationAttachment(
             input.conversationId as string,
@@ -201,6 +248,7 @@ export function useConversationSubmission(input: {
       };
       return attach(context, generation);
     } catch (error) {
+      debug("submission failed", { submissionId, attachmentError: error instanceof AttachmentError, error });
       if (!(error instanceof AttachmentError) && scope.current === generation) {
         setState({ phase: "idle" });
         setFailure(error);
@@ -210,7 +258,10 @@ export function useConversationSubmission(input: {
   }
 
   async function submit(submission: ComposerSubmission) {
-    if (inFlight.current) return;
+    if (inFlight.current) {
+      debug("ignores submit while in flight");
+      return;
+    }
     inFlight.current = true;
     try {
       return await submitOnce(submission);

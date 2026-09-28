@@ -13,10 +13,13 @@ import { EmptyState, LoadingState } from "@/components/common";
 import { CodeBlock } from "@/components/code-block";
 import { PlaybookFigure, PlaybookGallery } from "@/components/playbook-content";
 import { EstimatedTime, GuidedSteps, type GuidedStep } from "@/components/guided-steps";
+import { createDebug } from "@/lib/debug";
 import { renderInline } from "@/lib/inline-markdown";
 import { stepCountLabel } from "@/lib/utils";
 import { useAssessment } from "@/hooks/queries/assessments";
 import { useRiskCatalogue } from "@/hooks/queries/automation";
+
+const debug = createDebug("page:ManualTestSteps");
 
 function SetupTable({ block }: { block: DemonstrationTableBlock }) {
   const columns = useMemo(() => {
@@ -200,7 +203,10 @@ export default function ManualTestSteps() {
       tip={steps.length > 0 && risk?.tactic ? <RiskTactic risk={risk} /> : undefined}
       steps={navSteps}
       activeId={activeId}
-      onSelect={setChosenId}
+      onSelect={(stepId) => {
+        debug("selects step", { assessmentId, testId, stepId });
+        setChosenId(stepId);
+      }}
       aside={<EstimatedTime value={stepCountLabel(steps.length)} />}
       closeTo={backTo}
       closeLabel="Back to test"

@@ -11,8 +11,6 @@ import {
   LegacyTicketRedirect,
   ResolveTicketRedirect,
 } from "@/pages/LegacyRedirect";
-// The two landing pages load eagerly: they are where nearly every session
-// starts, so a chunk fetch there reads as a page reload.
 import Assessments from "@/pages/Assessments";
 import Resolve from "@/pages/Resolve";
 
@@ -35,8 +33,6 @@ function RequireAuth({ children }: { children: ReactNode }) {
   const { session, loading, profile, profileError, refreshProfile } = useAuth();
   if (loading) return <LoadingState label="Loading…" />;
   if (!session) return <Navigate to="/login" replace />;
-  // Only an initial load leaves both unset; a failed background refresh keeps
-  // the previous profile and never reaches this.
   if (!profile && profileError) {
     return (
       <ErrorState
@@ -70,6 +66,7 @@ function RequireCapability({
   return <>{children}</>;
 }
 
+/** The main application component. */
 export default function App() {
   return (
     <Routes>

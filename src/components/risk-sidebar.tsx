@@ -6,10 +6,13 @@ import { Badge } from "@/components/ui/badge";
 import { StatusBadge, PlatformBadge } from "@/components/data-display";
 import { riskIcon } from "@/lib/entity-icons";
 import { ApplicationIcon } from "@/components/application-icon";
+import { createDebug } from "@/lib/debug";
 import { cn } from "@/lib/utils";
 import type { Application } from "@/data/types";
 import type { Tone } from "@/lib/status";
 import { toneClasses } from "@/lib/status";
+
+const debug = createDebug("component:risk-sidebar");
 
 export interface RiskSidebarEntry {
   riskId: string;
@@ -55,6 +58,7 @@ export function RiskSidebar({
     <div className="lg:sticky lg:top-20 lg:self-start">
       <Link
         to={backTo}
+        onClick={() => debug("navigates back", { activeRiskId })}
         className="mb-2.5 inline-flex items-center gap-1 rounded text-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
       >
         <ChevronLeft className="h-3.5 w-3.5" />
@@ -90,7 +94,10 @@ export function RiskSidebar({
         {/* Below lg the list is an accordion, so the detail pane is not pushed off-screen. */}
         <button
           type="button"
-          onClick={() => setOpenOnMobile((open) => !open)}
+          onClick={() => {
+            debug("toggles risk list", { open: !openOnMobile });
+            setOpenOnMobile((open) => !open);
+          }}
           aria-expanded={openOnMobile}
           aria-controls="risk-sidebar-list"
           className="flex w-full items-center justify-between gap-2 border-t border-border/70 px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40 lg:pointer-events-none"
@@ -126,7 +133,10 @@ export function RiskSidebar({
                 <li key={entry.riskId}>
                   <button
                     type="button"
-                    onClick={() => navigate(riskHref(entry.riskId))}
+                    onClick={() => {
+                      debug("selects risk", { riskId: entry.riskId, from: activeRiskId });
+                      navigate(riskHref(entry.riskId));
+                    }}
                     aria-current={isActive ? "page" : undefined}
                     className={cn(
                       "flex w-full items-center gap-2 px-3 py-2.5 text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40",

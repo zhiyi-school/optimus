@@ -3,6 +3,13 @@ import type { Application, Finding, FindingHistory, FindingStatus } from "@/data
 import { requireUserId } from "./common";
 import { activityData } from "./activity";
 import { classifyRiskWithCompatibility, type ClassificationResult } from "@/data/compatibility/workflow";
+import { createDebug } from "@/lib/debug";
+
+const debug = createDebug("data:findings");
+
+function filterSummary(filters: FindingFilters) {
+  return { ...filters, search: filters.search?.length };
+}
 
 export interface FindingFilters {
   status?: FindingStatus;
@@ -14,6 +21,7 @@ export interface FindingFilters {
 
 export const findingData = {
   async list(filters: FindingFilters = {}): Promise<Finding[]> {
+    debug("listing findings", filterSummary(filters));
     let query = supabase.from("findings").select("*");
     if (filters.status) query = query.eq("status", filters.status);
     if (filters.applicationId)
@@ -24,23 +32,33 @@ export const findingData = {
     const { data, error } = await query.order("created_at", {
       ascending: false,
     });
-    if (error) throw error;
+    if (error) {
+      debug("listing findings failed", { code: error.code, message: error.message });
+      throw error;
+    }
+    debug("listed findings", { count: data?.length });
     return data;
   },
 
   async get(id: string): Promise<Finding | null> {
+    debug("fetching finding", { id });
     const { data, error } = await supabase
       .from("findings")
       .select("*")
       .eq("id", id)
       .maybeSingle();
-    if (error) throw error;
+    if (error) {
+      debug("fetching finding failed", { id, code: error.code, message: error.message });
+      throw error;
+    }
+    debug("fetched finding", { id, found: !!data, status: data?.status });
     return data;
   },
 
   async listWithApplication(
     filters: FindingFilters = {},
   ): Promise<(Finding & { application: Application | null })[]> {
+    debug("listing findings with applications", filterSummary(filters));
     let query = supabase.from("findings").select("*, application:applications(*)");
     if (filters.status) query = query.eq("status", filters.status);
     if (filters.applicationId)
@@ -49,41 +67,74 @@ export const findingData = {
     if (filters.severity) query = query.eq("severity", filters.severity);
     if (filters.search) query = query.ilike("title", `%${filters.search}%`);
     const { data, error } = await query.order("created_at", { ascending: false });
-    if (error) throw error;
+    if (error) {
+      debug("listing findings with applications failed", {
+        code: error.code,
+        message: error.message,
+      });
+      throw error;
+    }
+    debug("listed findings with applications", { count: data?.length });
     return data as (Finding & { application: Application | null })[];
   },
 
   async getWithApplication(
     id: string,
   ): Promise<(Finding & { application: Application | null }) | null> {
+    debug("fetching finding with application", { id });
     const { data, error } = await supabase
       .from("findings")
       .select("*, application:applications(*)")
       .eq("id", id)
       .maybeSingle();
-    if (error) throw error;
+    if (error) {
+      debug("fetching finding with application failed", {
+        id,
+        code: error.code,
+        message: error.message,
+      });
+      throw error;
+    }
+    debug("fetched finding with application", { id, found: !!data });
     return data as (Finding & { application: Application | null }) | null;
   },
 
   async history(findingId: string): Promise<FindingHistory[]> {
+    debug("listing finding history", { findingId });
     const { data, error } = await supabase
       .from("finding_history")
       .select("*")
       .eq("finding_id", findingId)
       .order("created_at", { ascending: false });
-    if (error) throw error;
+    if (error) {
+      debug("listing finding history failed", { findingId, code: error.code, message: error.message });
+      throw error;
+    }
+    debug("listed finding history", { findingId, count: data?.length });
     return data;
   },
 
   async upsertByExternalId(
     finding: Partial<Finding> & { external_id: string },
   ): Promise<Finding> {
+    debug("upserting finding by external id", {
+      externalId: finding.external_id,
+      fields: Object.keys(finding),
+    });
     const { data, error } = await supabase
       .from("findings")
       .upsert(finding, { onConflict: "external_id" })
       .select()
       .single();
-    if (error) throw error;
+    if (error) {
+      debug("upserting finding failed", {
+        externalId: finding.external_id,
+        code: error.code,
+        message: error.message,
+      });
+      throw error;
+    }
+    debug("upserted finding", { id: data?.id, externalId: finding.external_id });
     return data;
   },
 
@@ -92,6 +143,7 @@ export const findingData = {
     newStatus: FindingStatus,
     reason?: string,
   ): Promise<Finding> {
+    debug("updating finding status", { findingId, newStatus, reasonLength: reason?.length ?? 0 });
     const current = await findingData.get(findingId);
     const userId = await requireUserId();
 
@@ -101,15 +153,26 @@ export const findingData = {
       .eq("id", findingId)
       .select()
       .single();
-    if (error) throw error;
+    if (error) {
+      debug("updating finding status failed", { findingId, code: error.code, message: error.message });
+      throw error;
+    }
+    debug("updated finding status", { findingId, from: current?.status ?? null, to: newStatus });
 
-    await supabase.from("finding_history").insert({
+    const historyResult = await supabase.from("finding_history").insert({
       finding_id: findingId,
       previous_status: current?.status ?? null,
       new_status: newStatus,
       changed_by: userId,
       reason: reason ?? null,
     });
+    if (historyResult?.error) {
+      debug("recording finding history failed; continuing", {
+        findingId,
+        code: historyResult.error.code,
+        message: historyResult.error.message,
+      });
+    }
 
     await activityData.log({
       entity_type: "finding",
@@ -135,7 +198,16 @@ export const findingData = {
     reason: string;
   }): Promise<ClassificationResult> {
     const trimmed = input.reason.trim();
-    if (!trimmed) throw new Error("Changing the risk classification needs a reason.");
+    debug("classifying finding", {
+      findingId: input.findingId,
+      conversationId: input.conversationId,
+      status: input.status,
+      reasonLength: trimmed.length,
+    });
+    if (!trimmed) {
+      debug("classification refused; empty reason", { findingId: input.findingId });
+      throw new Error("Changing the risk classification needs a reason.");
+    }
     return classifyRiskWithCompatibility({ ...input, reason: trimmed });
   },
 };

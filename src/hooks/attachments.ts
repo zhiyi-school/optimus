@@ -1,13 +1,17 @@
 import { useState } from "react";
 import { riskConversationData } from "@/data/services/conversations";
 import { attachmentSource } from "@/lib/attachments";
+import { createDebug } from "@/lib/debug";
 import { downloadFile } from "@/lib/download";
 import { UserFacingError, errorMessage } from "@/lib/utils";
 import type { RiskConversationAttachment } from "@/data/types";
 
+const debug = createDebug("hooks:attachments");
+
 /** Minted per download and never cached, so a link cannot outlive the reader's access. */
 async function attachmentUrl(attachment: RiskConversationAttachment): Promise<string> {
   const source = attachmentSource(attachment);
+  debug("resolves attachment source", { attachmentId: attachment.id, provider: source.provider });
   if (source.provider === "server") {
     throw new UserFacingError(
       "This file is held by the automation server, which cannot serve it to the dashboard yet.",
@@ -15,6 +19,7 @@ async function attachmentUrl(attachment: RiskConversationAttachment): Promise<st
   }
   const { data, error } = await riskConversationData.getSignedUrl(source.path);
   if (error || !data?.signedUrl) {
+    debug("signed url unavailable", { attachmentId: attachment.id, error });
     throw new UserFacingError(
       "This file could not be opened. It may have been removed from storage.",
     );
@@ -27,12 +32,18 @@ export function useAttachmentDownload() {
   const [failed, setFailed] = useState<{ id: string; message: string } | null>(null);
 
   async function start(attachment: RiskConversationAttachment) {
-    if (busy) return;
+    if (busy) {
+      debug("ignores download while busy", { attachmentId: attachment.id, busy });
+      return;
+    }
+    debug("downloads attachment", { attachmentId: attachment.id, fileName: attachment.file_name });
     setBusy(attachment.id);
     setFailed(null);
     try {
       await downloadFile(await attachmentUrl(attachment), attachment.file_name);
+      debug("downloaded attachment", { attachmentId: attachment.id });
     } catch (error) {
+      debug("attachment download failed", { attachmentId: attachment.id, error });
       setFailed({
         id: attachment.id,
         message: errorMessage(error, "That file could not be downloaded."),

@@ -31,6 +31,7 @@ import {
   useTicketControls,
 } from "@/hooks/queries/tickets";
 import { useProfiles } from "@/hooks/queries/reference";
+import { createDebug } from "@/lib/debug";
 import {
   canResumeTicket,
   canWithdrawTicket,
@@ -43,6 +44,8 @@ import { useEnsureRemediation } from "@/hooks/use-ensure-remediation";
 import { cn, errorMessage } from "@/lib/utils";
 import type { ControlDetail } from "@/api/playbook-types";
 import type { Finding } from "@/data/types";
+
+const debug = createDebug("page:ResolveTicket");
 
 export default function ResolveTicket({ ticketId, finding: fallback }: { ticketId?: string; finding?: Finding }) {
   const { can } = useAuth();
@@ -109,7 +112,15 @@ export default function ResolveTicket({ ticketId, finding: fallback }: { ticketI
 
   if (ticketId && ticket.isLoading) return <LoadingState label="Loading remediation…" />;
   if (ticketId && (ticket.isError || !ticket.data)) {
-    return <ErrorState message="Unable to load this remediation." onRetry={() => ticket.refetch()} />;
+    return (
+      <ErrorState
+        message="Unable to load this remediation."
+        onRetry={() => {
+          debug("retries remediation load", { ticketId });
+          void ticket.refetch();
+        }}
+      />
+    );
   }
 
   const progress = controlProgress(live);
@@ -118,7 +129,14 @@ export default function ResolveTicket({ ticketId, finding: fallback }: { ticketI
 
   return (
     <div>
-      {playbook.updated && <PlaybookUpdatedNotice onDismiss={playbook.dismiss} />}
+      {playbook.updated && (
+        <PlaybookUpdatedNotice
+          onDismiss={() => {
+            debug("dismisses playbook update notice", { ticketId, platform: finding?.platform });
+            playbook.dismiss();
+          }}
+        />
+      )}
 
       <div className="grid grid-cols-1 gap-4">
         <Section title="Remediation approach">
@@ -127,7 +145,10 @@ export default function ResolveTicket({ ticketId, finding: fallback }: { ticketI
           ) : definitions.isError ? (
             <ErrorState
               message="The automation backend could not provide the remediation instructions for this risk."
-              onRetry={() => definitions.refetch()}
+              onRetry={() => {
+                debug("retries remediation approaches load", { platform: finding?.platform, riskId: finding?.test_id });
+                void definitions.refetch();
+              }}
             />
           ) : (
             <>
@@ -157,7 +178,9 @@ export default function ResolveTicket({ ticketId, finding: fallback }: { ticketI
                   ticketId
                     ? undefined
                     : async (controlId) => {
+                        debug("opens control before remediation exists", { findingId: finding?.id, controlId });
                         const id = await ensure(controlId);
+                        debug("ensures remediation", { findingId: finding?.id, controlId, ticketId: id ?? null });
                         if (id) navigate(`/resolve/tickets/${id}/controls/${controlId}`);
                       }
                 }
@@ -176,9 +199,10 @@ export default function ResolveTicket({ ticketId, finding: fallback }: { ticketI
                   blockedReason={
                     ticketId ? remediationBlockMessage(workflow.approachChangeBlock) : null
                   }
-                  onSelect={(controlId) =>
-                    ticketId ? selectControl.mutateAsync(controlId) : ensure(controlId)
-                  }
+                  onSelect={(controlId) => {
+                    debug("selects remediation approach", { ticketId, findingId: finding?.id, controlId });
+                    return ticketId ? selectControl.mutateAsync(controlId) : ensure(controlId);
+                  }}
                 />
               )}
             </>
@@ -235,11 +259,13 @@ function ApproachPicker({
 
   // The picker stays open until the write lands, so a refusal is visible where it happened.
   async function apply(control: ControlDetail) {
+    debug("applies approach", { controlId: control.control_id, previousControlId: selectedControlId });
     setSwitchingTo(control.control_id);
     setFailed(null);
     try {
       await onSelect(control.control_id);
     } catch (error) {
+      debug("fails to apply approach", { controlId: control.control_id, error });
       setFailed({
         controlId: control.control_id,
         message: errorMessage(error, "Could not change the remediation approach."),
@@ -248,13 +274,18 @@ function ApproachPicker({
     } finally {
       setSwitchingTo(null);
     }
+    debug("applied approach", { controlId: control.control_id });
     setConfirming(null);
     setOpen(false);
   }
 
   function choose(control: ControlDetail) {
-    if (control.control_id === selectedControlId || switchingTo) return;
+    if (control.control_id === selectedControlId || switchingTo) {
+      debug("ignores approach choice", { controlId: control.control_id, switchingTo });
+      return;
+    }
     if (hasProgress) {
+      debug("asks to confirm approach change", { controlId: control.control_id });
       setConfirming(control);
       return;
     }
@@ -265,7 +296,10 @@ function ApproachPicker({
     <div className="mt-3">
       <button
         type="button"
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => {
+          debug("toggles other approaches", { open: !open, candidateCount: candidates.length });
+          setOpen((value) => !value);
+        }}
         aria-expanded={open}
         className="text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
       >
@@ -341,6 +375,7 @@ function ApproachPicker({
         open={!!confirming}
         onOpenChange={(next) => {
           if (!next && !switchingTo) {
+            debug("dismisses approach change dialog", { controlId: confirming?.control_id });
             setConfirming(null);
             setFailed(null);
           }
@@ -363,6 +398,7 @@ function ApproachPicker({
               variant="outline"
               disabled={!!switchingTo}
               onClick={() => {
+                debug("cancels approach change", { controlId: confirming?.control_id });
                 setConfirming(null);
                 setFailed(null);
               }}
@@ -372,7 +408,11 @@ function ApproachPicker({
             <Button
               type="button"
               disabled={!!blockedReason || !!switchingTo}
-              onClick={() => confirming && void apply(confirming)}
+              onClick={() => {
+                if (!confirming) return;
+                debug("confirms approach change", { controlId: confirming.control_id });
+                void apply(confirming);
+              }}
             >
               {switchingTo ? "Switching…" : "Change approach"}
             </Button>

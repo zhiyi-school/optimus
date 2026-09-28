@@ -2,7 +2,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { RunSyncStatus } from "@/api/automation-types";
 import { canRetrySync, dashboardSyncPresentation, syncCountsSummary } from "@/lib/dashboard-sync";
+import { createDebug } from "@/lib/debug";
 import { cn } from "@/lib/utils";
+
+const debug = createDebug("component:dashboard-sync-notice");
 
 export function DashboardSyncNotice({
   sync,
@@ -41,7 +44,16 @@ export function DashboardSyncNotice({
       )}
       {retryError && <p className="mt-1.5 text-xs text-danger">{retryError}</p>}
       {canRetrySync(sync) && onRetry && (
-        <Button size="sm" variant="outline" className="mt-3" disabled={retrying} onClick={onRetry}>
+        <Button
+          size="sm"
+          variant="outline"
+          className="mt-3"
+          disabled={retrying}
+          onClick={() => {
+            debug("retries dashboard sync", { status: sync.status, attempt: sync.attempt });
+            onRetry();
+          }}
+        >
           {retrying ? "Retrying…" : "Retry dashboard sync"}
         </Button>
       )}

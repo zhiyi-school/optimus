@@ -1,7 +1,10 @@
 import { Download, Paperclip } from "lucide-react";
 import { useAttachmentDownload } from "@/hooks/attachments";
 import { attachmentMeta } from "@/lib/attachments";
+import { createDebug } from "@/lib/debug";
 import type { RiskConversationAttachment } from "@/data/types";
+
+const debug = createDebug("component:attachments");
 
 export function AttachmentList({ attachments }: { attachments: RiskConversationAttachment[] }) {
   const { busy, failed, start } = useAttachmentDownload();
@@ -21,7 +24,13 @@ export function AttachmentList({ attachments }: { attachments: RiskConversationA
               <button
                 type="button"
                 disabled={downloading}
-                onClick={() => void start(attachment)}
+                onClick={() => {
+                  debug("downloads attachment", {
+                    id: attachment.id,
+                    fileName: attachment.file_name,
+                  });
+                  void start(attachment);
+                }}
                 aria-label={`Download ${attachment.file_name}`}
                 className="inline-flex shrink-0 items-center gap-1 rounded font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-progress disabled:opacity-60"
               >
@@ -34,7 +43,10 @@ export function AttachmentList({ attachments }: { attachments: RiskConversationA
                 {failed.message}{" "}
                 <button
                   type="button"
-                  onClick={() => void start(attachment)}
+                  onClick={() => {
+                    debug("retries attachment download", { id: attachment.id });
+                    void start(attachment);
+                  }}
                   className="font-medium underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                 >
                   Try again

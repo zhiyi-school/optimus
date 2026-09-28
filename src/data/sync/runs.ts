@@ -5,7 +5,10 @@ import type {
   RunRecord,
   StartRunRequest,
 } from "@/api/automation-types";
+import { createDebug } from "@/lib/debug";
 import type { RunCancelToken } from "./mapping";
+
+const debug = createDebug("data:sync:runs");
 
 const RUN_POLL_INTERVAL_MS = 3000;
 const RUN_POLL_MAX_ATTEMPTS = 120;
@@ -24,27 +27,41 @@ export async function runAndWait(
   onStarted?: (run: RunRecord) => unknown,
   cancelToken?: RunCancelToken,
 ): Promise<RunWaitResult> {
+  debug("starting run and waiting", { fields: Object.keys(payload), cancellable: !!cancelToken });
   const started = await assessmentApi.startRun(payload);
-  if (onStarted) await onStarted(started);
+  debug("run started", { runId: started.run_id, status: started.status });
+  if (onStarted) {
+    debug("notifying run start listener", { runId: started.run_id });
+    await onStarted(started);
+  }
 
   let latest = started;
   let attempts = 0;
 
   while (latest.status === "running" && attempts < RUN_POLL_MAX_ATTEMPTS) {
     if (cancelToken?.cancelled) {
+      debug("stopped waiting; cancelled", { runId: started.run_id, attempts });
       return { run: latest, outcome: "cancelledWaiting", dashboardSyncPending: false };
     }
     await new Promise((resolve) => setTimeout(resolve, RUN_POLL_INTERVAL_MS));
     latest = await assessmentApi.getRun(started.run_id);
     attempts += 1;
+    debug("polled run", { runId: started.run_id, attempt: attempts, status: latest.status });
   }
 
   if (latest.status === "completed") {
+    debug("run completed; dashboard sync pending", { runId: started.run_id, attempts });
     return { run: latest, outcome: "completed", dashboardSyncPending: true };
   }
   if (latest.status === "failed") {
+    debug("run failed", { runId: started.run_id, attempts });
     return { run: latest, outcome: "failed", dashboardSyncPending: false };
   }
+  debug("stopped waiting; poll limit reached", {
+    runId: started.run_id,
+    attempts,
+    status: latest.status,
+  });
   return { run: latest, outcome: "timedOutWaiting", dashboardSyncPending: false };
 }
 

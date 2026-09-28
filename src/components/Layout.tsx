@@ -14,6 +14,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { createDebug } from "@/lib/debug";
 import { cn } from "@/lib/utils";
 
 const roleLabels: Record<string, string> = {
@@ -22,6 +23,8 @@ const roleLabels: Record<string, string> = {
   cio: "CIO",
   admin: "Admin",
 };
+
+const debug = createDebug("component:Layout");
 
 /** Nested risk, run and control routes keep their top-level tab underlined. */
 const ASSESS_ROUTES = ["/assessments", "/runs"];
@@ -68,6 +71,7 @@ export function Layout() {
                   key={item.to}
                   to={item.to}
                   aria-current={active ? "page" : undefined}
+                  onClick={() => debug("navigates", { to: item.to, from: pathname })}
                   className={cn(
                     "flex h-full shrink-0 items-center border-b-2 border-transparent px-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
                     active && "border-primary text-primary",
@@ -109,13 +113,20 @@ export function Layout() {
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
-                <NavLink to="/settings" className="flex items-center gap-2">
+                <NavLink
+                  to="/settings"
+                  onClick={() => debug("opens settings", { from: pathname })}
+                  className="flex items-center gap-2"
+                >
                   <SettingsIcon className="h-3.5 w-3.5" />
                   Settings
                 </NavLink>
               </DropdownMenuItem>
               <DropdownMenuItem
-                onSelect={() => void signOut()}
+                onSelect={() => {
+                  debug("signs out", { profileId: profile?.id });
+                  void signOut();
+                }}
                 className="flex items-center gap-2 text-danger focus:text-danger"
               >
                 <LogOut className="h-3.5 w-3.5" />

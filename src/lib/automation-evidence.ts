@@ -1,6 +1,9 @@
 import type { AutomationResultRow, EvidenceRef } from "@/api/automation-types";
 import type { EvidenceItem } from "@/lib/evidence-types";
+import { createDebug } from "@/lib/debug";
 import { formatDate, formatDuration } from "@/lib/utils";
+
+const debug = createDebug("lib:automation-evidence");
 
 export const AUTOMATION_SOURCE = "Automated test";
 export const MANUAL_SOURCE = "Security team";
@@ -11,13 +14,20 @@ export function latestResult(
   riskId: string | null | undefined,
 ): AutomationResultRow | undefined {
   if (!appExternalId || !riskId) return undefined;
-  return (history ?? [])
+  const newest = (history ?? [])
     .filter((row) => row.app_id === appExternalId && row.test_id === riskId)
     .reduce<AutomationResultRow | undefined>(
       (newest, row) =>
         !newest || (row.started_at ?? "") > (newest.started_at ?? "") ? row : newest,
       undefined,
     );
+  debug("picks latest result", {
+    appExternalId,
+    riskId,
+    historyCount: history?.length ?? 0,
+    runTimestamp: newest?.run_timestamp ?? null,
+  });
+  return newest;
 }
 
 function displayKind(kind: string, label: string): string {
@@ -98,8 +108,14 @@ export function combinedEvidence(
   manual: EvidenceItem[] | undefined,
   evidenceUrl: (runTimestamp: string, ref: string) => string,
 ): EvidenceItem[] {
+  const automated = automationEvidence(row, evidenceUrl);
+  debug("combines evidence", {
+    runTimestamp: row?.run_timestamp ?? null,
+    automatedCount: automated.length,
+    manualCount: manual?.length ?? 0,
+  });
   return [
-    ...automationEvidence(row, evidenceUrl),
+    ...automated,
     ...(manual ?? []).map((item) => ({ ...item, source: item.source ?? MANUAL_SOURCE })),
   ];
 }

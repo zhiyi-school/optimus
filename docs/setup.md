@@ -41,6 +41,20 @@ host's sync worker.
 Variables are read at build time, so a change requires restarting `npm run dev`
 or rebuilding.
 
+### Debug logging
+
+`src/lib/debug.ts` provides `createDebug(scope)`, whose statements write
+`console.debug` lines prefixed `[scope]`. They are silent unless either switch is on:
+
+- `VITE_DEBUG=true` in `.env`, which applies to every session of that build.
+- `localStorage.setItem("optimus:debug", "1")` in the browser console, followed by a
+  reload, which applies to one browser without a rebuild. Remove the key to turn it off.
+
+Enable the browser's **Verbose** console level to see the lines. Keys that look like
+credentials (tokens, passwords, API keys, authorization headers, signed URLs) are
+masked before logging. Ids, statuses and request paths are not, so treat captured
+output as internal. Leave `VITE_DEBUG` unset in production builds.
+
 ## 2. Supabase project
 
 Use hosted Supabase because multiple users need shared, persistent data.

@@ -13,8 +13,11 @@ import { useAssessments } from "@/hooks/queries/assessments";
 import { syncService } from "@/data/sync";
 import { assessmentRunRequestData } from "@/data/services/assessments";
 import { latestAssessmentPerApp } from "@/lib/assessments";
+import { createDebug } from "@/lib/debug";
 import { errorMessage, formatDate, cn } from "@/lib/utils";
 import type { Platform } from "@/data/types";
+
+const debug = createDebug("page:NewAssessment");
 
 type Screen = "form" | "review";
 
@@ -76,6 +79,7 @@ function PlatformChoice({
     if (step === 0) return;
     event.preventDefault();
     const next = (index + step + PLATFORMS.length) % PLATFORMS.length;
+    debug("moves platform selection", { key: event.key, platform: PLATFORMS[next].value });
     onChange(PLATFORMS[next].value);
     (event.currentTarget.parentElement?.children[next] as HTMLButtonElement | undefined)?.focus();
   }
@@ -91,7 +95,10 @@ function PlatformChoice({
             role="radio"
             aria-checked={selected}
             tabIndex={selected ? 0 : -1}
-            onClick={() => onChange(option.value)}
+            onClick={() => {
+              debug("selects platform", { platform: option.value });
+              onChange(option.value);
+            }}
             onKeyDown={(event) => move(event, index)}
             className={cn(
               "flex h-10 items-center justify-center gap-2 rounded-lg border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
@@ -142,6 +149,7 @@ export default function NewAssessment() {
   );
 
   const goToStep = useCallback((key: number) => {
+    debug("goes to step", { step: key, screen });
     if (key === 4) {
       setScreen("review");
       return;
@@ -156,6 +164,7 @@ export default function NewAssessment() {
 
   useEffect(() => {
     if (screen !== "form" || pendingScrollStep === null) return;
+    debug("scrolls to pending step", { step: pendingScrollStep });
     sectionRefs[pendingScrollStep as 1 | 2 | 3].current?.scrollIntoView({ behavior: "smooth", block: "start" });
     setPendingScrollStep(null);
   }, [screen, pendingScrollStep, sectionRefs]);
@@ -165,11 +174,20 @@ export default function NewAssessment() {
   }, []);
 
   const removeEmail = useCallback((i: number) => {
+    debug("removes email contact", { index: i });
     setEmails((prev) => prev.filter((_, idx) => idx !== i));
   }, []);
 
   const confirm = useCallback(async () => {
-    if (!name.trim()) return;
+    if (!name.trim()) {
+      debug("rejects submission", { field: "name", rule: "required" });
+      return;
+    }
+    debug("submits assessment", {
+      platform,
+      hasIdentifier: !!identifier.trim(),
+      contactCount: emails.map((e) => e.trim()).filter(Boolean).length,
+    });
     setSaving(true);
     setError(null);
     try {
@@ -181,12 +199,15 @@ export default function NewAssessment() {
         appType: appType.trim(),
         contactEmails: emails.map((e) => e.trim()).filter(Boolean),
       });
+      debug("creates assessment", { assessmentId: assessment.id });
 
       // The run is requested durably rather than started here, so leaving this
       // page cannot lose it.
       try {
         await assessmentRunRequestData.request(assessment.id);
+        debug("queues assessment run", { assessmentId: assessment.id });
       } catch (err) {
+        debug("fails to queue assessment run", { assessmentId: assessment.id, error: err });
         console.warn("The assessment was created but could not be queued for testing.", err);
       }
 
@@ -198,8 +219,10 @@ export default function NewAssessment() {
         queryClient.invalidateQueries({ queryKey: ["dashboardMetrics"] }),
       ]);
 
+      debug("navigates after create", { to: "/assessments" });
       navigate("/assessments");
     } catch (err) {
+      debug("fails to create assessment", err);
       setError(errorMessage(err, "Unable to add app."));
     } finally {
       setSaving(false);
@@ -362,7 +385,10 @@ export default function NewAssessment() {
                       size="sm"
                       variant="outline"
                       className="mt-2 border-primary text-primary hover:bg-primary/5"
-                      onClick={() => setEmails((prev) => [...prev, ""])}
+                      onClick={() => {
+                        debug("adds email contact", { count: emails.length + 1 });
+                        setEmails((prev) => [...prev, ""]);
+                      }}
                     >
                       <Plus className="h-3.5 w-3.5" />
                       Add email
@@ -383,7 +409,10 @@ export default function NewAssessment() {
                           key={c.id}
                           type="button"
                           disabled={!c.available}
-                          onClick={() => setConnector(c.id)}
+                          onClick={() => {
+                            debug("selects connector", { connector: c.id });
+                            setConnector(c.id);
+                          }}
                           className={cn(
                             "flex w-full items-start gap-3 rounded-lg border p-3 text-left",
                             selected
@@ -489,14 +518,28 @@ export default function NewAssessment() {
                     Cancel
                   </Button>
                 </Link>
-                <Button type="button" disabled={!canSubmit} onClick={() => setScreen("review")}>
+                <Button
+                  type="button"
+                  disabled={!canSubmit}
+                  onClick={() => {
+                    debug("opens review", { connector });
+                    setScreen("review");
+                  }}
+                >
                   Next
                 </Button>
               </>
             )}
             {screen === "review" && (
               <>
-                <Button type="button" variant="outline" onClick={() => setScreen("form")}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    debug("returns to form");
+                    setScreen("form");
+                  }}
+                >
                   <ChevronLeft className="h-3.5 w-3.5" />
                   Back
                 </Button>

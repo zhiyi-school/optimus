@@ -29,6 +29,7 @@ import {
   type ConversationEventKind,
 } from "@/lib/status";
 import { cn, errorMessage, formatDate, formatDuration } from "@/lib/utils";
+import { createDebug } from "@/lib/debug";
 import { CLASSIFICATION_OPTIONS } from "@/hooks/conversation-composer";
 import type {
   ComposerAction,
@@ -43,6 +44,8 @@ import type {
   RiskConversationAttachment,
   RiskConversationEntry,
 } from "@/data/types";
+
+const debug = createDebug("component:conversation-panel");
 
 const ACTION_LABEL: Record<ComposerActionKind, string> = {
   classification: "Change classification",
@@ -135,6 +138,7 @@ export function RiskConversationPanel({
       return;
     }
     const isFirstFill = seenCount.current === 0;
+    debug("receives items", { count: list.length, isFirstFill, pinned: pinnedToLatest.current });
     seenCount.current = list.length;
     if (isFirstFill || pinnedToLatest.current) scrollToLatest();
     else setHasUnread(true);
@@ -142,6 +146,7 @@ export function RiskConversationPanel({
 
   useEffect(() => {
     if (highlightRunTimestamp) {
+      debug("scrolls to highlighted run", { runTimestamp: highlightRunTimestamp });
       highlightedRef.current?.scrollIntoView?.({ block: "center", behavior: "smooth" });
     }
   }, [highlightRunTimestamp, list.length]);
@@ -161,6 +166,7 @@ export function RiskConversationPanel({
 
   /** Adding or removing an action never touches the draft or the chosen file. */
   function selectOffer(offer: ComposerActionOffer) {
+    debug("selects action", { kind: offer.kind });
     setAction(
       offer.kind === "classification"
         ? {
@@ -180,17 +186,30 @@ export function RiskConversationPanel({
     if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
     event.preventDefault();
     if (event.repeat || sending || !ready) return;
+    debug("submits on Enter", { length: message.length });
     event.currentTarget.form?.requestSubmit();
   }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    if (!ready && !retryingAttachment) return;
-    try {
-      await onSubmit({ message, file, action: action ?? undefined });
-    } catch {
+    if (!ready && !retryingAttachment) {
+      debug("rejects submit", { action: action?.kind ?? null, hasMessage: !!message });
       return;
     }
+    debug("submits", {
+      length: message.length,
+      action: action?.kind ?? null,
+      fileName: file?.name,
+      fileSize: file?.size,
+      retryingAttachment,
+    });
+    try {
+      await onSubmit({ message, file, action: action ?? undefined });
+    } catch (error) {
+      debug("submit fails", { action: action?.kind ?? null, retryingAttachment }, error);
+      return;
+    }
+    debug("submit succeeds", { action: action?.kind ?? null, retryingAttachment });
     setDraft("");
     setFile(undefined);
     setAction(null);
@@ -198,7 +217,9 @@ export function RiskConversationPanel({
   }
 
   async function abandonAttachment() {
+    debug("abandons attachment retry", { fileName: attachmentRetry?.fileName });
     await onAbandonAttachment?.();
+    debug("abandoned attachment retry");
     setDraft("");
     setFile(undefined);
     setAction(null);
@@ -223,14 +244,29 @@ export function RiskConversationPanel({
             {isLoading && <LoadingState label="Loading conversation…" />}
 
             {isError && (
-              <ErrorState message="Unable to load this conversation." onRetry={onRetry} />
+              <ErrorState
+                message="Unable to load this conversation."
+                onRetry={
+                  onRetry &&
+                  (() => {
+                    debug("retries conversation");
+                    onRetry();
+                  })
+                }
+              />
             )}
 
             {!isLoading && !isError && historyError && (
               <div className="mb-4">
                 <ErrorState
                   message="Unable to load the automated test history. The conversation below is complete apart from the automated runs."
-                  onRetry={onRetryHistory}
+                  onRetry={
+                    onRetryHistory &&
+                    (() => {
+                      debug("retries run history");
+                      onRetryHistory();
+                    })
+                  }
                 />
               </div>
             )}
@@ -239,7 +275,13 @@ export function RiskConversationPanel({
               <div className="mb-4">
                 <ErrorState
                   message="Unable to load the files attached to this conversation. The messages below are complete apart from their attachments."
-                  onRetry={onRetryAttachments}
+                  onRetry={
+                    onRetryAttachments &&
+                    (() => {
+                      debug("retries attachments");
+                      onRetryAttachments();
+                    })
+                  }
                 />
               </div>
             )}
@@ -295,7 +337,10 @@ export function RiskConversationPanel({
           {hasUnread && (
             <button
               type="button"
-              onClick={scrollToLatest}
+              onClick={() => {
+                debug("jumps to latest");
+                scrollToLatest();
+              }}
               className="absolute inset-x-0 bottom-3 mx-auto flex w-fit items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-foreground shadow-card hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
             >
               <ArrowDown className="h-3 w-3" />
@@ -325,8 +370,14 @@ export function RiskConversationPanel({
                   action={action}
                   offer={(composerOffers ?? []).find((offer) => offer.kind === action.kind)}
                   disabled={retryingAttachment}
-                  onStatus={(status) => setAction({ kind: "classification", status })}
-                  onRemove={() => setAction(null)}
+                  onStatus={(status) => {
+                    debug("changes classification", { status });
+                    setAction({ kind: "classification", status });
+                  }}
+                  onRemove={() => {
+                    debug("removes action", { kind: action.kind });
+                    setAction(null);
+                  }}
                 />
               )}
               <div className="flex items-end gap-2 rounded-lg border border-border bg-card p-2">
@@ -347,7 +398,15 @@ export function RiskConversationPanel({
                     type="file"
                     className="hidden"
                     disabled={retryingAttachment}
-                    onChange={(event) => setFile(event.target.files?.[0])}
+                    onChange={(event) => {
+                      const chosen = event.target.files?.[0];
+                      debug("adds attachment", {
+                        fileName: chosen?.name,
+                        size: chosen?.size,
+                        count: event.target.files?.length ?? 0,
+                      });
+                      setFile(chosen);
+                    }}
                   />
                 </label>
                 <Button
@@ -371,7 +430,10 @@ export function RiskConversationPanel({
                   <button
                     type="button"
                     disabled={retryingAttachment}
-                    onClick={() => setFile(undefined)}
+                    onClick={() => {
+                      debug("removes attachment", { fileName: file.name, size: file.size });
+                      setFile(undefined);
+                    }}
                     aria-label={`Remove ${file.name}`}
                     className="rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                   >

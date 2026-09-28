@@ -1,5 +1,8 @@
 import type { AutomationResultRow } from "@/api/automation-types";
 import { artifactNamed } from "@/lib/automation-evidence";
+import { createDebug } from "@/lib/debug";
+
+const debug = createDebug("lib:plaintext-literals");
 
 export type PlaintextCategory = "credential" | "secret_key" | "credential_url" | "sensitive_value";
 
@@ -98,11 +101,17 @@ export function plaintextLiterals(
   runTimestamp: string,
 ): PlaintextAnalysis {
   const root = record(document);
-  if (!root || !Array.isArray(root.sensitive_information_findings)) return { state: "unsupported" };
+  if (!root || !Array.isArray(root.sensitive_information_findings)) {
+    debug("analysis unsupported", { runTimestamp });
+    return { state: "unsupported" };
+  }
 
   const provider = text(root.analysis_provider) ?? "unknown analyzer";
   const scan = record(root.sensitive_scan);
-  if (scan && scan.enabled === false) return { state: "not_scanned", provider };
+  if (scan && scan.enabled === false) {
+    debug("analysis not scanned", { runTimestamp, provider });
+    return { state: "not_scanned", provider };
+  }
 
   const literals: PlaintextLiteral[] = [];
   const seen = new Set<string>();
@@ -142,6 +151,13 @@ export function plaintextLiterals(
     });
   }
 
+  debug("reads plaintext literals", {
+    runTimestamp,
+    provider,
+    reported: root.sensitive_information_findings.length,
+    kept: literals.length,
+    truncated: scan?.truncated === true,
+  });
   return { state: "ready", literals, truncated: scan?.truncated === true, provider };
 }
 

@@ -7,8 +7,11 @@ import { AssessmentSidebar } from "@/components/assessment-sidebar";
 import { useAssessment } from "@/hooks/queries/assessments";
 import { useFindings } from "@/hooks/queries/evidence";
 import { useRiskCatalogue } from "@/hooks/queries/automation";
+import { createDebug } from "@/lib/debug";
 import { formatDate } from "@/lib/utils";
 import type { Application, Finding } from "@/data/types";
+
+const debug = createDebug("page:AssessmentDetail");
 
 /**
  * A direct or bookmarked link to `/assessments/:assessmentId`. Queued,
@@ -35,7 +38,15 @@ export default function AssessmentDetail() {
 
   if (isLoading) return <LoadingState label="Loading assessment…" />;
   if (isError || !assessment)
-    return <ErrorState message="Unable to load this assessment." onRetry={() => refetch()} />;
+    return (
+      <ErrorState
+        message="Unable to load this assessment."
+        onRetry={() => {
+          debug("retries assessment load", { assessmentId });
+          void refetch();
+        }}
+      />
+    );
 
   if (assessment.status !== "completed") {
     return <Navigate to={`/assessments?expanded=${assessment.id}`} replace />;

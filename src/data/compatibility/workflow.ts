@@ -5,6 +5,9 @@ import type {
   RetestRun,
   RiskConversationAttachment,
 } from "@/data/types";
+import { createDebug } from "@/lib/debug";
+
+const debug = createDebug("data:compat");
 
 export type ClassificationCapability = "entry" | "legacy_without_entry";
 
@@ -30,15 +33,37 @@ export async function classifyRiskWithCompatibility(
     p_status: input.status,
     p_reason: input.reason,
   };
+  debug("rpc classify_risk_entry", {
+    findingId: input.findingId,
+    conversationId: input.conversationId,
+    status: input.status,
+  });
   const current = await supabase.rpc("classify_risk_entry", params);
   if (!current.error) {
     const payload = current.data as { finding: Finding; entry_id: string };
+    debug("classified via entry RPC", { findingId: input.findingId, entryId: payload?.entry_id });
     return { finding: payload.finding, entryId: payload.entry_id, capability: "entry" };
   }
-  if (!isMissingFunction(current.error)) throw current.error;
+  if (!isMissingFunction(current.error)) {
+    debug("classify_risk_entry failed; not a missing-function error, rethrowing", {
+      code: current.error.code,
+      message: current.error.message,
+    });
+    throw current.error;
+  }
 
+  debug("classify_risk_entry missing; falling back to legacy classify_risk", {
+    code: current.error.code,
+  });
   const legacy = await supabase.rpc("classify_risk", params);
-  if (legacy.error) throw legacy.error;
+  if (legacy.error) {
+    debug("legacy classify_risk failed", {
+      code: legacy.error.code,
+      message: legacy.error.message,
+    });
+    throw legacy.error;
+  }
+  debug("classified via legacy RPC without entry", { findingId: input.findingId });
   return {
     finding: legacy.data as Finding,
     entryId: null,
@@ -66,14 +91,32 @@ export interface AttachmentInsertResult {
 export async function insertAttachmentWithCompatibility(
   row: AttachmentMetadataRow,
 ): Promise<AttachmentInsertResult> {
+  debug("inserting attachment metadata", {
+    entryId: row.entry_id,
+    storagePath: row.storage_path,
+    fileName: row.file_name,
+    size: row.size_bytes,
+  });
   const current = await supabase
     .from("risk_conversation_attachments")
     .insert(row)
     .select()
     .single();
-  if (!current.error) return { attachment: current.data, capability: "provider_metadata" };
-  if (!isMissingAttachmentMetadataColumn(current.error)) throw current.error;
+  if (!current.error) {
+    debug("inserted attachment with provider metadata", { attachmentId: current.data?.id });
+    return { attachment: current.data, capability: "provider_metadata" };
+  }
+  if (!isMissingAttachmentMetadataColumn(current.error)) {
+    debug("attachment insert failed; not a missing-column error, rethrowing", {
+      code: current.error.code,
+      message: current.error.message,
+    });
+    throw current.error;
+  }
 
+  debug("provider metadata columns missing; retrying with legacy columns", {
+    code: current.error.code,
+  });
   const legacyRow = {
     entry_id: row.entry_id,
     uploaded_by: row.uploaded_by,
@@ -86,7 +129,14 @@ export async function insertAttachmentWithCompatibility(
     .insert(legacyRow)
     .select()
     .single();
-  if (legacy.error) throw legacy.error;
+  if (legacy.error) {
+    debug("legacy attachment insert failed", {
+      code: legacy.error.code,
+      message: legacy.error.message,
+    });
+    throw legacy.error;
+  }
+  debug("inserted attachment with legacy columns", { attachmentId: legacy.data?.id });
   return { attachment: legacy.data, capability: "legacy_supabase" };
 }
 
@@ -125,6 +175,13 @@ export async function requestReassessmentWithCompatibility(input: {
   message: string | null;
   submissionId: string;
 }): Promise<ReassessmentRequestResult | null> {
+  debug("rpc request_reassessment_entry", {
+    conversationId: input.conversationId,
+    findingId: input.findingId,
+    ticketId: input.ticketId,
+    submissionId: input.submissionId,
+    messageLength: input.message?.length ?? 0,
+  });
   const { data, error } = await supabase.rpc("request_reassessment_entry", {
     p_conversation_id: input.conversationId,
     p_finding_id: input.findingId,
@@ -135,9 +192,21 @@ export async function requestReassessmentWithCompatibility(input: {
   // Only a database without migration 0030 falls back; a permission, validation
   // or network failure keeps its own meaning.
   if (error) {
-    if (isMissingFunction(error)) return null;
+    if (isMissingFunction(error)) {
+      debug("request_reassessment_entry missing; caller uses legacy path", { code: error.code });
+      return null;
+    }
+    debug("request_reassessment_entry failed; rethrowing", {
+      code: error.code,
+      message: error.message,
+    });
     throw error;
   }
   const payload = data as { run: RetestRun; entry_id: string | null };
+  debug("reassessment queued via RPC", {
+    submissionId: input.submissionId,
+    runId: payload?.run?.id,
+    entryId: payload?.entry_id ?? null,
+  });
   return { run: payload.run, entryId: payload.entry_id ?? null, capability: "queue_rpc" };
 }

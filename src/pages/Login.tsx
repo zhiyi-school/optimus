@@ -13,6 +13,9 @@ import { Button } from "@/components/ui/button";
 import { LoadingState } from "@/components/common";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { createDebug } from "@/lib/debug";
+
+const debug = createDebug("page:Login");
 
 type Mode = "signin" | "signup";
 
@@ -60,6 +63,7 @@ export default function Login() {
   if (session) return <Navigate to={defaultRouteFor(profile)} replace />;
 
   function switchMode(next: Mode) {
+    debug("switches mode", { from: mode, to: next });
     setMode(next);
     setError(null);
     setNotice(null);
@@ -67,14 +71,17 @@ export default function Login() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    debug("submits credentials", { mode, hasEmail: email.length > 0, hasDisplayName: displayName.length > 0 });
     setError(null);
     setNotice(null);
     setLoading(true);
     try {
       if (mode === "signin") {
         await signIn(email, password);
+        debug("signs in");
       } else {
         const { requiresEmailConfirmation } = await signUp(email, password, displayName);
+        debug("signs up", { requiresEmailConfirmation });
         if (requiresEmailConfirmation) {
           setNotice("Check your email to confirm your account, then sign in below.");
           setMode("signin");
@@ -82,6 +89,7 @@ export default function Login() {
         }
       }
     } catch (err) {
+      debug("fails to authenticate", { mode, error: err });
       setError(
         err instanceof Error
           ? err.message

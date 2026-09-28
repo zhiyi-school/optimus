@@ -4,7 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useCreateRiskAcceptanceTicket, useReviewRiskAcceptance } from "@/hooks/queries/tickets";
+import { createDebug } from "@/lib/debug";
 import type { Finding } from "@/data/types";
+
+const debug = createDebug("component:ticket-actions:acceptance");
 
 export function AcceptRiskButton({ finding }: { finding: Finding }) {
   const [open, setOpen] = useState(false);
@@ -17,6 +20,13 @@ export function AcceptRiskButton({ finding }: { finding: Finding }) {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    debug("requests risk acceptance", {
+      findingId: finding.id,
+      reasonLength: reason.trim().length,
+      hasJustification: !!justification,
+      hasControls: !!controls,
+      hasExpiry: !!expiresAt,
+    });
     await create.mutateAsync({
       finding_id: finding.id,
       application_id: finding.application_id,
@@ -26,12 +36,19 @@ export function AcceptRiskButton({ finding }: { finding: Finding }) {
       compensating_controls: controls || undefined,
       expires_at: expiresAt || undefined,
     });
+    debug("requested risk acceptance", { findingId: finding.id });
     setOpen(false);
     navigate(`/findings/${finding.id}`);
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        debug("toggles acceptance dialog", { open: next, findingId: finding.id });
+        setOpen(next);
+      }}
+    >
       <DialogTrigger asChild>
         <Button variant="outline">Accept Risk</Button>
       </DialogTrigger>
@@ -74,7 +91,14 @@ export function AcceptRiskButton({ finding }: { finding: Finding }) {
             />
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                debug("cancels risk acceptance", { findingId: finding.id });
+                setOpen(false);
+              }}
+            >
               Cancel
             </Button>
             <Button type="submit" disabled={create.isPending}>
@@ -100,12 +124,25 @@ export function ReviewRiskAcceptanceDialog({
   const review = useReviewRiskAcceptance();
 
   async function decide(decision: "accepted" | "rejected") {
+    debug("reviews risk acceptance", {
+      ticketId,
+      riskAcceptanceId,
+      decision,
+      commentLength: comment.trim().length,
+    });
     await review.mutateAsync({ id: riskAcceptanceId, ticketId, decision, comment });
+    debug("reviewed risk acceptance", { ticketId, riskAcceptanceId, decision });
     setOpen(false);
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        debug("toggles review dialog", { open: next, ticketId, riskAcceptanceId });
+        setOpen(next);
+      }}
+    >
       <DialogTrigger asChild>
         <Button size="sm">Review Risk Acceptance</Button>
       </DialogTrigger>

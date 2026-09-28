@@ -5,8 +5,11 @@ import { primaryRole } from "@/auth/permissions";
 import { PageHeader, StatCard, LoadingState, ErrorState } from "@/components/common";
 import { CtaCard } from "@/components/cta-card";
 import { useDashboardMetrics } from "@/hooks/queries/tickets";
+import { createDebug } from "@/lib/debug";
 import { findingStatusConfig } from "@/lib/status";
 import type { UserRole } from "@/data/types";
+
+const debug = createDebug("page:Dashboard");
 
 const roleGreeting: Record<UserRole, string> = {
   developer: "Findings and tickets that need your attention.",
@@ -27,7 +30,15 @@ export default function Dashboard() {
       <PageHeader title="Dashboard" description={role ? roleGreeting[role] : undefined} />
 
       {isLoading && <LoadingState label="Loading dashboard…" />}
-      {isError && <ErrorState message="Unable to load dashboard metrics." onRetry={() => refetch()} />}
+      {isError && (
+        <ErrorState
+          message="Unable to load dashboard metrics."
+          onRetry={() => {
+            debug("retries metrics load", { role });
+            void refetch();
+          }}
+        />
+      )}
 
       {metrics && role === "developer" && <DeveloperDashboard metrics={metrics} />}
       {metrics && role === "cio" && <CioDashboard metrics={metrics} />}

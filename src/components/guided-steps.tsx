@@ -2,7 +2,10 @@ import { useEffect, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, ArrowRight, Check, Clock, Info, X, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { createDebug } from "@/lib/debug";
 import { cn } from "@/lib/utils";
+
+const debug = createDebug("component:guided-steps");
 
 // A footer action that navigates is a link, so it must not wrap a real button.
 const linkButton =
@@ -64,8 +67,10 @@ export function GuidedSteps({
 
   useEffect(() => {
     const previous = document.body.style.overflow;
+    debug("locks body scroll");
     document.body.style.overflow = "hidden";
     return () => {
+      debug("restores body scroll");
       document.body.style.overflow = previous;
     };
   }, []);
@@ -94,6 +99,7 @@ export function GuidedSteps({
           <Link
             to={closeTo}
             aria-label={closeLabel}
+            onClick={() => debug("closes guide", { via: "close", activeId })}
             className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
           >
             <X className="h-5 w-5" />
@@ -132,7 +138,10 @@ export function GuidedSteps({
                         <li key={step.id} className="shrink-0 lg:shrink">
                           <button
                             type="button"
-                            onClick={() => onSelect(step.id)}
+                            onClick={() => {
+                              debug("selects step", { stepId: step.id, index: stepIndex });
+                              onSelect(step.id);
+                            }}
                             aria-current={active ? "step" : undefined}
                             className={cn(
                               "relative flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
@@ -188,23 +197,42 @@ export function GuidedSteps({
           data-guided-footer
           className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border bg-card px-5 py-3.5 sm:px-6 sm:py-4"
         >
-          <Link to={closeTo} className={linkButtonOutline}>
+          <Link
+            to={closeTo}
+            className={linkButtonOutline}
+            onClick={() => debug("closes guide", { via: "cancel", activeId })}
+          >
             Cancel
           </Link>
           {guided && (
             <div className="flex items-center gap-2">
               {!onFirst && (
-                <Button variant="outline" onClick={() => onSelect(steps[index - 1].id)}>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    debug("goes to previous step", { from: activeId, to: steps[index - 1].id });
+                    onSelect(steps[index - 1].id);
+                  }}
+                >
                   <ArrowLeft className="h-4 w-4" />
                   Previous
                 </Button>
               )}
               {onLast ? (
-                <Link to={closeTo} className={linkButtonPrimary}>
+                <Link
+                  to={closeTo}
+                  className={linkButtonPrimary}
+                  onClick={() => debug("finishes guide", { activeId, stepCount: steps.length })}
+                >
                   {finishLabel}
                 </Link>
               ) : (
-                <Button onClick={() => onSelect(steps[index + 1].id)}>
+                <Button
+                  onClick={() => {
+                    debug("goes to next step", { from: activeId, to: steps[index + 1].id });
+                    onSelect(steps[index + 1].id);
+                  }}
+                >
                   Next Step
                   <ArrowRight className="h-4 w-4" />
                 </Button>

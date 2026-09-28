@@ -13,6 +13,7 @@ import {
 } from "@/hooks/queries/tickets";
 import { useLiveControlKeys, useRiskCatalogue } from "@/hooks/queries/automation";
 import { useAuth } from "@/auth/useAuth";
+import { createDebug } from "@/lib/debug";
 import {
   remediationStatusLabels,
   summarizeApplication,
@@ -20,6 +21,8 @@ import {
 } from "@/lib/resolve";
 import { compareByName, formatDate } from "@/lib/utils";
 import type { Application } from "@/data/types";
+
+const debug = createDebug("page:Resolve");
 
 interface Row {
   id: string;
@@ -141,6 +144,11 @@ export default function Resolve() {
         <ErrorState
           message="Unable to load your remediation work."
           onRetry={() => {
+            debug("retries remediation load", {
+              applicationsError: applications.isError,
+              findingsError: findings.isError,
+              ticketsError: tickets.isError,
+            });
             void applications.refetch();
             void findings.refetch();
             void tickets.refetch();
@@ -159,7 +167,10 @@ export default function Resolve() {
         <DataTable
           columns={columns}
           rows={rows}
-          onRowClick={(row) => navigate(`/resolve/applications/${row.application.id}`)}
+          onRowClick={(row) => {
+            debug("opens application", { applicationId: row.application.id, status: row.summary.status });
+            navigate(`/resolve/applications/${row.application.id}`);
+          }}
           rowLabel={(row) => `Open remediation work for ${row.application.name}`}
           renderCard={(row) => {
             const status = remediationStatusLabels[row.summary.status];

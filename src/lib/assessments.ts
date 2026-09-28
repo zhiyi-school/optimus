@@ -1,7 +1,10 @@
+import { createDebug } from "@/lib/debug";
 import { compareByName } from "@/lib/utils";
 import type { Application, Assessment, Finding, FindingStatus } from "@/data/types";
 
 export type AssessmentRow = Assessment & { application: Application | null };
+
+const debug = createDebug("lib:assessments");
 
 /** Least reassuring first, so opening a completed assessment lands on work that still needs a decision. */
 const RISK_PRIORITY: (FindingStatus | "untested")[] = ["at_risk", "inconclusive", "untested"];
@@ -24,8 +27,12 @@ export function preferredAssessmentRisk(
     const match = ordered.find(
       (risk) => (statusByRisk.get(risk.risk_id) ?? "untested") === wanted,
     );
-    if (match) return match.risk_id;
+    if (match) {
+      debug("prefers assessment risk", { riskId: match.risk_id, status: wanted });
+      return match.risk_id;
+    }
   }
+  debug("prefers first catalogue risk", { riskId: ordered[0].risk_id });
   return ordered[0].risk_id;
 }
 
@@ -41,6 +48,7 @@ export function latestAssessmentPerApp(assessments: AssessmentRow[] | undefined)
     const existing = latestByApp.get(a.application_id);
     if (!existing || a.updated_at > existing.updated_at) latestByApp.set(a.application_id, a);
   }
+  debug("keeps latest assessment per app", { assessmentCount: assessments?.length ?? 0, appCount: latestByApp.size });
   return [...latestByApp.values()].sort((a, b) =>
     compareByName(a.application?.name, b.application?.name, a.application_id, b.application_id),
   );

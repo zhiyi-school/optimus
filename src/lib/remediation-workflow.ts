@@ -14,6 +14,9 @@ import {
   selectionWasReplaced,
   type LiveControl,
 } from "@/lib/resolve";
+import { createDebug } from "@/lib/debug";
+
+const debug = createDebug("lib:remediation-workflow");
 
 export type RemediationReasonCode =
   | "approach_permission"
@@ -77,7 +80,7 @@ export function remediationWorkflow(input: RemediationWorkflowInput): Remediatio
   const approachChangeBlock = approachBlock(input.ticket, input.mayEdit);
   const reassessmentBlock = reassessmentBlockFor(input);
 
-  return {
+  const workflow = {
     candidates,
     storedControlId,
     selectedControlId,
@@ -93,6 +96,23 @@ export function remediationWorkflow(input: RemediationWorkflowInput): Remediatio
     approachChangeBlock,
     reassessmentBlock,
   };
+  debug("decides workflow", {
+    ticketId: input.ticket?.id,
+    ticketStatus: input.ticket?.status,
+    definitionsState: input.definitionsState,
+    candidateCount: candidates.length,
+    storedControlId,
+    selectedControlId,
+    replaced,
+    planSize: reconciliationPlan.length,
+    rowsLoaded,
+    reconciled,
+    complete: workflow.complete,
+    editable: workflow.editable,
+    approachChangeBlock: approachChangeBlock?.code ?? null,
+    reassessmentBlock: reassessmentBlock?.code ?? null,
+  });
+  return workflow;
 }
 
 function approachBlock(

@@ -5,6 +5,7 @@ import { PlatformBadge, StatusBadge, TestRunStatusBadge } from "@/components/dat
 import { RunEventTimeline } from "@/components/run-events";
 import { DashboardSyncNotice } from "@/components/dashboard-sync-notice";
 import { DownloadSarifButton } from "@/components/download-sarif-button";
+import { createDebug } from "@/lib/debug";
 import { canExportSarif } from "@/lib/sarif";
 import {
   useRunEvents,
@@ -15,6 +16,8 @@ import {
 } from "@/hooks/queries/automation";
 import { mapVerdictToFindingStatus } from "@/data/sync";
 import { errorMessage, formatDate, formatDuration } from "@/lib/utils";
+
+const debug = createDebug("page:RunDetail");
 
 export default function RunDetail() {
   const { runTimestamp: runId } = useParams<{ runTimestamp: string }>();
@@ -32,7 +35,17 @@ export default function RunDetail() {
   } = useRunResults(run?.run_timestamp ?? runId, !inProgress);
 
   if (isLoading) return <LoadingState label="Loading run…" />;
-  if (isError || !run) return <ErrorState message="Unable to load this run." onRetry={() => refetch()} />;
+  if (isError || !run) {
+    return (
+      <ErrorState
+        message="Unable to load this run."
+        onRetry={() => {
+          debug("retries run load", { runId });
+          void refetch();
+        }}
+      />
+    );
+  }
 
   return (
     <div>
@@ -69,7 +82,13 @@ export default function RunDetail() {
       <DashboardSyncNotice
         className="mb-6"
         sync={sync}
-        onRetry={() => resync.mutate()}
+        onRetry={() => {
+          debug("requests run resync", { runId: run.run_id });
+          resync.mutate(undefined, {
+            onSuccess: (data) => debug("resyncs run", { runId: run.run_id, status: data?.status }),
+            onError: (error) => debug("fails to resync run", { runId: run.run_id, error }),
+          });
+        }}
         retrying={resync.isPending}
         retryError={resync.isError ? errorMessage(resync.error, "Could not start the sync.") : null}
       />
@@ -89,7 +108,13 @@ export default function RunDetail() {
           <h2 className="mb-2 text-sm font-semibold text-foreground">Results</h2>
           {resultsLoading && <LoadingState label="Loading results…" />}
           {resultsError && (
-            <ErrorState message="Unable to load results for this run." onRetry={() => refetchResults()} />
+            <ErrorState
+              message="Unable to load results for this run."
+              onRetry={() => {
+                debug("retries results load", { runTimestamp: run.run_timestamp });
+                void refetchResults();
+              }}
+            />
           )}
           {!resultsLoading && !resultsError && (results ?? []).length === 0 && (
             <EmptyState title="No results were recorded for this run." />

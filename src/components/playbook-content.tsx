@@ -4,8 +4,11 @@ import { automationAssetUrl } from "@/api/automation-client";
 import { CodeBlock } from "@/components/code-block";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import type { PlaybookBlock, PlaybookTableBlock } from "@/api/playbook-types";
+import { createDebug } from "@/lib/debug";
 import { renderInline } from "@/lib/inline-markdown";
 import { renderableBlocks } from "@/lib/playbook";
+
+const debug = createDebug("component:playbook-content");
 
 /** Phone screenshots stay thumbnail-sized; diagrams and desktop captures get the wider cap. */
 const figureSize = {
@@ -51,7 +54,10 @@ export function PlaybookFigure({
     <figure className="w-fit max-w-full overflow-hidden rounded-md border border-border">
       <button
         type="button"
-        onClick={() => setExpanded(true)}
+        onClick={() => {
+          debug("expands figure", { label });
+          setExpanded(true);
+        }}
         aria-label={`View ${label} at full size`}
         className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40"
       >
@@ -62,7 +68,13 @@ export function PlaybookFigure({
           {renderInline(caption)}
         </figcaption>
       )}
-      <Dialog open={expanded} onOpenChange={setExpanded}>
+      <Dialog
+        open={expanded}
+        onOpenChange={(open) => {
+          debug("toggles figure dialog", { label, open });
+          setExpanded(open);
+        }}
+      >
         <DialogContent className="max-w-3xl">
           <DialogTitle className="mb-3 pr-6 text-sm">{label}</DialogTitle>
           <img src={src} alt={label} className="mx-auto max-h-[75vh] w-auto max-w-full object-contain" />

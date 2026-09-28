@@ -1,36 +1,68 @@
 import { supabase, EVIDENCE_BUCKET } from "@/data/supabase";
 import type { Evidence } from "@/data/types";
+import { createDebug } from "@/lib/debug";
 import { requireUserId } from "./common";
+
+const debug = createDebug("data:evidence");
 
 export const evidenceData = {
   async listForFinding(findingId: string): Promise<Evidence[]> {
+    debug("listing evidence for finding", { findingId });
     const { data, error } = await supabase
       .from("evidence")
       .select("*")
       .eq("finding_id", findingId)
       .order("created_at", { ascending: false });
-    if (error) throw error;
+    if (error) {
+      debug("listing evidence for finding failed", {
+        findingId,
+        code: error.code,
+        message: error.message,
+      });
+      throw error;
+    }
+    debug("listed evidence for finding", { findingId, count: data?.length });
     return data;
   },
 
   async listForTicket(ticketId: string): Promise<Evidence[]> {
+    debug("listing evidence for ticket", { ticketId });
     const { data, error } = await supabase
       .from("evidence")
       .select("*")
       .eq("ticket_id", ticketId)
       .order("created_at", { ascending: false });
-    if (error) throw error;
+    if (error) {
+      debug("listing evidence for ticket failed", {
+        ticketId,
+        code: error.code,
+        message: error.message,
+      });
+      throw error;
+    }
+    debug("listed evidence for ticket", { ticketId, count: data?.length });
     return data;
   },
 
   async uploadFile(findingId: string | null, ticketId: string | null, file: File) {
+    debug("uploading evidence file", {
+      findingId,
+      ticketId,
+      fileName: file.name,
+      size: file.size,
+      type: file.type,
+    });
     const userId = await requireUserId();
     const prefix = findingId ? `finding-${findingId}` : `ticket-${ticketId}`;
     const storagePath = `${prefix}/${Date.now()}-${file.name}`;
     const { error: uploadError } = await supabase.storage
       .from(EVIDENCE_BUCKET)
       .upload(storagePath, file);
-    if (uploadError) throw uploadError;
+    if (uploadError) {
+      debug("evidence upload failed", { storagePath, message: uploadError.message });
+      throw uploadError;
+    }
+    debug("uploaded evidence bytes", { storagePath });
 
     const { data, error } = await supabase
       .from("evidence")
@@ -45,11 +77,16 @@ export const evidenceData = {
       })
       .select()
       .single();
-    if (error) throw error;
+    if (error) {
+      debug("recording evidence row failed", { storagePath, code: error.code, message: error.message });
+      throw error;
+    }
+    debug("recorded evidence row", { evidenceId: data?.id, storagePath });
     return data;
   },
 
   getSignedUrl(storagePath: string) {
+    debug("signing evidence path", { storagePath });
     return supabase.storage.from(EVIDENCE_BUCKET).createSignedUrl(storagePath, 3600);
   },
 };

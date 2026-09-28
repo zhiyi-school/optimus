@@ -2,8 +2,11 @@ import { useState } from "react";
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { assessmentApi } from "@/api/automation-services";
+import { createDebug } from "@/lib/debug";
 import { sarifFileName } from "@/lib/sarif";
 import { errorMessage } from "@/lib/utils";
+
+const debug = createDebug("component:download-sarif-button");
 
 export function DownloadSarifButton({
   runTimestamp,
@@ -19,11 +22,13 @@ export function DownloadSarifButton({
 
   async function download() {
     if (!runTimestamp) return;
+    debug("downloads SARIF", { runTimestamp });
     setBusy(true);
     setError(null);
     try {
       const blob = await assessmentApi.downloadReportSarif(runTimestamp);
       if (!blob) {
+        debug("finds no SARIF export", { runTimestamp });
         setError("No SARIF export is available for this run.");
         return;
       }
@@ -35,7 +40,9 @@ export function DownloadSarifButton({
       anchor.click();
       anchor.remove();
       URL.revokeObjectURL(url);
+      debug("downloaded SARIF", { runTimestamp, size: blob.size });
     } catch (err) {
+      debug("SARIF download fails", { runTimestamp }, err);
       setError(errorMessage(err, "Could not download the SARIF export."));
     } finally {
       setBusy(false);

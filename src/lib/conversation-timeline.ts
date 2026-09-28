@@ -1,5 +1,8 @@
 import type { AutomationResultRow } from "@/api/automation-types";
 import type { RiskConversationEntry } from "@/data/types";
+import { createDebug } from "@/lib/debug";
+
+const debug = createDebug("lib:conversation-timeline");
 
 export type ConversationTimelineItem =
   | { key: string; at: string; kind: "entry"; entry: RiskConversationEntry }
@@ -34,6 +37,7 @@ export function conversationTimeline(
     ),
   ];
 
+  debug("builds timeline", { entryCount: entries?.length ?? 0, runCount: runs?.length ?? 0 });
   return items.sort(
     (a, b) =>
       instant(a.at) - instant(b.at) ||

@@ -8,11 +8,14 @@ import {
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/common";
+import { createDebug } from "@/lib/debug";
 import { downloadFile } from "@/lib/download";
 import { errorMessage, formatBytes } from "@/lib/utils";
 import type { EvidenceItem } from "@/lib/evidence-types";
 
 export type { EvidenceItem } from "@/lib/evidence-types";
+
+const debug = createDebug("component:evidence");
 
 /** How many rail items are shown before the reader asks for the rest. */
 export const RAIL_COLLAPSED_ITEMS = 5;
@@ -30,11 +33,18 @@ function useDownload() {
 
   async function start(item: EvidenceItem) {
     if (!item.url) return;
+    debug("downloads evidence", {
+      id: item.id,
+      fileName: item.downloadName ?? item.name,
+      kind: item.kind,
+    });
     setBusy(item.id);
     setFailed(null);
     try {
       await downloadFile(item.url, item.downloadName ?? item.name);
+      debug("downloaded evidence", { id: item.id });
     } catch (error) {
+      debug("evidence download fails", { id: item.id }, error);
       setFailed({
         id: item.id,
         message: errorMessage(error, "That file could not be downloaded."),
@@ -121,6 +131,7 @@ export function EvidenceList({ items }: { items: EvidenceItem[] }) {
                     target="_blank"
                     rel="noreferrer"
                     aria-label={`View ${item.name}`}
+                    onClick={() => debug("opens evidence", { id: item.id, kind: item.kind })}
                     className="shrink-0 rounded text-muted-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                   >
                     <ExternalLink className="h-3.5 w-3.5" />
@@ -133,7 +144,10 @@ export function EvidenceList({ items }: { items: EvidenceItem[] }) {
                   {failed.message}{" "}
                   <button
                     type="button"
-                    onClick={() => start(item)}
+                    onClick={() => {
+                      debug("retries evidence download", { id: item.id });
+                      void start(item);
+                    }}
                     className="rounded font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                   >
                     Try again
@@ -147,7 +161,10 @@ export function EvidenceList({ items }: { items: EvidenceItem[] }) {
       {hidden > 0 && (
         <button
           type="button"
-          onClick={() => setExpanded((open) => !open)}
+          onClick={() => {
+            debug("toggles evidence list", { expanded: !expanded, hidden });
+            setExpanded((open) => !open);
+          }}
           aria-expanded={expanded}
           aria-controls={listId}
           className="mt-2 rounded text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
@@ -180,7 +197,13 @@ export function EvidenceViewer({ items }: { items: EvidenceItem[] }) {
         if (item.kind === "image" && item.url) {
           return (
             <Card key={item.id} className="overflow-hidden">
-              <a href={item.url} target="_blank" rel="noreferrer" aria-label={`View ${item.name}`}>
+              <a
+                href={item.url}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={`View ${item.name}`}
+                onClick={() => debug("opens evidence", { id: item.id, kind: item.kind })}
+              >
                 <img src={item.url} alt={item.name} className="h-28 w-full object-cover" />
               </a>
               <div className="flex items-center justify-between gap-2 px-3 py-2 text-xs text-muted-foreground">

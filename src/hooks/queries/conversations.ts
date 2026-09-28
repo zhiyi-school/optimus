@@ -14,6 +14,9 @@ import {
   conversationInvalidationKeys,
 } from "./invalidation-rules";
 import { conversationKeys, ticketKeys } from "@/hooks/query-keys";
+import { createDebug } from "@/lib/debug";
+
+const debug = createDebug("hooks:queries:conversations");
 
 const EMPTY_ENTRIES: RiskConversationEntry[] = [];
 const EMPTY_ATTACHMENTS: RiskConversationAttachment[] = [];
@@ -32,15 +35,19 @@ export function useRiskConversation(
 ) {
   return useQuery({
     queryKey: conversationKeys.byRisk(applicationId, riskId, findingId, opts.create),
-    queryFn: () =>
-      opts.create
+    queryFn: async () => {
+      debug("resolves risk conversation", { applicationId, riskId, findingId, create: opts.create });
+      const conversation = await (opts.create
         ? riskConversationData.getOrCreate({
             applicationId: applicationId as string,
             riskId: riskId as string,
             findingId,
             originAssessmentId: opts.originAssessmentId,
           })
-        : riskConversationData.find(applicationId as string, riskId as string),
+        : riskConversationData.find(applicationId as string, riskId as string));
+      debug("resolved risk conversation", { applicationId, riskId, conversationId: conversation?.id ?? null });
+      return conversation;
+    },
     enabled: !!applicationId && !!riskId,
   });
 }
@@ -48,7 +55,12 @@ export function useRiskConversation(
 export function useRiskConversationById(conversationId: string | null | undefined) {
   return useQuery({
     queryKey: conversationKeys.detail(conversationId),
-    queryFn: () => riskConversationData.get(conversationId as string),
+    queryFn: async () => {
+      debug("fetches conversation", { conversationId });
+      const conversation = await riskConversationData.get(conversationId as string);
+      debug("fetched conversation", { conversationId, found: Boolean(conversation) });
+      return conversation;
+    },
     enabled: !!conversationId,
   });
 }
@@ -58,17 +70,28 @@ export function useRiskConversationEntries(conversationId: string | undefined) {
   const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: conversationKeys.entries(conversationId),
-    queryFn: () => riskConversationData.listEntries(conversationId as string),
+    queryFn: async () => {
+      debug("fetches conversation entries", { conversationId });
+      const entries = await riskConversationData.listEntries(conversationId as string);
+      debug("fetched conversation entries", { conversationId, count: entries.length });
+      return entries;
+    },
     enabled: !!conversationId,
   });
 
   useEffect(() => {
     if (!conversationId) return;
-    return riskConversationData.subscribeToConversation(conversationId, () => {
+    debug("subscribes to conversation", { conversationId });
+    const unsubscribe = riskConversationData.subscribeToConversation(conversationId, () => {
+      debug("conversation changed, invalidates entries", { conversationId });
       void queryClient.invalidateQueries({
         queryKey: conversationKeys.entries(conversationId),
       });
     });
+    return () => {
+      debug("unsubscribes from conversation", { conversationId });
+      unsubscribe();
+    };
   }, [conversationId, queryClient]);
 
   return { ...query, data: query.data ?? (query.isLoading ? undefined : EMPTY_ENTRIES) };
@@ -79,7 +102,12 @@ export function useRiskConversationAttachments(entryIds: string[]) {
   const key = [...entryIds].sort();
   const query = useQuery({
     queryKey: conversationKeys.attachments(key),
-    queryFn: () => riskConversationData.listAttachments(key),
+    queryFn: async () => {
+      debug("fetches conversation attachments", { entryCount: key.length });
+      const attachments = await riskConversationData.listAttachments(key);
+      debug("fetched conversation attachments", { entryCount: key.length, count: attachments.length });
+      return attachments;
+    },
     enabled: key.length > 0,
   });
   return { ...query, data: query.data ?? EMPTY_ATTACHMENTS };
@@ -94,7 +122,12 @@ export function useSendRiskMessage(conversationId: string | undefined) {
         kind: "message",
         message: input.message,
       }),
-    onSuccess: () => invalidate(conversationEntryInvalidationKeys(conversationId as string)),
+    onMutate: (input) => debug("sends message", { conversationId, messageLength: input.message.length }),
+    onError: (error) => debug("send message failed", { conversationId, error }),
+    onSuccess: (entry) => {
+      debug("sent message", { conversationId, entryId: entry.id });
+      return invalidate(conversationEntryInvalidationKeys(conversationId as string));
+    },
   });
 }
 
@@ -117,14 +150,21 @@ export function useSaveConversationAttachment() {
       bytesUploaded: boolean;
     }) => {
       let bytesUploaded = input.bytesUploaded;
+      const target = { entryId: input.pending.entryId, fileName: input.pending.file.name };
       try {
         if (!bytesUploaded) {
+          debug("uploads attachment bytes", { ...target, size: input.pending.file.size });
           await conversationAttachmentData.uploadBytes(input.pending);
           bytesUploaded = true;
+          debug("uploaded attachment bytes", target);
+        } else {
+          debug("reuses uploaded bytes", target);
         }
         const attachment = await conversationAttachmentData.saveMetadata(input.pending);
+        debug("saved attachment metadata", { ...target, attachmentId: attachment.id });
         return { attachment, bytesUploaded };
       } catch (error) {
+        debug("save attachment failed", { ...target, bytesUploaded, error });
         throw new ConversationAttachmentFailure(
           "That was recorded, but the file could not be attached.",
           input.pending,
@@ -133,7 +173,10 @@ export function useSaveConversationAttachment() {
         );
       }
     },
-    onSuccess: () => invalidate(conversationAttachmentInvalidationKeys()),
+    onSuccess: () => {
+      debug("attachment saved, invalidates attachments");
+      return invalidate(conversationAttachmentInvalidationKeys());
+    },
   });
 }
 
@@ -153,6 +196,16 @@ export function useRequestReassessment(conversationId: string | undefined) {
         message: input.message,
         submissionId: input.submissionId,
       }),
+    onMutate: (input) =>
+      debug("requests reassessment", {
+        conversationId,
+        findingId: input.findingId,
+        ticketId: input.ticketId,
+        submissionId: input.submissionId,
+        messageLength: input.message?.length ?? 0,
+      }),
+    onError: (error, input) =>
+      debug("request reassessment failed", { conversationId, submissionId: input.submissionId, error }),
     onSuccess: (_data, variables) =>
       invalidate([
         ...conversationInvalidationKeys(conversationId as string),
@@ -178,6 +231,9 @@ export function useWithdrawReassessment(conversationId: string | undefined) {
   return useMutation({
     mutationFn: (input: { retestId: string; reason: string; findingId: string; ticketId: string }) =>
       retestData.withdraw(input.retestId, input.reason),
+    onMutate: (input) =>
+      debug("withdraws reassessment", { conversationId, retestId: input.retestId, reasonLength: input.reason.length }),
+    onError: (error, input) => debug("withdraw reassessment failed", { conversationId, retestId: input.retestId, error }),
     onSuccess: (_data, variables) =>
       invalidate([
         ...conversationInvalidationKeys(conversationId as string),

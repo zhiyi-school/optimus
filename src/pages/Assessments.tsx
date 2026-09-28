@@ -27,8 +27,11 @@ import {
 import { useAuth } from "@/auth/useAuth";
 import { ApplicationIcon } from "@/components/application-icon";
 import { latestAssessmentPerApp } from "@/lib/assessments";
+import { createDebug } from "@/lib/debug";
 import { cn, compareByName, errorMessage, formatDate } from "@/lib/utils";
 import type { Assessment, Application } from "@/data/types";
+
+const debug = createDebug("page:Assessments");
 
 /** Setup, waiting, and pre-completion failure all expose status through the row's dropdown only. */
 const INCOMPLETE_STATUSES = ["queued", "waiting", "running", "failed"];
@@ -54,6 +57,7 @@ export default function Assessments() {
   const toggleExpand = useCallback(
     (id: string) => {
       const next = new URLSearchParams(params);
+      debug("toggles expanded assessment", { assessmentId: id, expanded: next.get("expanded") !== id });
       if (next.get("expanded") === id) next.delete("expanded");
       else next.set("expanded", id);
       setParams(next, { replace: true });
@@ -77,6 +81,7 @@ export default function Assessments() {
   const [filtersOpen, setFiltersOpen] = useState(activeFilters > 0);
 
   const setParam = useCallback((key: string, value: string) => {
+    debug("changes filter", { key, value });
     const next = new URLSearchParams(params);
     if (value) next.set(key, value);
     else next.delete(key);
@@ -95,7 +100,10 @@ export default function Assessments() {
   // would justify it has loaded.
   useEffect(() => {
     if (!expandedId || isLoading) return;
-    if (!rows.some((r) => r.id === expandedId)) toggleExpand(expandedId);
+    if (!rows.some((r) => r.id === expandedId)) {
+      debug("clears stale expanded assessment", { assessmentId: expandedId });
+      toggleExpand(expandedId);
+    }
   }, [expandedId, isLoading, rows, toggleExpand]);
 
   const awaitingSync = useMemo(
@@ -109,11 +117,14 @@ export default function Assessments() {
 
   const confirmDelete = useCallback(async () => {
     if (!appToDelete) return;
+    debug("confirms application delete", { applicationId: appToDelete.id });
     setDeleteError(null);
     try {
       await deleteApp.mutateAsync({ applicationId: appToDelete.id, applicationName: appToDelete.name });
+      debug("deletes application", { applicationId: appToDelete.id });
       setAppToDelete(null);
     } catch (err) {
+      debug("fails to delete application", { applicationId: appToDelete.id, error: err });
       setDeleteError(errorMessage(err, "Unable to delete this app."));
     }
   }, [appToDelete, deleteApp]);
@@ -175,6 +186,7 @@ export default function Assessments() {
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
+                      debug("opens delete dialog", { applicationId: r.application?.id });
                       setAppToDelete(r.application);
                     }}
                     className="text-muted-foreground hover:text-danger"
@@ -204,7 +216,14 @@ export default function Assessments() {
                   New Assessment
                 </Button>
               </Link>
-              <Button size="sm" variant="outline" onClick={() => void refetch()}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  debug("refreshes assessments");
+                  void refetch();
+                }}
+              >
                 <RefreshCw className="h-3.5 w-3.5" />
                 Refresh
               </Button>
@@ -237,7 +256,10 @@ export default function Assessments() {
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <button
           type="button"
-          onClick={() => setFiltersOpen((open) => !open)}
+          onClick={() => {
+            debug("toggles filters", { open: !filtersOpen, activeFilters });
+            setFiltersOpen((open) => !open);
+          }}
           aria-expanded={filtersOpen}
           className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
         >
@@ -287,7 +309,15 @@ export default function Assessments() {
       )}
 
       {isLoading && <LoadingState label="Loading assessments…" />}
-      {isError && <ErrorState message="Unable to load assessments." onRetry={() => refetch()} />}
+      {isError && (
+        <ErrorState
+          message="Unable to load assessments."
+          onRetry={() => {
+            debug("retries assessments load");
+            void refetch();
+          }}
+        />
+      )}
       {!isLoading && !isError && rows.length === 0 && (
         <EmptyState
           title="No assessments are currently available."
@@ -302,7 +332,10 @@ export default function Assessments() {
         <DataTable
           columns={columns}
           rows={rows}
-          onRowClick={(r) => navigate(`/assessments/${r.id}`)}
+          onRowClick={(r) => {
+            debug("opens assessment", { assessmentId: r.id, status: r.status });
+            navigate(`/assessments/${r.id}`);
+          }}
           rowLabel={(r) => `Open the assessment for ${r.application?.name ?? "this application"}`}
           rowActivation={(r) => (r.status === "completed" ? "navigate" : "expand")}
           expandLabel={(r) =>
@@ -326,7 +359,10 @@ export default function Assessments() {
             </span>
           )}
           expandedRowId={expandedId}
-          onToggleExpand={(r) => toggleExpand(r.id)}
+          onToggleExpand={(r) => {
+            debug("expands assessment row", { assessmentId: r.id, status: r.status });
+            toggleExpand(r.id);
+          }}
           renderExpanded={(r) =>
             INCOMPLETE_STATUSES.includes(r.status) ? (
               <AssessmentStatusPanel assessment={r} canRetry={canRunTest} />
@@ -335,7 +371,14 @@ export default function Assessments() {
         />
       )}
 
-      <Dialog open={!!appToDelete} onOpenChange={(open) => !open && setAppToDelete(null)}>
+      <Dialog
+        open={!!appToDelete}
+        onOpenChange={(open) => {
+          if (open) return;
+          debug("dismisses delete dialog", { applicationId: appToDelete?.id });
+          setAppToDelete(null);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete {appToDelete?.name}?</DialogTitle>
@@ -346,7 +389,14 @@ export default function Assessments() {
           </DialogHeader>
           {deleteError && <p className="text-xs text-danger">{deleteError}</p>}
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setAppToDelete(null)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                debug("cancels application delete", { applicationId: appToDelete?.id });
+                setAppToDelete(null);
+              }}
+            >
               Cancel
             </Button>
             <Button variant="destructive" disabled={deleteApp.isPending} onClick={() => void confirmDelete()}>

@@ -1,4 +1,7 @@
 import type { Profile, UserRole } from "@/data/types";
+import { createDebug } from "@/lib/debug";
+
+const debug = createDebug("auth:permissions");
 
 export type Capability =
   | "view_dashboard"
@@ -83,17 +86,38 @@ type ProfileLike = Pick<Profile, "roles" | "team_id"> & Partial<Pick<Profile, "i
 
 /** `no_team` is a setup state, not a grant — it never falls back to every application. */
 export function resolveAccess(profile: ProfileLike | null | undefined, loading = false): ResolveAccess {
-  if (loading) return "loading";
-  if (!profile) return "unauthorized";
-  if (!roleCan(profile.roles, "view_resolve")) return "unauthorized";
-  if (profile.is_active === false) return "inactive";
-  if (!profile.team_id) return "no_team";
+  if (loading) {
+    debug("resolve access: loading");
+    return "loading";
+  }
+  if (!profile) {
+    debug("resolve access: unauthorized; no profile");
+    return "unauthorized";
+  }
+  if (!roleCan(profile.roles, "view_resolve")) {
+    debug("resolve access: unauthorized; role lacks view_resolve", { roles: profile.roles });
+    return "unauthorized";
+  }
+  if (profile.is_active === false) {
+    debug("resolve access: inactive profile", { roles: profile.roles });
+    return "inactive";
+  }
+  if (!profile.team_id) {
+    debug("resolve access: no team", { roles: profile.roles });
+    return "no_team";
+  }
+  debug("resolve access: ready", { roles: profile.roles, teamId: profile.team_id });
   return "ready";
 }
 
 /** Post-login landing route: holding the developer role starts you in Resolve, whatever else you hold. */
 export function defaultRouteFor(profile: ProfileLike | null | undefined): string {
-  if (!profile) return "/";
+  if (!profile) {
+    debug("default route: no profile; using /");
+    return "/";
+  }
   const isDeveloper = profile.roles?.includes("developer") ?? false;
-  return isDeveloper && roleCan(profile.roles, "view_resolve") ? "/resolve" : "/";
+  const route = isDeveloper && roleCan(profile.roles, "view_resolve") ? "/resolve" : "/";
+  debug("default route", { roles: profile.roles, isDeveloper, route });
+  return route;
 }

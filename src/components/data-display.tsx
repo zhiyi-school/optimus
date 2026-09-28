@@ -1,6 +1,7 @@
 import { Fragment, type ReactNode } from "react";
 import { ChevronDown, ChevronRight, Circle, Smartphone, Apple } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { createDebug } from "@/lib/debug";
 import { cn } from "@/lib/utils";
 import {
   findingStatusConfig,
@@ -11,6 +12,8 @@ import {
   assessmentStatusConfig,
 } from "@/lib/status";
 import type { FindingStatus, TicketStatus, Platform } from "@/data/types";
+
+const debug = createDebug("component:data-display");
 
 export function StatusBadge({ status }: { status: FindingStatus }) {
   const config = findingStatusConfig[status];
@@ -122,7 +125,10 @@ export function DataTable<T extends { id: string }>({
                 {activation === "navigate" ? (
                   <button
                     type="button"
-                    onClick={() => onRowClick?.(row)}
+                    onClick={() => {
+                      debug("opens row", { rowId: row.id });
+                      onRowClick?.(row);
+                    }}
                     aria-label={rowLabel?.(row)}
                     className="flex w-full items-center gap-3 rounded-xl border border-border/70 bg-card p-3 text-left shadow-card transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                   >
@@ -135,7 +141,10 @@ export function DataTable<T extends { id: string }>({
                       type="button"
                       aria-expanded={isExpanded}
                       aria-label={expandLabel?.(row) ?? (isExpanded ? "Hide details" : "Show details")}
-                      onClick={() => onToggleExpand?.(row)}
+                      onClick={() => {
+                        debug("toggles row", { rowId: row.id, expanded: !isExpanded });
+                        onToggleExpand?.(row);
+                      }}
                       className="flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40"
                     >
                       <span className="min-w-0 flex-1">{renderCard(row)}</span>
@@ -201,6 +210,7 @@ export function DataTable<T extends { id: string }>({
             const expandedContent = isExpandable ? renderExpanded?.(row) : undefined;
             const isExpanded = isExpandable && expandedRowId === row.id;
             const activate = () => {
+              debug("activates row", { rowId: row.id, activation, expanded: isExpanded });
               if (isLink) onRowClick?.(row);
               else if (isExpandable) onToggleExpand?.(row);
             };

@@ -1,4 +1,7 @@
+import { createDebug } from "@/lib/debug";
 import { UserFacingError } from "@/lib/utils";
+
+const debug = createDebug("lib:download");
 
 const DISPOSITION_FILENAME = /filename\*?=(?:UTF-8''|")?([^";]+)/i;
 
@@ -8,7 +11,8 @@ export function filenameFromDisposition(header: string | null): string | undefin
   if (!match) return undefined;
   try {
     return decodeURIComponent(match[1]).trim() || undefined;
-  } catch {
+  } catch (error) {
+    debug("keeps undecoded disposition filename", { error });
     return match[1].trim() || undefined;
   }
 }
@@ -19,8 +23,8 @@ async function refusalMessage(response: Response, fallback: string): Promise<str
     const body = await response.clone().json();
     const detail = (body as { detail?: unknown })?.detail;
     if (typeof detail === "string" && detail.trim()) return detail.trim();
-  } catch {
-    /* not a structured refusal */
+  } catch (error) {
+    debug("refusal has no structured detail", { status: response.status, error });
   }
   return `${fallback} (${response.status})`;
 }
@@ -36,18 +40,22 @@ export async function downloadFile(
   fetchImpl: typeof fetch = fetch,
 ): Promise<void> {
   let response: Response;
+  debug("downloads file", { filename });
   try {
     response = await fetchImpl(url);
-  } catch {
+  } catch (error) {
+    debug("download request failed", { filename, error });
     throw new UserFacingError("Could not reach the server to download this file.");
   }
 
   if (!response.ok) {
+    debug("download refused", { filename, status: response.status });
     throw new UserFacingError(await refusalMessage(response, "That file could not be downloaded"));
   }
 
   const blob = await response.blob();
   const name = filenameFromDisposition(response.headers.get("content-disposition")) ?? filename;
+  debug("saves download", { filename: name, size: blob.size, type: blob.type });
   const objectUrl = URL.createObjectURL(blob);
   try {
     const anchor = document.createElement("a");

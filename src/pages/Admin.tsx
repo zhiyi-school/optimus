@@ -24,9 +24,12 @@ import {
   useUpdateProfileRoles,
   useUpdateProfileTeam,
 } from "@/hooks/queries/reference";
+import { createDebug } from "@/lib/debug";
 import { formatShortDate } from "@/lib/utils";
 import type { Application, Profile, Team, TeamType, UserRole } from "@/data/types";
 import { ApplicationIcon } from "@/components/application-icon";
+
+const debug = createDebug("page:Admin");
 
 const roleLabels: Record<UserRole, string> = {
   developer: "Developer Team",
@@ -67,7 +70,15 @@ export default function Admin() {
           <NewTeamDialog />
         </div>
         {teamsLoading && <LoadingState label="Loading teams…" />}
-        {teamsError && <ErrorState message="Unable to load teams." onRetry={() => refetchTeams()} />}
+        {teamsError && (
+          <ErrorState
+            message="Unable to load teams."
+            onRetry={() => {
+              debug("retries teams load");
+              void refetchTeams();
+            }}
+          />
+        )}
         {!teamsLoading && !teamsError && (teams ?? []).length === 0 && (
           <EmptyState title="No teams yet." description="Create a team to start assigning users and applications." />
         )}
@@ -103,7 +114,15 @@ export default function Admin() {
           docs/SUPABASE_SETUP.md), so a single admin session can never self-escalate.
         </p>
         {profilesLoading && <LoadingState label="Loading users…" />}
-        {profilesError && <ErrorState message="Unable to load users." onRetry={() => refetchProfiles()} />}
+        {profilesError && (
+          <ErrorState
+            message="Unable to load users."
+            onRetry={() => {
+              debug("retries users load");
+              void refetchProfiles();
+            }}
+          />
+        )}
         {!profilesLoading && !profilesError && (profiles ?? []).length > 0 && (
           <UserTable profiles={profiles ?? []} teams={teams ?? []} currentUserId={profile?.id} />
         )}
@@ -116,7 +135,15 @@ export default function Admin() {
           findings and tickets.
         </p>
         {appsLoading && <LoadingState label="Loading applications…" />}
-        {appsError && <ErrorState message="Unable to load applications." onRetry={() => refetchApps()} />}
+        {appsError && (
+          <ErrorState
+            message="Unable to load applications."
+            onRetry={() => {
+              debug("retries applications load");
+              void refetchApps();
+            }}
+          />
+        )}
         {!appsLoading && !appsError && (applications ?? []).length === 0 && (
           <EmptyState title="No applications yet." />
         )}
@@ -161,9 +188,17 @@ function UserTable({
       render: (p) => (
         <Select
           value={p.team_id ?? ""}
-          onChange={(e) =>
-            updateTeam.mutate({ profileId: p.id, teamId: e.target.value || null })
-          }
+          onChange={(e) => {
+            const teamId = e.target.value || null;
+            debug("assigns user team", { profileId: p.id, teamId });
+            updateTeam.mutate(
+              { profileId: p.id, teamId },
+              {
+                onSuccess: () => debug("saves user team", { profileId: p.id, teamId }),
+                onError: (error) => debug("fails to save user team", { profileId: p.id, teamId, error }),
+              },
+            );
+          }}
         >
           <option value="">Unassigned</option>
           {teams.map((t) => (
@@ -182,7 +217,17 @@ function UserTable({
           size="sm"
           variant="outline"
           disabled={setActive.isPending}
-          onClick={() => setActive.mutate({ profileId: p.id, isActive: !p.is_active })}
+          onClick={() => {
+            const isActive = !p.is_active;
+            debug("sets user active", { profileId: p.id, isActive });
+            setActive.mutate(
+              { profileId: p.id, isActive },
+              {
+                onSuccess: () => debug("saves user active", { profileId: p.id, isActive }),
+                onError: (error) => debug("fails to save user active", { profileId: p.id, isActive, error }),
+              },
+            );
+          }}
         >
           {p.is_active ? "Active" : "Inactive"}
         </Button>
@@ -202,12 +247,21 @@ function EditRolesDialog({ profile, isSelf }: { profile: Profile; isSelf: boolea
     const next = new Set(selected);
     if (next.has(role)) next.delete(role);
     else next.add(role);
+    debug("toggles role", { profileId: profile.id, role, selected: next.has(role) });
     setSelected(next);
   }
 
   async function onSave() {
-    if (selected.size === 0) return;
-    await updateRoles.mutateAsync({ profileId: profile.id, roles: [...selected] });
+    if (selected.size === 0) {
+      debug("rejects roles", { profileId: profile.id, field: "roles", rule: "atLeastOne" });
+      return;
+    }
+    debug("saves roles", { profileId: profile.id, roles: [...selected] });
+    await updateRoles.mutateAsync(
+      { profileId: profile.id, roles: [...selected] },
+      { onError: (error) => debug("fails to save roles", { profileId: profile.id, error }) },
+    );
+    debug("saved roles", { profileId: profile.id });
     setOpen(false);
   }
 
@@ -222,7 +276,13 @@ function EditRolesDialog({ profile, isSelf }: { profile: Profile; isSelf: boolea
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        debug("toggles roles dialog", { profileId: profile.id, open: next });
+        setOpen(next);
+      }}
+    >
       <DialogTrigger asChild>
         <Button size="sm" variant="ghost">
           Edit
@@ -252,7 +312,14 @@ function EditRolesDialog({ profile, isSelf }: { profile: Profile; isSelf: boolea
           <p className="text-xs text-danger">A user must have at least one role.</p>
         )}
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              debug("cancels roles edit", { profileId: profile.id });
+              setOpen(false);
+            }}
+          >
             Cancel
           </Button>
           <Button disabled={updateRoles.isPending || selected.size === 0} onClick={() => void onSave()}>
@@ -286,12 +353,20 @@ function ApplicationTable({ applications, teams }: { applications: Application[]
       render: (a) => (
         <Select
           value={a.developer_team_id ?? ""}
-          onChange={(e) =>
-            updateApp.mutate({
-              applicationId: a.id,
-              patch: { developer_team_id: e.target.value || null },
-            })
-          }
+          onChange={(e) => {
+            const teamId = e.target.value || null;
+            debug("assigns application team", { applicationId: a.id, teamId });
+            updateApp.mutate(
+              {
+                applicationId: a.id,
+                patch: { developer_team_id: teamId },
+              },
+              {
+                onSuccess: () => debug("saves application team", { applicationId: a.id, teamId }),
+                onError: (error) => debug("fails to save application team", { applicationId: a.id, teamId, error }),
+              },
+            );
+          }}
         >
           <option value="">Unassigned</option>
           {teams.map((t) => (
@@ -315,14 +390,28 @@ function NewTeamDialog() {
   const create = useCreateTeam();
 
   async function onSubmit() {
-    if (!name.trim()) return;
-    await create.mutateAsync({ name: name.trim(), type });
+    if (!name.trim()) {
+      debug("rejects team", { field: "name", rule: "required" });
+      return;
+    }
+    debug("creates team", { type });
+    await create.mutateAsync(
+      { name: name.trim(), type },
+      { onError: (error) => debug("fails to create team", { type, error }) },
+    );
+    debug("created team", { type });
     setName("");
     setOpen(false);
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        debug("toggles new team dialog", { open: next });
+        setOpen(next);
+      }}
+    >
       <DialogTrigger asChild>
         <Button size="sm" variant="outline">
           New Team
@@ -348,7 +437,14 @@ function NewTeamDialog() {
           </div>
         </div>
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              debug("cancels new team");
+              setOpen(false);
+            }}
+          >
             Cancel
           </Button>
           <Button disabled={create.isPending || !name.trim()} onClick={() => void onSubmit()}>
@@ -372,6 +468,7 @@ function EditApplicationDialog({ application }: { application: Application }) {
   const update = useUpdateApplication();
 
   async function onSubmit() {
+    debug("saves application", { applicationId: application.id });
     await update.mutateAsync({
       applicationId: application.id,
       patch: {
@@ -383,12 +480,21 @@ function EditApplicationDialog({ application }: { application: Application }) {
         developer_contact_name: devName.trim() || null,
         developer_contact_email: devEmail.trim() || null,
       },
+    }, {
+      onError: (error) => debug("fails to save application", { applicationId: application.id, error }),
     });
+    debug("saved application", { applicationId: application.id });
     setOpen(false);
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        debug("toggles application dialog", { applicationId: application.id, open: next });
+        setOpen(next);
+      }}
+    >
       <DialogTrigger asChild>
         <Button size="sm" variant="ghost">
           Edit
@@ -423,7 +529,14 @@ function EditApplicationDialog({ application }: { application: Application }) {
           </div>
         </div>
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              debug("cancels application edit", { applicationId: application.id });
+              setOpen(false);
+            }}
+          >
             Cancel
           </Button>
           <Button disabled={update.isPending || !name.trim()} onClick={() => void onSubmit()}>

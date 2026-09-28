@@ -5,11 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
 import { PlaybookContent } from "@/components/playbook-content";
 import { playbookApi } from "@/api/playbook-services";
+import { createDebug } from "@/lib/debug";
 import { introRepeatsSummary } from "@/lib/resolve";
 import { errorMessage, formatBytes } from "@/lib/utils";
 import type { AutomationPlatform } from "@/api/automation-types";
 import type { ControlDetail, ControlSourceMetadata, ControlStep } from "@/api/playbook-types";
 import type { ControlProgressStatus, TicketControlStep } from "@/data/types";
+
+const debug = createDebug("component:control-content");
 
 export interface ControlStepProgress {
   byStepKey: Map<string, TicketControlStep>;
@@ -46,6 +49,7 @@ export function ControlReferences({ control }: { control: ControlDetail }) {
             href={reference.url}
             target="_blank"
             rel="noreferrer noopener"
+            onClick={() => debug("opens reference", { label: reference.label })}
             className="inline-flex items-center gap-1.5 rounded text-sm text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
           >
             <ExternalLink className="h-3.5 w-3.5 shrink-0" />
@@ -76,6 +80,9 @@ export function ControlSourceArchive({
       {source.download_enabled ? (
         <a
           href={playbookApi.sourceDownloadUrl(platform, controlId)}
+          onClick={() =>
+            debug("downloads source archive", { platform, controlId, fileName: source.file_name })
+          }
           className="inline-flex items-center gap-1.5 rounded text-sm text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
         >
           <Download className="h-3.5 w-3.5" />
@@ -105,7 +112,12 @@ export function ControlGuidance({ notes }: { notes: (string | false | null | und
 
 function SupportingSection({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <details className="group rounded-md border border-border/70 bg-muted/40 [&_summary::-webkit-details-marker]:hidden">
+    <details
+      onToggle={(event) =>
+        debug("toggles supporting section", { title, open: event.currentTarget.open })
+      }
+      className="group rounded-md border border-border/70 bg-muted/40 [&_summary::-webkit-details-marker]:hidden"
+    >
       <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-md px-3 py-2 text-xs font-medium text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
         {title}
         <ChevronDown
@@ -200,7 +212,15 @@ export function ControlStepBody({
             disabled={!editable || progress?.pending}
             aria-pressed={done}
             aria-label={done ? `Mark step ${number} not started` : `Mark step ${number} complete`}
-            onClick={() => row && progress?.setStatus(row.id, done ? "not_started" : "completed")}
+            onClick={() => {
+              if (!row) return;
+              debug("toggles step completion", {
+                stepId: row.id,
+                stepKey: step.step_key,
+                status: done ? "not_started" : "completed",
+              });
+              progress?.setStatus(row.id, done ? "not_started" : "completed");
+            }}
             className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Icon className={done ? "h-4 w-4 text-success" : "h-4 w-4 text-muted-foreground"} />
@@ -211,7 +231,10 @@ export function ControlStepBody({
             <button
               type="button"
               className="rounded text-xs text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-              onClick={() => setNoteOpen(true)}
+              onClick={() => {
+                debug("opens step note", { stepId: row.id });
+                setNoteOpen(true);
+              }}
             >
               {row.developer_note ? "Edit note" : "Add a note"}
             </button>
@@ -238,13 +261,21 @@ export function ControlStepBody({
                 size="sm"
                 disabled={progress.pending}
                 onClick={() => {
+                  debug("saves step note", { stepId: row.id, noteLength: note.trim().length });
                   progress.setStatus(row.id, row.status, note);
                   setNoteOpen(false);
                 }}
               >
                 Save note
               </Button>
-              <Button size="sm" variant="outline" onClick={() => setNoteOpen(false)}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  debug("cancels step note", { stepId: row.id });
+                  setNoteOpen(false);
+                }}
+              >
                 Cancel
               </Button>
             </div>

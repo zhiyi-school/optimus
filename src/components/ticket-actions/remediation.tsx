@@ -14,8 +14,11 @@ import {
 } from "@/hooks/queries/tickets";
 import { useSendRiskMessage } from "@/hooks/queries/conversations";
 import { activeRemediationTicket, effectiveSelectedControlId, resumableRemediationTicket, selectableControls, selectedControl, selectedControlReconciliationPlan } from "@/lib/resolve";
+import { createDebug } from "@/lib/debug";
 import { errorMessage, formatDate } from "@/lib/utils";
 import type { Application, Finding, Ticket } from "@/data/types";
+
+const debug = createDebug("component:ticket-actions:remediation");
 
 export function WorkOnRiskButton({
   finding,
@@ -54,6 +57,12 @@ export function WorkOnRiskButton({
       candidates,
       effectiveSelectedControlId(preferredControlId, candidates),
     );
+    debug("starts remediation", {
+      findingId: finding.id,
+      riskId: finding.test_id,
+      selectedControlId: initial?.control_id ?? null,
+      candidateCount: candidates.length,
+    });
     const ticket = await start.mutateAsync({
       ticket: {
         finding_id: finding.id,
@@ -74,6 +83,7 @@ export function WorkOnRiskButton({
           }
         : null,
     });
+    debug("started remediation", { findingId: finding.id, ticketId: ticket.id });
     setOpen(false);
     navigate(ticketPath(ticket.id));
   }
@@ -95,7 +105,9 @@ export function WorkOnRiskButton({
         <Button
           disabled={resume.isPending}
           onClick={async () => {
+            debug("resumes remediation", { findingId: finding.id, ticketId: withdrawn.id });
             await resume.mutateAsync();
+            debug("resumed remediation", { ticketId: withdrawn.id });
             navigate(ticketPath(withdrawn.id));
           }}
         >
@@ -111,7 +123,13 @@ export function WorkOnRiskButton({
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        debug("toggles start dialog", { open: next, findingId: finding.id });
+        setOpen(next);
+      }}
+    >
       <DialogTrigger asChild>
         <Button>Start remediation</Button>
       </DialogTrigger>
@@ -156,7 +174,14 @@ export function WorkOnRiskButton({
             </p>
           )}
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                debug("cancels start remediation", { findingId: finding.id });
+                setOpen(false);
+              }}
+            >
               Cancel
             </Button>
             <Button type="submit" disabled={start.isPending}>
@@ -183,13 +208,21 @@ export function WithdrawRemediationDialog({
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    debug("withdraws remediation", { ticketId: ticket.id, reasonLength: reason.trim().length });
     await withdraw.mutateAsync(reason);
+    debug("withdrew remediation", { ticketId: ticket.id });
     setOpen(false);
     setReason("");
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        debug("toggles withdraw dialog", { open: next, ticketId: ticket.id });
+        setOpen(next);
+      }}
+    >
       <DialogTrigger asChild>
         <Button size={size} variant="outline">
           Withdraw remediation
@@ -221,7 +254,14 @@ export function WithdrawRemediationDialog({
             </p>
           )}
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                debug("cancels withdrawal", { ticketId: ticket.id });
+                setOpen(false);
+              }}
+            >
               Cancel
             </Button>
             <Button type="submit" disabled={withdraw.isPending || !reason.trim()}>
@@ -244,7 +284,14 @@ export function ResumeRemediationButton({
   const resume = useResumeTicket(ticket.id, ticket.finding_id);
   return (
     <div>
-      <Button size={size} disabled={resume.isPending} onClick={() => void resume.mutateAsync()}>
+      <Button
+        size={size}
+        disabled={resume.isPending}
+        onClick={() => {
+          debug("resumes remediation", { ticketId: ticket.id });
+          void resume.mutateAsync();
+        }}
+      >
         {resume.isPending ? "Resuming…" : "Resume remediation"}
       </Button>
       {resume.isError && (
@@ -298,14 +345,22 @@ export function RequestChangesDialog({
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    debug("requests changes", { ticketId, conversationId, commentLength: comment.trim().length });
     if (conversationId) await sendMessage.mutateAsync({ message: comment });
     await updateStatus.mutateAsync("rejected");
+    debug("requested changes", { ticketId });
     setOpen(false);
     setComment("");
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        debug("toggles request changes dialog", { open: next, ticketId });
+        setOpen(next);
+      }}
+    >
       <DialogTrigger asChild>
         <Button size="sm" variant="outline">
           Request Changes
@@ -328,7 +383,14 @@ export function RequestChangesDialog({
             onChange={(e) => setComment(e.target.value)}
           />
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                debug("cancels change request", { ticketId });
+                setOpen(false);
+              }}
+            >
               Cancel
             </Button>
             <Button

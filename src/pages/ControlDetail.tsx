@@ -21,9 +21,12 @@ import {
   useTicketControlSteps,
   useTicketControls,
 } from "@/hooks/queries/tickets";
+import { createDebug } from "@/lib/debug";
 import { changedSinceCompleted, contentHashes, controlSummary, liveControls } from "@/lib/resolve";
 import { resolveRiskPath } from "@/lib/legacy-routes";
 import { stepCountLabel } from "@/lib/utils";
+
+const debug = createDebug("page:ControlDetail");
 
 export default function ControlDetail() {
   const { ticketId, controlId } = useParams<{ ticketId: string; controlId: string }>();
@@ -71,7 +74,16 @@ export default function ControlDetail() {
       editable: can("update_control_progress"),
       pending: setStatus.isPending,
       error: setStatus.isError ? setStatus.error : null,
-      setStatus: (stepId, status, note) => setStatus.mutate({ stepId, status, note }),
+      setStatus: (stepId, status, note) => {
+        debug("sets step status", { stepId, status, noteLength: note?.length ?? 0 });
+        setStatus.mutate(
+          { stepId, status, note },
+          {
+            onSuccess: () => debug("saves step status", { stepId, status }),
+            onError: (error) => debug("fails to save step status", { stepId, status, error }),
+          },
+        );
+      },
     }),
     [live, can, setStatus],
   );
@@ -101,14 +113,23 @@ export default function ControlDetail() {
   if (ticket.isLoading || control.isLoading) return shell(<LoadingState label="Loading control…" />);
   if (ticket.isError || !ticket.data) {
     return shell(
-      <ErrorState message="Unable to load this remediation." onRetry={() => ticket.refetch()} />,
+      <ErrorState
+        message="Unable to load this remediation."
+        onRetry={() => {
+          debug("retries remediation load", { ticketId });
+          void ticket.refetch();
+        }}
+      />,
     );
   }
   if (control.isError || !control.data) {
     return shell(
       <ErrorState
         message="The automation backend could not provide the remediation instructions for this control. Check that its playbook directory is configured and reachable."
-        onRetry={() => control.refetch()}
+        onRetry={() => {
+          debug("retries control load", { platform, controlId });
+          void control.refetch();
+        }}
       />,
     );
   }
@@ -135,7 +156,14 @@ export default function ControlDetail() {
       icon={FileText}
       title={`Remediation Steps — ${control.data.title}`}
       description={controlSummary(control.data)}
-      notice={playbook.updated ? <PlaybookUpdatedNotice onDismiss={playbook.dismiss} /> : undefined}
+      notice={playbook.updated ? (
+          <PlaybookUpdatedNotice
+            onDismiss={() => {
+              debug("dismisses playbook update notice", { platform });
+              playbook.dismiss();
+            }}
+          />
+        ) : undefined}
       tipLabel="Tip"
       tip={
         <ControlGuidance
@@ -150,7 +178,10 @@ export default function ControlDetail() {
       }
       steps={navSteps}
       activeId={activeStepKey}
-      onSelect={setChosenStepKey}
+      onSelect={(stepKey) => {
+        debug("selects step", { controlId, stepKey });
+        setChosenStepKey(stepKey);
+      }}
       aside={<EstimatedTime value={stepCountLabel(definitionSteps.length)} />}
       supporting={supporting}
       closeTo={backTo}

@@ -1,3 +1,7 @@
+import { createDebug } from "@/lib/debug";
+
+const debug = createDebug("lib:legacy-routes");
+
 export interface RiskLocation {
   applicationId: string | null | undefined;
   assessmentId: string | null | undefined;
@@ -21,6 +25,14 @@ export function canonicalRiskPath(
   audience: RiskAudience,
 ): string | null {
   const riskId = location.riskId?.trim();
+  debug("maps legacy link", {
+    riskId,
+    assessmentId: location.assessmentId,
+    applicationId: location.applicationId,
+    security: audience.security,
+    developer: audience.developer,
+    controlId: audience.controlId,
+  });
   if (!riskId) return null;
 
   if (audience.security && location.assessmentId) {
@@ -46,6 +58,7 @@ export function resolveRiskPath(
 ): string {
   const riskId = location.riskId?.trim();
   const applicationId = location.applicationId?.trim();
+  debug("resolves risk path", { applicationId, riskId });
   if (!applicationId) return "/resolve";
   if (!riskId) return `/resolve/applications/${applicationId}`;
   return `/resolve/applications/${applicationId}/risks/${encodeURIComponent(riskId)}`;

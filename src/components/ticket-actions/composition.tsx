@@ -2,11 +2,14 @@ import { Button } from "@/components/ui/button";
 import type { RiskConversationContext } from "@/hooks/conversation-composer";
 import { useUpdateTicketStatus } from "@/hooks/queries/tickets";
 import { canResumeTicket, canWithdrawTicket, outstandingReassessments } from "@/lib/resolve";
+import { createDebug } from "@/lib/debug";
 import { formatDate } from "@/lib/utils";
 import type { Ticket } from "@/data/types";
 import type { Capability } from "@/auth/permissions";
 import { RequestChangesDialog, ResumeRemediationButton, WithdrawRemediationDialog } from "./remediation";
 import { ReviewRiskAcceptanceDialog } from "./acceptance";
+
+const debug = createDebug("component:ticket-actions:composition");
 
 export function RiskConversationActions({
   finding,
@@ -86,7 +89,10 @@ export function TicketActions({
           size="sm"
           variant="outline"
           disabled={updateStatus.isPending}
-          onClick={() => void updateStatus.mutateAsync("closed")}
+          onClick={() => {
+            debug("closes ticket", { ticketId: ticket.id, status: ticket.status });
+            void updateStatus.mutateAsync("closed");
+          }}
         >
           Close Ticket
         </Button>

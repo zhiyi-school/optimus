@@ -13,8 +13,11 @@ import {
 import { WorkOnRiskButton } from "@/components/ticket-actions/remediation";
 import { useControlDetail, useControlSource } from "@/hooks/queries/tickets";
 import { useFinding } from "@/hooks/queries/evidence";
+import { createDebug } from "@/lib/debug";
 import { controlSummary, isRemediationControl, playbookControlStatusLabels } from "@/lib/resolve";
 import { stepCountLabel } from "@/lib/utils";
+
+const debug = createDebug("page:ControlPreview");
 
 export default function ControlPreview() {
   const { findingId, controlId } = useParams<{ findingId: string; controlId: string }>();
@@ -50,14 +53,23 @@ export default function ControlPreview() {
   if (finding.isLoading || control.isLoading) return shell(<LoadingState label="Loading control…" />);
   if (finding.isError || !finding.data) {
     return shell(
-      <ErrorState message="Unable to load this finding." onRetry={() => finding.refetch()} />,
+      <ErrorState
+        message="Unable to load this finding."
+        onRetry={() => {
+          debug("retries finding load", { findingId });
+          void finding.refetch();
+        }}
+      />,
     );
   }
   if (control.isError || !control.data) {
     return shell(
       <ErrorState
         message="The automation backend could not provide the remediation instructions for this control. Check that its playbook directory is configured and reachable."
-        onRetry={() => control.refetch()}
+        onRetry={() => {
+          debug("retries control load", { platform, controlId });
+          void control.refetch();
+        }}
       />,
     );
   }
@@ -117,7 +129,10 @@ export default function ControlPreview() {
       }
       steps={navSteps}
       activeId={activeStepKey}
-      onSelect={setChosenStepKey}
+      onSelect={(stepKey) => {
+        debug("selects step", { controlId, stepKey });
+        setChosenStepKey(stepKey);
+      }}
       aside={<EstimatedTime value={stepCountLabel(definitionSteps.length)} />}
       supporting={supporting}
       closeTo={backTo}
