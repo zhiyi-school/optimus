@@ -101,7 +101,7 @@ vi.mock("@/data/supabase", () => ({
   supabase: { from: () => ({}), auth: {}, storage: { from: () => ({}) } },
 }));
 
-vi.mock("@/auth/useAuth", () => ({
+vi.mock("@/auth/auth-context", () => ({
   useAuth: () => ({
     profile: { id: "example-developer-id", display_name: "Example Developer", roles, team_id: null },
     can: (capability: Capability) => roleCan(roles, capability),

@@ -75,8 +75,8 @@ vi.mock("@/data/services/users", () => ({
 
 let currentUserId: string | null = null;
 
-const { AuthProvider } = await import("@/auth/AuthProvider");
-const { useAuth } = await import("@/auth/useAuth");
+const { AuthProvider } = await import("@/auth/auth-provider");
+const { useAuth } = await import("@/auth/auth-context");
 
 let container: HTMLDivElement;
 let root: Root;

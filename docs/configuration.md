@@ -74,7 +74,7 @@ is allowed to run (see below).
 
 ## Run polling (start → watch)
 
-`src/data/sync/runs.ts`'s `runAndWait` — the shared logic behind every "Run
+`src/workflows/automation-run.ts`'s `runAndWait` — the shared logic behind every "Run
 Automated Test" / "Run Retest" action — polls the backend for run status
 rather than waiting on a single long request:
 
@@ -93,7 +93,7 @@ run back up: `useActiveRun` finds it again in `GET /runs` by the app and risk it
 covers. There is no `POST /runs/{id}/cancel` endpoint in this phase.
 
 Every "Running…" button also has a **Stop waiting** action next to it
-(`RunCancelToken` in `src/data/sync/mapping.ts`) — it stops the dashboard's
+(`RunCancelToken` in `src/workflows/automation-run.ts`) — it stops the dashboard's
 polling loop early without pretending to cancel anything on the backend (there's
 no cancel-a-run endpoint), so it's purely a way to get the UI back under
 your control before the 6-minute backstop. This matters because the

@@ -3,7 +3,6 @@
  */
 
 import { supabase, ATTACHMENTS_BUCKET } from "@/data/supabase";
-import { insertAttachmentWithCompatibility } from "@/data/compatibility/workflow";
 import { attachmentStorageKey } from "@/lib/attachments";
 import type { RiskConversationAttachment } from "@/data/types";
 import { createDebug } from "@/lib/debug";
@@ -96,7 +95,14 @@ export const conversationAttachmentData = {
       size_bytes: pending.file.size,
     };
     try {
-      return (await insertAttachmentWithCompatibility(row)).attachment;
+      const { data, error } = await supabase
+        .from("risk_conversation_attachments")
+        .insert(row)
+        .select()
+        .single();
+      if (error) throw error;
+      debug("inserted attachment metadata", { attachmentId: data?.id });
+      return data;
     } catch (error) {
       debug("attachment metadata insert failed; checking for concurrent write", {
         storagePath: pending.storagePath,

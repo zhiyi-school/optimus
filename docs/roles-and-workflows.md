@@ -172,9 +172,7 @@ how many steps, and whether the playbook marks it `active`, `deprecated` or
 screenshots, references and implementation example, with nothing writable.
 
 The current read-only preview is
-`/resolve/findings/:findingId/controls/:controlId`. Legacy `/findings/...` and
-`/tickets/...` URLs are redirect shims into the assessment or Resolve risk
-workspace; they are not standalone finding or ticket pages.
+`/resolve/findings/:findingId/controls/:controlId`.
 
 Preview mode creates no `ticket_controls` or `ticket_control_steps` rows.
 Steps cannot be ticked, notes cannot be added, and no fix or reassessment can be
@@ -395,9 +393,7 @@ required reason. `classify_risk_entry()` writes
 the finding cannot change without the record of who changed it and why. The risk
 workspace shows that history without offering a separate classification page.
 
-On a database without migration `0025`, the client falls back to legacy
-`classify_risk()`. The decision remains atomic, but no entry id is available for
-a classification attachment. See the
+The frontend requires migration `0025` for this. See the
 [compatibility matrix](./frontend-integration.md#database-and-api-compatibility).
 
 **Severity** - Critical, High, Medium, Low, Info - is test-result data and is
@@ -455,7 +451,6 @@ for permissions and persisted transitions.
 | `under_review` or verification result | security | Close or request changes | ticket `closed`, or `rejected` plus conversation message | security capability | ticket update trigger/RLS reserve finalisation and security states for security |
 | `open`, `in_progress`, `rejected` | owning developer | Withdraw remediation | ticket `withdrawn`, immutable reason/actor/time and event | capability and lifecycle | ticket trigger verifies type, source state, actor and reason |
 | `withdrawn` | owning developer | Resume remediation | ticket `in_progress`; progress and history retained | capability and lifecycle | ticket trigger allows only the resume transition |
-| historical `fix_submitted` | owning developer | select approach, withdraw, or request reassessment when otherwise ready | current transitions above; old event remains readable | explicit compatibility capability | migrations preserve the legal legacy state; no current UI creates it |
 
 “Current steps” means rows matching the live playbook definition. An unavailable
 or failed playbook response is unknown, not zero work. A removed stored approach
@@ -482,9 +477,9 @@ always says what is missing. `enforce_retest_request_permissions` re-checks the
 selected approach, its rows and their completion, so a client that skipped the
 page cannot request one early.
 
-`fix_submitted` remains a legal ticket status: remediations recorded before this
-keep it and may still be reassessed, and old timelines still render the event.
-Nothing puts a ticket into it any more.
+`fix_submitted` is retired. Migration `0032` moved every ticket in that status
+to `in_progress` and the database now rejects it; old timelines still render
+the `fix_submitted` event.
 
 Security can send work back at any point with **Request Changes**, which moves
 the ticket to `rejected` and posts the reason into the conversation. The
@@ -509,7 +504,7 @@ moves the ticket to `withdrawn`. This is deliberately not `closed`:
 
 Withdrawal requires a written reason and records who withdrew and when. It is
 offered only while the developer still owns the next step — `open`,
-`in_progress`, `fix_submitted` or `rejected`. Once a reassessment has been
+`in_progress` or `rejected`. Once a reassessment has been
 requested the work is in security's queue, so withdrawal is refused and the
 decision is security's.
 
@@ -525,7 +520,7 @@ The Resolve workspace renames every ticket status for a developer audience:
 |---|---|
 | `open` | Action required |
 | `in_progress` | In progress |
-| `fix_submitted` | Fix submitted — historical only, see below |
+| `fix_submitted` | Fix submitted — retired by `0032`; no ticket carries it |
 | `retest_requested` | Awaiting reassessment |
 | `retest_in_progress` | Security verification in progress |
 | `under_review` | Under security review |
@@ -569,14 +564,8 @@ is a separate call that refuses an empty reason, and `updateStatus()` rejects
 /resolve/applications/:applicationId                    one application's remediation progress
 /resolve/applications/:applicationId/risks/:riskId      one feature-risk, with its conversation
 /resolve/findings/:findingId/controls/:controlId        preview a control before starting
-/resolve/tickets/:ticketId                             redirects to the risk page above
 /resolve/tickets/:ticketId/controls/:controlId          one control's ordered steps, writable
 ```
-
-A ticket's controls are clickable wherever they appear. On the generic ticket
-page they link to `/tickets/:ticketId/controls/:controlId`, which renders the
-same control but is guarded by `view_tickets`, so a security reviewer can read
-what the developer is working through without holding developer access.
 
 Progress is reported with two formulas, both computed in `src/lib/resolve.ts`:
 

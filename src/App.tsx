@@ -4,17 +4,11 @@
 
 import { Navigate, Route, Routes } from "react-router-dom";
 import { lazy, Suspense, type ReactNode } from "react";
-import { useAuth } from "@/auth/useAuth";
+import { useAuth } from "@/auth/auth-context";
 import { defaultRouteFor, type Capability } from "@/auth/permissions";
 import { Layout } from "@/components/Layout";
 import { ErrorState, LoadingState } from "@/components/common";
 import { ResolveGuard } from "@/components/resolve-guard";
-import {
-  LegacyFindingRedirect,
-  LegacyListRedirect,
-  LegacyTicketRedirect,
-  ResolveTicketRedirect,
-} from "@/pages/LegacyRedirect";
 import Assessments from "@/pages/Assessments";
 import Resolve from "@/pages/Resolve";
 
@@ -149,17 +143,6 @@ export default function App() {
           }
         />
 
-        <Route path="findings" element={<LegacyListRedirect />} />
-        <Route path="findings/:findingId" element={<LegacyFindingRedirect />} />
-        <Route
-          path="findings/:findingId/controls/:controlId"
-          element={<LegacyFindingRedirect />}
-        />
-
-        <Route path="tickets" element={<LegacyListRedirect />} />
-        <Route path="tickets/:ticketId" element={<LegacyTicketRedirect />} />
-        <Route path="tickets/:ticketId/controls/:controlId" element={<LegacyTicketRedirect />} />
-
         <Route
           path="resolve"
           element={
@@ -189,14 +172,6 @@ export default function App() {
           element={
             <ResolveGuard>
               <ControlPreview />
-            </ResolveGuard>
-          }
-        />
-        <Route
-          path="resolve/tickets/:ticketId"
-          element={
-            <ResolveGuard>
-              <ResolveTicketRedirect />
             </ResolveGuard>
           }
         />

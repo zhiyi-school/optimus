@@ -2,6 +2,7 @@
  * Labels, tones and state derivations for finding, ticket, conversation and assessment statuses.
  */
 
+import type { RiskVerdict } from "@/api/automation-types";
 import type {
   Assessment,
   AssessmentRunRequest,
@@ -33,6 +34,19 @@ export const findingStatusConfig: Record<
   reduced_risk: { label: "Reduced Risk", tone: "success" },
   inconclusive: { label: "Inconclusive", tone: "warning" },
 };
+
+/** Maps an automation verdict to a finding status; anything unrecognised is inconclusive. */
+export function mapVerdictToFindingStatus(verdict: RiskVerdict | string): FindingStatus {
+  switch (verdict) {
+    case "At Risk":
+      return "at_risk";
+    case "Reduced Risk":
+      return "reduced_risk";
+    case "Inconclusive":
+    default:
+      return "inconclusive";
+  }
+}
 
 export const severityConfig: Record<string, { label: string; tone: Tone }> = {
   critical: { label: "Critical", tone: "danger" },

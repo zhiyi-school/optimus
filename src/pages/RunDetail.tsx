@@ -18,7 +18,7 @@ import {
   useRunSyncStatus,
   useResyncRun,
 } from "@/hooks/queries/automation";
-import { mapVerdictToFindingStatus } from "@/data/sync";
+import { mapVerdictToFindingStatus } from "@/lib/status";
 import { errorMessage, formatDate, formatDuration } from "@/lib/utils";
 
 const debug = createDebug("page:RunDetail");

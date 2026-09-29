@@ -12,7 +12,7 @@ import { ticketData } from "@/data/services/tickets";
 import { createDebug, errorSummary } from "@/lib/debug";
 import { UserFacingError } from "@/lib/utils";
 
-const debug = createDebug("data:sync:provisioning");
+const debug = createDebug("workflows:app-registration");
 
 /** Title and platform-specific setup instructions for an app's provisioning ticket. */
 function provisioningTicketCopy(

@@ -91,7 +91,7 @@ function retest(overrides: Partial<RetestRun> = {}): RetestRun {
     cancelled_at: null,
     cancelled_by: null,
     cancellation_reason: null,
-    previous_ticket_status: "fix_submitted",
+    previous_ticket_status: "in_progress",
     ...overrides,
   } as RetestRun;
 }
@@ -128,7 +128,7 @@ vi.mock("@/data/supabase", () => ({
   supabase: { from: () => ({}), auth: {}, storage: { from: () => ({}) } },
 }));
 
-vi.mock("@/auth/useAuth", () => ({
+vi.mock("@/auth/auth-context", () => ({
   useAuth: () => ({
     profile: { id: DEVELOPER, display_name: "Example Developer", roles },
     can: (capability: Capability) => roleCan(roles, capability),
@@ -630,7 +630,7 @@ describe("the reassessment actions in the developer's conversation", () => {
   }
 
   it("offers the request from inside the composer, not above the thread", () => {
-    tickets = [ticket({ status: "fix_submitted" })];
+    tickets = [ticket({ status: "in_progress" })];
     render();
 
     const request = buttonLabelled("Request reassessment")!;
@@ -754,7 +754,7 @@ describe("the reassessment actions in the developer's conversation", () => {
   });
 
   it("treats a cancelled request as history, offering the reassessment again", () => {
-    tickets = [ticket({ status: "fix_submitted" })];
+    tickets = [ticket({ status: "in_progress" })];
     retests = [
       retest({
         status: "cancelled",
@@ -772,7 +772,7 @@ describe("the reassessment actions in the developer's conversation", () => {
   });
 
   it("does not offer withdrawal on a remediation that is no longer awaiting one", () => {
-    tickets = [ticket({ status: "fix_submitted" })];
+    tickets = [ticket({ status: "in_progress" })];
     retests = [retest()];
     render();
 

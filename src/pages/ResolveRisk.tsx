@@ -4,7 +4,7 @@
 
 import { useMemo } from "react";
 import { useParams } from "react-router-dom";
-import { useAuth } from "@/auth/useAuth";
+import { useAuth } from "@/auth/auth-context";
 import { LoadingState, ErrorState, EmptyState } from "@/components/common";
 import { PlatformBadge, SeverityBadge, StatusBadge } from "@/components/data-display";
 import { ToneBadge } from "@/components/resolve-display";

@@ -23,7 +23,7 @@ function profile(): Profile {
   };
 }
 
-vi.mock("@/auth/useAuth", () => ({
+vi.mock("@/auth/auth-context", () => ({
   useAuth: () => ({
     profile: profile(),
     can: (capability: Capability) => roleCan(roles, capability),
@@ -170,17 +170,11 @@ describe("the active tab follows the tree a route belongs to", () => {
     "/resolve",
     "/resolve/applications/example-app-id",
     "/resolve/applications/example-app-id/risks/example-feature-01-risk-01",
-    "/resolve/tickets/example-ticket-id",
     "/resolve/tickets/example-ticket-id/controls/example-feature-01-risk-01-control-01",
     "/resolve/findings/example-finding-id/controls/example-feature-01-risk-01-control-01",
   ])("keeps Resolve active on %s", (route) => {
     render(route);
     expect(active()).toEqual(["Resolve"]);
-  });
-
-  it("underlines nothing on a legacy route that is only passing through", () => {
-    render("/findings/example-finding-id");
-    expect(active()).toEqual([]);
   });
 });
 

@@ -55,10 +55,10 @@ describe("the conversation has exactly one home", () => {
     }
   });
 
-  it("is reached from an old finding link by the redirect that maps it", () => {
-    const redirect = source("src/lib/legacy-routes.ts");
-    expect(redirect).toContain("/assessments/${location.assessmentId}/tests/");
-    expect(redirect).toContain("/resolve/applications/${location.applicationId}/risks/");
+  it("has no legacy finding or ticket routes left", () => {
+    for (const path of sourceFiles()) {
+      expect(source(path), path).not.toMatch(/[`"']\/(findings|tickets)\//);
+    }
   });
 
   it("owns the classification control, which no longer sits on the finding page", () => {

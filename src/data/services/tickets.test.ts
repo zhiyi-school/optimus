@@ -20,12 +20,11 @@ const STATUSES: TicketStatus[] = [
 const DEVELOPER_STATUSES: TicketStatus[] = [
   "open",
   "in_progress",
-  "fix_submitted",
   "retest_requested",
   "withdrawn",
 ];
 
-const WITHDRAWABLE_FROM: TicketStatus[] = ["open", "in_progress", "fix_submitted", "rejected"];
+const WITHDRAWABLE_FROM: TicketStatus[] = ["open", "in_progress", "rejected"];
 
 let actor = DEVELOPER;
 let actorIsSecurity = false;

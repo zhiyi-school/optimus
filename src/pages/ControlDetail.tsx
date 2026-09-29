@@ -5,7 +5,7 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams } from "react-router-dom";
 import { FileText } from "lucide-react";
-import { useAuth } from "@/auth/useAuth";
+import { useAuth } from "@/auth/auth-context";
 import { LoadingState, ErrorState } from "@/components/common";
 import { PlaybookUpdatedNotice } from "@/components/resolve-display";
 import { EstimatedTime, GuidedSteps, type GuidedStep } from "@/components/guided-steps";
@@ -27,7 +27,7 @@ import {
 } from "@/hooks/queries/tickets";
 import { createDebug } from "@/lib/debug";
 import { changedSinceCompleted, contentHashes, controlSummary, liveControls } from "@/lib/resolve";
-import { resolveRiskPath } from "@/lib/legacy-routes";
+import { resolveRiskPath } from "@/lib/risk-routes";
 import { stepCountLabel } from "@/lib/utils";
 
 const debug = createDebug("page:ControlDetail");

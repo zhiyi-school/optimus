@@ -9,6 +9,7 @@ import { Input, Textarea } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useCreateRiskAcceptanceTicket, useReviewRiskAcceptance } from "@/hooks/queries/tickets";
 import { createDebug } from "@/lib/debug";
+import { resolveRiskPath } from "@/lib/risk-routes";
 import type { Finding } from "@/data/types";
 
 const debug = createDebug("component:ticket-actions:acceptance");
@@ -23,7 +24,7 @@ export function AcceptRiskButton({ finding }: { finding: Finding }) {
   const navigate = useNavigate();
   const create = useCreateRiskAcceptanceTicket();
 
-  /** Creates the risk acceptance ticket, then closes the dialog and opens the finding. */
+  /** Creates the risk acceptance ticket, then closes the dialog and opens the risk workspace. */
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     debug("requests risk acceptance", {
@@ -44,7 +45,7 @@ export function AcceptRiskButton({ finding }: { finding: Finding }) {
     });
     debug("requested risk acceptance", { findingId: finding.id });
     setOpen(false);
-    navigate(`/findings/${finding.id}`);
+    navigate(resolveRiskPath({ applicationId: finding.application_id, riskId: finding.test_id }));
   }
 
   return (

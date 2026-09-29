@@ -19,7 +19,6 @@ import type {
   TicketStatus,
 } from "@/data/types";
 import type { Tone } from "@/lib/status";
-import { isHistoricalFixSubmitted } from "@/data/compatibility/capabilities";
 import { remediationBlockMessage } from "@/lib/remediation-workflow-messages";
 import type { RemediationBlock } from "@/lib/remediation-workflow";
 import { createDebug } from "@/lib/debug";
@@ -82,7 +81,7 @@ export const APPROACH_SELECTABLE_FROM: TicketStatus[] = [
 
 export const REMEDIATION_EDITABLE_FROM: TicketStatus[] = ["open", "in_progress", "rejected"];
 
-/** Mirrors `requestable_from` in enforce_retest_request_permissions; legacy `fix_submitted` is checked apart. */
+/** Mirrors `requestable_from` in enforce_retest_request_permissions. */
 export const REASSESSMENT_REQUESTABLE_FROM: TicketStatus[] = [
   "open",
   "in_progress",
@@ -400,10 +399,10 @@ export function selectedApproachComplete(control: LiveControl | undefined): bool
   return total > 0 && completed >= total;
 }
 
-/** Whether the approach may change; wider than `canEditRemediation`, as legacy `fix_submitted` may switch too. */
+/** Whether the remediation approach may still change. */
 export function canSelectApproach(ticket: Ticket | null | undefined): boolean {
   if (!ticket || ticket.type !== "remediation") return false;
-  return APPROACH_SELECTABLE_FROM.includes(ticket.status) || isHistoricalFixSubmitted(ticket.status);
+  return APPROACH_SELECTABLE_FROM.includes(ticket.status);
 }
 
 /** The message explaining why the approach cannot change, or null when it can. */
@@ -423,7 +422,7 @@ export function approachChangeBlockedReason(
 /** True when a remediation's status allows requesting a reassessment. */
 export function canRequestReassessment(ticket: Ticket | null | undefined): boolean {
   if (!ticket || ticket.type !== "remediation") return false;
-  return REASSESSMENT_REQUESTABLE_FROM.includes(ticket.status) || isHistoricalFixSubmitted(ticket.status);
+  return REASSESSMENT_REQUESTABLE_FROM.includes(ticket.status);
 }
 
 /** Deterministic queue order: oldest first, id breaking a tie. */
@@ -478,7 +477,7 @@ export function canWithdrawReassessment(
 /** True when a remediation's status allows withdrawing it. */
 export function canWithdrawTicket(ticket: Ticket | null | undefined): boolean {
   if (!ticket || ticket.type !== "remediation") return false;
-  return WITHDRAWABLE_FROM.includes(ticket.status) || isHistoricalFixSubmitted(ticket.status);
+  return WITHDRAWABLE_FROM.includes(ticket.status);
 }
 
 /** True for a withdrawn remediation. */

@@ -133,7 +133,7 @@ vi.mock("@/data/supabase", () => ({
   supabase: { from: () => ({}), auth: {}, storage: { from: () => ({}) } },
 }));
 
-vi.mock("@/auth/useAuth", () => ({
+vi.mock("@/auth/auth-context", () => ({
   useAuth: () => ({
     profile: { id: "example-user-id", display_name: "Example Developer", roles: ["developer"] },
     can: (capability: string) => capabilities.includes(capability),
@@ -467,21 +467,6 @@ describe("switching approach", () => {
     expect(button.disabled).toBe(true);
     const note = document.getElementById(button.getAttribute("aria-describedby") as string);
     expect(note?.textContent).toContain("Security is verifying this remediation");
-  });
-
-  // The database allows a switch from fix_submitted; the page used to disable it there.
-  it("still allows a switch after the fix is submitted, as the database does", async () => {
-    twoApproaches();
-    storedSelection = FIRST;
-    ticketStatus = "fix_submitted";
-    render();
-    act(() => buttonNamed("View other approaches (1)")?.click());
-
-    const button = buttonNamed("Use this approach")!;
-    expect(button.disabled).toBe(false);
-    await act(async () => button.click());
-
-    expect(selected).toEqual([SECOND]);
   });
 
   it("keeps the alternative visible and reports the refusal when the switch fails", async () => {

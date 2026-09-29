@@ -83,12 +83,6 @@ describe("remediation workflow calculation", () => {
     expect(state.reassessmentBlock).toBeNull();
   });
 
-  it("keeps historical fix_submitted tickets eligible", () => {
-    const state = calculate({ ticket: ticket({ status: "fix_submitted" }) });
-    expect(state.approachChangeBlock).toBeNull();
-    expect(state.reassessmentBlock).toBeNull();
-  });
-
   it("blocks a reassessment on permission alone, whatever the remediation says", () => {
     expect(calculate({ mayRequest: false }).reassessmentBlock?.code).toBe("reassessment_permission");
     for (const state of [

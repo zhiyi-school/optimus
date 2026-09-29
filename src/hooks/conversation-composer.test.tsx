@@ -23,7 +23,6 @@ let uploadFailureHasBytes = false;
 let attachmentInputs: { bytesUploaded: boolean; fileName: string }[] = [];
 let recordFails = false;
 let reassessmentFails = false;
-let legacyClassification = false;
 let holdRecord = false;
 let finishRecord: (() => void) | null = null;
 let definitions: unknown[] = [];
@@ -90,7 +89,7 @@ vi.mock("@/test-support/query-hooks", () => ({
       calls.push({ name: "classify", input });
       return Promise.resolve({
         finding: { id: FINDING },
-        entryId: legacyClassification ? null : "entry-classification",
+        entryId: "entry-classification",
       });
     },
     isPending: false,
@@ -196,7 +195,6 @@ beforeEach(() => {
   attachmentInputs = [];
   recordFails = false;
   reassessmentFails = false;
-  legacyClassification = false;
   holdRecord = false;
   finishRecord = null;
   definitions = [approach()];
@@ -428,20 +426,6 @@ describe("when the file cannot be stored", () => {
     expect(composer.attachmentRetry).toBeNull();
   });
 
-  it("never repeats a legacy classification just to guess an attachment entry", async () => {
-    render();
-    legacyClassification = true;
-    const submission: ComposerSubmission = {
-      message: "Verified.",
-      file: file(),
-      action: { kind: "classification", status: "reduced_risk" },
-    };
-
-    expect(await submit(submission)).toBeInstanceOf(AttachmentError);
-    expect(composer.attachmentRetry).toMatchObject({ retryable: false });
-    expect(await submit(submission)).toBeInstanceOf(AttachmentError);
-    expect(calls.map((call) => call.name)).toEqual(["classify"]);
-  });
 });
 
 describe("what each reader is offered", () => {
@@ -523,12 +507,6 @@ describe("what each reader is offered", () => {
       expect(composer.offers[0].blockedReason).toBeNull();
     },
   );
-
-  it("still lets a remediation recorded before the change ask for one", () => {
-    ticketStatus = "fix_submitted";
-    render({ can: (capability) => capability === "request_retest" });
-    expect(composer.offers[0].blockedReason).toBeNull();
-  });
 
   it("offers the request when the approaches could not be loaded", () => {
     definitionsFailed = true;

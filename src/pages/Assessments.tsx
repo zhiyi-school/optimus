@@ -28,7 +28,7 @@ import {
   useApplications,
   useDeleteApplication,
 } from "@/hooks/queries/reference";
-import { useAuth } from "@/auth/useAuth";
+import { useAuth } from "@/auth/auth-context";
 import { ApplicationIcon } from "@/components/application-icon";
 import { latestAssessmentPerApp } from "@/lib/assessments";
 import { createDebug } from "@/lib/debug";

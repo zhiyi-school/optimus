@@ -10,9 +10,12 @@ import type {
   StartRunRequest,
 } from "@/api/automation-types";
 import { createDebug } from "@/lib/debug";
-import type { RunCancelToken } from "./mapping";
 
-const debug = createDebug("data:sync:runs");
+const debug = createDebug("workflows:automation-run");
+
+export interface RunCancelToken {
+  cancelled: boolean;
+}
 
 const RUN_POLL_INTERVAL_MS = 3000;
 const RUN_POLL_MAX_ATTEMPTS = 120;

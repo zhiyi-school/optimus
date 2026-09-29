@@ -33,7 +33,7 @@ vi.mock("@/data/supabase", () => ({
   supabase: { from: () => ({}), auth: {}, storage: { from: () => ({}) } },
 }));
 
-vi.mock("@/auth/useAuth", () => ({
+vi.mock("@/auth/auth-context", () => ({
   useAuth: () => ({
     session: hasSession ? { access_token: "example-token" } : null,
     profile: profile(),

@@ -132,18 +132,20 @@ src/
 │   ├── automation-client.ts
 │   ├── automation-services.ts
 │   └── automation-types.ts
-├── data/                 # Supabase client + grouped data services + sync
+├── data/                 # Supabase client + grouped data services
 │   ├── supabase.ts
 │   ├── services/
 │   │   ├── assessments.ts
 │   │   ├── conversations.ts
 │   │   ├── conversation-attachments.ts
 │   │   └── tickets.ts
-│   ├── compatibility/    # Recognised older RPC/schema capabilities only
-│   ├── sync.ts
 │   └── types.ts
+├── workflows/            # Browser-side operations spanning both backends
+│   ├── app-registration.ts   # addApp: register, create rows, roll back
+│   └── automation-run.ts     # runAndWait and active-run/progress lookups
 ├── auth/
-│   ├── AuthProvider.tsx
+│   ├── auth-context.ts   # Context, value type and useAuth()
+│   ├── auth-provider.tsx
 │   └── permissions.ts    # Capability model
 ├── components/
 │   ├── ui/                # Small shadcn-style primitives
@@ -204,9 +206,8 @@ semantics. Ticket action modules own their controls directly, while
 Conversation persistence belongs to `data/services/conversations.ts`.
 Attachment byte and metadata stages belong to
 `data/services/conversation-attachments.ts`; the submission coordinator retains
-their partial-success context. Recognised older database shapes are isolated in
-`data/compatibility/workflow.ts`, so ordinary service errors cannot accidentally
-activate a fallback.
+their partial-success context. The services call the current RPCs and columns
+directly; there are no older-schema fallbacks.
 Assessment services contain assessment and assessment-run-request operations
 only. Shared evidence item shapes live in `lib/evidence-types.ts`, so API and
 domain mapping code does not depend on a React component.
@@ -228,7 +229,7 @@ fetching stays in `use-remediation-readiness.ts`, while
 | Change | Owner and required verification |
 | --- | --- |
 | Automation API field, enum or request | `src/api/automation-types.ts` and `automation-services.ts`; extend `automation-services.test.ts` and coordinate the backend contract tests |
-| Supabase read/write | One domain module under `src/data/services/`; keep recognized older-schema handling in `src/data/compatibility/` and add service tests |
+| Supabase read/write | One domain module under `src/data/services/`; correct older schemas with a new migration, not client fallbacks, and add service tests |
 | Query behavior | The matching `src/hooks/queries/` module; query keys belong to `query-keys.ts`, narrow invalidation groups to `queries/invalidation-rules.ts` |
 | Workflow/submission behavior | Pure rules under `src/lib/`, coordination under focused hooks, database enforcement in a new migration and SQL test |
 | Migration | Next numbered `supabase/migrations/` file plus fresh, `0024` upgrade, final-schema and RLS coverage through `npm run test:database` |
@@ -251,15 +252,10 @@ outside this repository.
 /assessments/:assessmentId/tests/:testId                 Test workspace + run history
 /assessments/:assessmentId/tests/:testId/runs/:runId     One run's detail, scoped to a single test
 /runs/:runTimestamp                                      One backend run's progress + full result summary
-/findings, /tickets                                      Legacy list redirects
-/findings/:findingId                                     Legacy redirect to the assessment/Resolve risk workspace
-/findings/:findingId/controls/:controlId                 Legacy redirect to the current control preview
-/tickets/:ticketId[/controls/:controlId]                 Legacy redirect to the Resolve risk workspace
 /resolve                                                 Developer workspace: applications in the team's scope
 /resolve/applications/:applicationId                     One application's remediation progress
 /resolve/findings/:findingId/controls/:controlId         One control, read-only, before any ticket exists
 /resolve/applications/:applicationId/risks/:riskId       One feature-risk: conversation, evidence, remediation
-/resolve/tickets/:ticketId                               Redirects to the risk page above
 /resolve/tickets/:ticketId/controls/:controlId           One control's ordered steps, writable
 /settings                                                Profile + automation defaults
 /admin                                                   Teams, users, roles, applications (admin role only)
@@ -275,10 +271,9 @@ independently, so the guard is UX, not authorization.
 A remediation has no page of its own. `ResolveTicket` is a section of the
 feature-risk workspace, beneath the risk header and beside its conversation, so
 a developer never leaves the thread to work through the controls.
-`/resolve/tickets/:ticketId` exists only to redirect an old bookmark onto that
-page; it stays inside `/resolve` so a mixed-role user is not moved into Assess,
-and it degrades to the application, then to `/resolve`, when a legacy ticket
-names no risk or no application. Closing, cancelling or finishing the guided
+Links into it are built by `resolveRiskPath` (`src/lib/risk-routes.ts`), which
+degrades to the application, then to `/resolve`, when a ticket names no risk or
+no application. Closing, cancelling or finishing the guided
 steps returns to the same place.
 
 The two current control routes under `/resolve` render one component pair —
@@ -286,8 +281,7 @@ The two current control routes under `/resolve` render one component pair —
 `control-content` module, so Markdown blocks, screenshots, references and the
 archive are rendered in one place. Both use `ResolveGuard`; whether steps can be
 ticked is decided separately by `update_control_progress`. A preview reads no
-progress rows and creates none. The old `/findings/...` and `/tickets/...`
-variants only redirect.
+progress rows and creates none.
 
 `/assessments/new` (Security Team only) registers the app with **both**
 systems: an `applications` row plus a placeholder ("Not Started")

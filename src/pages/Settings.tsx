@@ -3,7 +3,7 @@
  */
 
 import type { ReactNode } from "react";
-import { useAuth } from "@/auth/useAuth";
+import { useAuth } from "@/auth/auth-context";
 import { PageHeader } from "@/components/common";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";

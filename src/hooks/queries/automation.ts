@@ -8,7 +8,7 @@ import { assessmentApi, configApi, provisioningApi, syncApi, testApi } from "@/a
 import type { AutomationPlatform, DashboardSyncStatus, RunProgressEvent } from "@/api/automation-types";
 import type { ControlDetail } from "@/api/playbook-types";
 import { playbookApi } from "@/api/playbook-services";
-import { findActiveRun, findPlatformRun, type ActiveRunFilter } from "@/data/sync";
+import { findActiveRun, findPlatformRun, type ActiveRunFilter } from "@/workflows/automation-run";
 import { SYNC_STATUS_POLL_INTERVAL_MS, syncPollInterval } from "@/lib/dashboard-sync";
 import { selectableControls } from "@/lib/resolve";
 import { dashboardSyncInvalidationPrefixes } from "./invalidation-rules";

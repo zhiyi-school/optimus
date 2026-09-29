@@ -16,7 +16,7 @@ import { supabase } from "@/data/supabase";
 import { userData } from "@/data/services/users";
 import type { Profile } from "@/data/types";
 import { roleCan, type Capability } from "@/auth/permissions";
-import { AuthContext, type AuthContextValue } from "@/auth/AuthContext";
+import { AuthContext, type AuthContextValue } from "@/auth/auth-context";
 
 /** Tracks the Supabase session and profile, clearing cached queries whenever the account changes. */
 export function AuthProvider({ children }: { children: ReactNode }) {

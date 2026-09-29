@@ -25,11 +25,11 @@ import { EvidenceViewer, type EvidenceItem } from "@/components/evidence";
 import { AttachmentList } from "@/components/attachments";
 import { initialsOf, roleBubbleTone, roleLabel } from "@/lib/people";
 import { primaryRole } from "@/auth/permissions";
-import { mapVerdictToFindingStatus } from "@/data/sync";
 import type { ConversationTimelineItem } from "@/lib/conversation-timeline";
 import {
   conversationEventConfig,
   conversationEventSummary,
+  mapVerdictToFindingStatus,
   type ConversationEventKind,
 } from "@/lib/status";
 import { cn, errorMessage, formatDate, formatDuration } from "@/lib/utils";

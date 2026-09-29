@@ -42,8 +42,8 @@ authorization boundary.
   owns — which meant the generic status mutation could set `closed` and skip
   the reassessment workflow entirely. `enforce_ticket_update_permissions`
   (`0017_ticket_controls.sql`) closes that: a caller holding neither
-  `security` nor `admin` may only move a ticket to `open`, `in_progress`,
-  `fix_submitted` or `retest_requested`, cannot touch `closed_at`, and cannot
+  `security` nor `admin` may only move a ticket to `open`, `in_progress` or
+  `retest_requested`, cannot touch `closed_at`, and cannot
   change `type`, `finding_id`, `application_id`, `created_by` or either
   assignment column. It is a guardrail on the security-owned transitions, not
   a full state machine — which step is *sensible* next is still the
@@ -133,7 +133,8 @@ events in one feed.
 - **Who may write what is decided by `kind`.** `classification_changed`,
   `retest_started`, `retest_completed` and `retest_failed` require
   `has_role('security')`; `message`, `retest_requested`, `remediation_started`,
-  `remediation_withdrawn` and `fix_submitted` accept `developer` or `security`.
+  `remediation_withdrawn` accept `developer` or `security`. `fix_submitted`
+  entries recorded before `0032` stay readable, but no client can insert one.
   Every authenticated insert must set `author_id = auth.uid()`, so nobody can
   post under another name. Entries with no author come from the sync worker,
   which holds the service-role key and is not subject to these policies.
@@ -152,9 +153,8 @@ events in one feed.
   without `has_role('security')`, an empty reason, or a finding belonging to a
   different application risk than the conversation it was called from. Driving
   those writes from the browser left a window in which the finding could change
-  without the conversation ever recording who changed it or why. If migration
-  `0025` is absent, the frontend falls back to legacy `classify_risk()`; the
-  decision remains atomic but a file cannot attach to that decision entry.
+  without the conversation ever recording who changed it or why. The frontend
+  requires `0025`; it no longer calls the older `classify_risk()`.
 - **A ticket records the conversation it was opened against, once.**
   `tickets.risk_conversation_id` is immutable for everyone once set — the
   trigger refuses to repoint it even for security.
@@ -176,7 +176,7 @@ events in one feed.
 - **Opening a conversation is not a way around the remediation workflow.**
   `enforce_retest_request_permissions` requires a caller without
   `has_role('security')` to name a remediation ticket in `open`, `in_progress`,
-  `rejected`, historical `fix_submitted`, or — since `0030` — a state an
+  `rejected`, or — since `0030` — a state an
   outstanding reassessment has already left it in (`retest_requested`,
   `retest_in_progress`, `under_review`). `0029` removed the step-completion
   requirement. It refuses anyone a ticket raised against a different risk. A
@@ -319,7 +319,7 @@ A developer who decides not to continue needs a way out that is not `closed`.
   needs doing; the Resolve dashboard counts a withdrawn ticket as withdrawn and
   as nothing else — not active, not awaiting security, not resolved.
 - **Withdrawal stops before security starts.** `withdrawn` is reachable only
-  from `open`, `in_progress`, `fix_submitted` or `rejected`. Once the developer
+  from `open`, `in_progress` or `rejected`. Once the developer
   has asked for a reassessment the request is in security's queue, so cancelling
   it is security's call, and the trigger refuses a developer withdrawal from
   `retest_requested` onwards.
@@ -430,7 +430,7 @@ that never writes icon references works fine with the columns present and null.
 ## Idempotent sync
 
 See [AUTOMATION_API.md](./automation-api.md#idempotent-sync) for how
-`src/data/sync.ts` uses `applications.external_id` and
+the backend's dashboard sync worker uses `applications.external_id` and
 `findings.external_id` to keep re-syncing the same automation run
 duplicate-free.
 
@@ -439,7 +439,7 @@ duplicate-free.
 The original spec for this dashboard explicitly forbade assessment
 creation from the frontend — assessments were meant to exist only as a
 byproduct of automation runs. That was deliberately overridden: Security
-Team can now add an app directly via "Add App" (`syncService.addApp`,
+Team can now add an app directly via "Add App" (`addApp` in `src/workflows/app-registration.ts`,
 `src/pages/Assessments.tsx`).
 
 This inserts an `applications` row (`0004_application_contacts.sql` adds

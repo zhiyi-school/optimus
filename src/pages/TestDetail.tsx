@@ -46,12 +46,12 @@ import { useProfiles } from "@/hooks/queries/reference";
 import { DashboardSyncNotice } from "@/components/dashboard-sync-notice";
 import { assessmentApi, defaultConfigPath } from "@/api/automation-services";
 import {
-  syncService,
   riskProgressInRun,
+  runAndWait,
   type RiskRunPhase,
   type RunCancelToken,
-} from "@/data/sync";
-import { useAuth } from "@/auth/useAuth";
+} from "@/workflows/automation-run";
+import { useAuth } from "@/auth/auth-context";
 import { hasRole } from "@/auth/permissions";
 import { createDebug } from "@/lib/debug";
 import { riskIcon } from "@/lib/entity-icons";
@@ -215,7 +215,7 @@ function TestPage() {
         debug("claims reassessment", { retestId: claim.id });
         await retestData.startRun(claim.id);
       }
-      const { run, outcome } = await syncService.runAndWait(
+      const { run, outcome } = await runAndWait(
         { platform, config_path: defaultConfigPath(platform), apps: appExternalId, risks: testId },
         (started) => {
           debug("starts run", { runId: started.run_id, retestId: claim?.id });

@@ -4,7 +4,7 @@
 
 import { Navigate } from "react-router-dom";
 import { ListChecks, Settings } from "lucide-react";
-import { useAuth } from "@/auth/useAuth";
+import { useAuth } from "@/auth/auth-context";
 import { primaryRole } from "@/auth/permissions";
 import { PageHeader, StatCard, LoadingState, ErrorState } from "@/components/common";
 import { CtaCard } from "@/components/cta-card";

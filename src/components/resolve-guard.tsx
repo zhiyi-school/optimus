@@ -5,7 +5,7 @@
 import type { ReactNode } from "react";
 import { Navigate } from "react-router-dom";
 import { ShieldAlert, UserCog } from "lucide-react";
-import { useAuth } from "@/auth/useAuth";
+import { useAuth } from "@/auth/auth-context";
 import { resolveAccess } from "@/auth/permissions";
 import { LoadingState } from "@/components/common";
 import { Card, CardContent } from "@/components/ui/card";

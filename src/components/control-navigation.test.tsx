@@ -14,8 +14,7 @@ import type { TicketControl, TicketControlStep } from "@/data/types";
 const CONTROL_ID = "example-feature-01-risk-01-control-01";
 const SECOND_CONTROL_ID = "example-feature-01-risk-01-control-02";
 const TICKET_ROUTE = `/resolve/tickets/example-ticket-id/controls/${CONTROL_ID}`;
-const READ_ONLY_ROUTE = `/tickets/example-ticket-id/controls/${CONTROL_ID}`;
-const PREVIEW_ROUTE = `/findings/example-finding-id/controls/${CONTROL_ID}`;
+const PREVIEW_ROUTE = `/resolve/findings/example-finding-id/controls/${CONTROL_ID}`;
 
 function definition(overrides: Partial<ControlDetail> = {}): ControlDetail {
   return {
@@ -167,7 +166,7 @@ function previewList(props: Partial<Parameters<typeof ControlDefinitionList>[0]>
   return (
     <ControlDefinitionList
       controls={[definition()]}
-      linkTo={(id) => `/findings/example-finding-id/controls/${id}`}
+      linkTo={(id) => `/resolve/findings/example-finding-id/controls/${id}`}
       {...props}
     />
   );
@@ -228,12 +227,6 @@ describe("ControlChecklist card navigation", () => {
   it("names its destination for a screen reader", () => {
     render(checklist());
     expect(card().getAttribute("aria-label")).toBe("View steps for Control 1");
-  });
-
-  it("sends a ticket viewer without Resolve access to the ticket-scoped route", () => {
-    render(checklist({ linkTo: (id) => `/tickets/example-ticket-id/controls/${id}` }));
-    click(withText("Control 1"));
-    expect(path()).toBe(READ_ONLY_ROUTE);
   });
 
   it("is one link per control, with nothing interactive inside it", () => {

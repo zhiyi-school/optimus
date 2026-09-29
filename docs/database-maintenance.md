@@ -24,7 +24,7 @@ The script verifies two distinct paths:
 | Path | Starting point | Coverage |
 | --- | --- | --- |
 | Fresh installation | Empty database | `0001` through the current migration, version-appropriate SQL workflow/RLS suites, effective schema, grants, triggers, indexes, constraints, RLS and storage policies |
-| Supported upgrade | Schema through `0024` | Synthetic application/team/roles, findings, conversations/events/attachments, remediation tickets including `fix_submitted`, selected controls and completed/incomplete steps, and a historical reassessment; then `0025` onward and preservation/final-schema assertions |
+| Supported upgrade | Schema through `0024` | Synthetic application/team/roles, findings, conversations/events/attachments, remediation tickets including `fix_submitted`, selected controls and completed/incomplete steps, and a historical reassessment; then `0025` onward, the `0032` move of `fix_submitted` to `in_progress`, and preservation/final-schema assertions |
 
 `0024` is the single supported historical test baseline because `0025`–`0027`
 are the documented classification, reassessment, and attachment compatibility
@@ -55,6 +55,37 @@ backfills, and irreversible data changes. Production rollback therefore means
 a reviewed forward correction or a tested restore plan, not assuming every
 migration can be run backward.
 
+## Retiring `fix_submitted` (0032)
+
+Migration `0032_retire_fix_submitted.sql` retires the `fix_submitted` ticket
+status. It:
+
+- moves every `fix_submitted` ticket to `in_progress`, the current state for
+  "the developer is working and may ask for a reassessment", and writes one
+  `ticket_updated` activity row per ticket recording the change;
+- rewrites `retest_runs.previous_ticket_status` from `fix_submitted` to
+  `in_progress`, so withdrawing an old request restores a current state;
+- removes `fix_submitted` from `tickets_status_check` and
+  `retest_runs_previous_ticket_status_check`;
+- redefines `enforce_ticket_update_permissions()`,
+  `enforce_retest_request_permissions()` and `withdraw_reassessment()` without
+  it. A request with no recorded previous state now restores `in_progress`
+  instead of `fix_submitted`;
+- recreates the `risk_conversation_entries_insert` policy so clients can no
+  longer record new `fix_submitted` events.
+
+Conversation entries of kind `fix_submitted` are kept, and the kind stays legal,
+because they are the audit trail of what happened. `dashboard_metrics()` still
+returns a `fix_submitted` ticket count, which is now always `0`; it is removed
+together with the frontend's handling of the status.
+
+**Rollout order.** Apply `0032` to every supported database before deploying
+the frontend that removed its older-schema fallbacks and `fix_submitted` ticket
+handling. That frontend cannot edit, withdraw or reassess a ticket still in
+`fix_submitted`, and it no longer falls back when `0025`, `0027` or `0030` is
+missing. A frontend that predates the removal works unchanged against `0032`. The status rewrite is not reversible from the
+activity rows alone; roll forward if it needs correcting.
+
 ## Reassessment queue (0030)
 
 Migration `0030_reassessment_queue.sql` lets several reassessment requests be
@@ -75,14 +106,12 @@ when nothing else is outstanding.
 frontend:
 
 1. **Database first.** Until `0030` is applied, a second request is rejected by
-   the old unique index and the frontend falls back to the pre-0030 path, which
-   reuses the existing active request.
+   the old unique index.
 2. **Worker second.** An older worker sets the ticket to `under_review` as soon
    as any run completes. With several requests outstanding that is wrong, so the
    worker must be updated before multiple queued requests are encouraged.
-3. **Frontend last.** It only starts creating distinct requests once the RPC is
-   present; without it, `requestReassessmentWithCompatibility` returns null and
-   the legacy single-request path is used unchanged.
+3. **Frontend last.** The current frontend calls the RPC directly and has no
+   pre-0030 path, so a request fails until `0030` is applied.
 
 **Rollback is not symmetric.** Re-creating the old
 `retest_runs_one_active_per_conversation` index fails while more than one

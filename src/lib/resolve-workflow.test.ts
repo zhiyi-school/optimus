@@ -345,7 +345,6 @@ describe("developer remediation from a control preview, end to end", () => {
     expect(state.live()[0].status).toBe("completed");
     expect(state.finding.status).toBe("at_risk");
 
-    state.move("fix_submitted");
     expect(canRequestReassessment(state.ticket)).toBe(true);
     state.move("retest_requested");
 
@@ -575,10 +574,10 @@ describe("a playbook that changes while a ticket is open", () => {
 
   it("leaves the developer's other workflow state alone throughout", () => {
     const state = started();
-    state.move("fix_submitted");
+    state.move("in_progress");
     state.reconcile([controlDefinition, deprioritized]);
 
-    expect(state.ticket.status).toBe("fix_submitted");
+    expect(state.ticket.status).toBe("in_progress");
     expect(state.finding.status).toBe("at_risk");
     expect(canRequestReassessment(state.ticket)).toBe(true);
   });

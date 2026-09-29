@@ -19,6 +19,7 @@ import { useControlDetail, useControlSource } from "@/hooks/queries/tickets";
 import { useFinding } from "@/hooks/queries/evidence";
 import { createDebug } from "@/lib/debug";
 import { controlSummary, isRemediationControl, playbookControlStatusLabels } from "@/lib/resolve";
+import { resolveRiskPath } from "@/lib/risk-routes";
 import { stepCountLabel } from "@/lib/utils";
 
 const debug = createDebug("page:ControlPreview");
@@ -32,7 +33,9 @@ export default function ControlPreview() {
   const control = useControlDetail(platform, controlId);
   const source = useControlSource(platform, controlId);
 
-  const backTo = `/findings/${findingId}`;
+  const backTo = finding.data
+    ? resolveRiskPath({ applicationId: finding.data.application_id, riskId: finding.data.test_id })
+    : "/resolve";
   const definitionSteps = control.data?.steps ?? [];
   const [chosenStepKey, setChosenStepKey] = useState<string | null>(null);
   const activeStepKey =
@@ -49,7 +52,7 @@ export default function ControlPreview() {
       activeId={null}
       onSelect={() => {}}
       closeTo={backTo}
-      closeLabel="Back to the finding"
+      closeLabel="Back to the risk"
       navLabel="Remediation steps"
     >
       {children}
@@ -142,7 +145,7 @@ export default function ControlPreview() {
       aside={<EstimatedTime value={stepCountLabel(definitionSteps.length)} />}
       supporting={supporting}
       closeTo={backTo}
-      closeLabel="Back to the finding"
+      closeLabel="Back to the risk"
       navLabel="Remediation steps"
       finishLabel="Done"
     >

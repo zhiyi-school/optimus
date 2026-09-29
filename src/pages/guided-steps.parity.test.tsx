@@ -100,7 +100,7 @@ vi.mock("@/data/supabase", () => ({
   supabase: { from: () => ({}), auth: {}, storage: { from: () => ({}) } },
 }));
 
-vi.mock("@/auth/useAuth", () => ({
+vi.mock("@/auth/auth-context", () => ({
   useAuth: () => ({
     profile: { id: "example-developer-id", display_name: "Example Developer", roles },
     can: (capability: Capability) => roleCan(roles, capability),
@@ -740,7 +740,7 @@ describe("leaving the workflow", () => {
   it("returns Cancel and the close icon to the same parent page", () => {
     const parents: Record<PageName, string> = {
       manual: `/assessments/${ASSESSMENT}/tests/${RISK}`,
-      preview: `/findings/${FINDING}`,
+      preview: `/resolve/applications/${APPLICATION}/risks/${RISK}`,
       detail: `/resolve/applications/${APPLICATION}/risks/${RISK}`,
     };
     for (const page of ["manual", "preview", "detail"] as PageName[]) {

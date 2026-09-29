@@ -57,7 +57,7 @@ for creation, lookup, history, evidence, registry state and synchronization.
 Adding an app from `/assessments/new` registers it with the automation
 backend, not just in Supabase — this is what makes it testable at all, since
 `POST /runs` resolves app ids out of `configs/<platform>.yaml`.
-`syncService.addApp` calls `POST /config/{platform}/apps`, stores the returned
+`addApp` (`src/workflows/app-registration.ts`) calls `POST /config/{platform}/apps`, stores the returned
 `id` as `applications.external_id` (which is what makes a later automation
 sync merge into this row instead of creating a duplicate), then writes the
 Supabase rows.
@@ -304,7 +304,7 @@ altogether — costs nothing but the live progress view.
 Because the browser is only ever an observer, "is a run in progress?" cannot live
 in React state: unmounting a page would lose it, and a second person opening the
 same page would never see it at all. Instead `useActiveRun` polls `GET /runs`
-every 5s and `findActiveRun` (`src/data/sync/runs.ts`) picks out the record that
+every 5s and `findActiveRun` (`src/workflows/automation-run.ts`) picks out the record that
 is still `running` and whose `apps`/`risks` selection covers the app and risk the
 page is showing. A `null` selection covers everything, mirroring the backend's
 `--apps`/`--risks` defaults.

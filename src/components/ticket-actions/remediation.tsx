@@ -4,7 +4,6 @@
 
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "@/auth/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -19,6 +18,7 @@ import {
 import { useSendRiskMessage } from "@/hooks/queries/conversations";
 import { activeRemediationTicket, effectiveSelectedControlId, resumableRemediationTicket, selectableControls, selectedControl, selectedControlReconciliationPlan } from "@/lib/resolve";
 import { createDebug } from "@/lib/debug";
+import { resolveRiskPath } from "@/lib/risk-routes";
 import { errorMessage, formatDate } from "@/lib/utils";
 import type { Application, Finding, Ticket } from "@/data/types";
 
@@ -40,7 +40,6 @@ export function WorkOnRiskButton({
   const [plannedFix, setPlannedFix] = useState("");
   const [targetVersion, setTargetVersion] = useState("");
   const navigate = useNavigate();
-  const { can } = useAuth();
   const start = useStartRemediation();
   const { data: tickets } = useFindingTickets(finding.id);
   const definitions = useRiskControls(finding.platform, finding.test_id);
@@ -48,13 +47,7 @@ export function WorkOnRiskButton({
   const active = activeRemediationTicket(finding.id, tickets);
   const withdrawn = resumableRemediationTicket(finding.id, tickets);
   const resume = useResumeTicket(withdrawn?.id ?? "", finding.id);
-  /** Path to the remediation workspace, ticket or finding page, depending on access. */
-  const ticketPath = (id: string) =>
-    can("view_resolve") && finding.test_id
-      ? `/resolve/applications/${finding.application_id}/risks/${encodeURIComponent(finding.test_id)}`
-      : can("view_resolve")
-        ? `/resolve/tickets/${id}`
-        : `/findings/${finding.id}`;
+  const riskPath = resolveRiskPath({ applicationId: finding.application_id, riskId: finding.test_id });
 
   /** Starts remediation with the initial selected control and opens the resulting page. */
   async function onSubmit(e: FormEvent) {
@@ -92,13 +85,13 @@ export function WorkOnRiskButton({
     });
     debug("started remediation", { findingId: finding.id, ticketId: ticket.id });
     setOpen(false);
-    navigate(ticketPath(ticket.id));
+    navigate(riskPath);
   }
 
   if (active) {
     return (
       <Link
-        to={ticketPath(active.id)}
+        to={riskPath}
         className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
       >
         Continue remediation
@@ -115,7 +108,7 @@ export function WorkOnRiskButton({
             debug("resumes remediation", { findingId: finding.id, ticketId: withdrawn.id });
             await resume.mutateAsync();
             debug("resumed remediation", { ticketId: withdrawn.id });
-            navigate(ticketPath(withdrawn.id));
+            navigate(riskPath);
           }}
         >
           {resume.isPending ? "Resuming…" : "Resume remediation"}

@@ -13,7 +13,7 @@ vi.mock("@/api/automation-services", () => ({
 }));
 
 const { findActiveRun, findPlatformRun, riskProgressInRun, runAndWait } =
-  await import("./runs");
+  await import("./automation-run");
 
 function record(status: RunRecord["status"], error: string | null = null): RunRecord {
   return {

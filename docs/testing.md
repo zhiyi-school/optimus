@@ -60,7 +60,7 @@ real browser.
 
 | Area | File |
 | --- | --- |
-| Run start/poll behaviour, in-flight run matching, per-risk phase | `src/data/sync/runs.test.ts` |
+| Run start/poll behaviour, in-flight run matching, per-risk phase | `src/workflows/automation-run.test.ts` |
 | Automation API client — SARIF and sync methods, error degradation, URL escaping | `src/api/automation-services.test.ts` |
 | Dashboard sync presentation, polling start/stop, retry gating | `src/lib/dashboard-sync.test.ts` |
 | SARIF export gating and download filename | `src/lib/sarif.test.ts` |
@@ -90,7 +90,7 @@ then both repositories' focused playbook tests must pass.
 
 **Keep logic testable by keeping it pure.** The reason polling, run matching,
 sync presentation and SARIF gating are all unit-tested is that each lives in a
-plain function in `src/lib/` or `src/data/sync/` rather than inside a component.
+plain function in `src/lib/` or `src/workflows/` rather than inside a component.
 New behaviour of that kind should follow the same shape.
 
 **Prove a new test can fail.** After writing a test for a fix, revert the fix

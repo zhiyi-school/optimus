@@ -5,7 +5,7 @@
 import { Suspense } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { ShieldCheck, LogOut, Settings as SettingsIcon } from "lucide-react";
-import { useAuth } from "@/auth/useAuth";
+import { useAuth } from "@/auth/auth-context";
 import { LoadingState } from "@/components/common";
 import { useTeams } from "@/hooks/queries/reference";
 import { initialsOf } from "@/lib/people";

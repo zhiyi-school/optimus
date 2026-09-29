@@ -20,7 +20,6 @@ let uploads: string[] = [];
 let rpcCalls: { name: string; params: Record<string, unknown> }[] = [];
 let rpcError: unknown = null;
 let rpcResult: Record<string, unknown> | null = null;
-let rpcMissing: string[] = [];
 let raceOn: string | null = null;
 let missingColumns: string[] = [];
 let loseAttachmentInsertResponse = false;
@@ -109,12 +108,6 @@ vi.mock("@/data/supabase", () => ({
     from: (name: string) => table(name),
     rpc: (name: string, params: Record<string, unknown>) => {
       rpcCalls.push({ name, params });
-      if (rpcMissing.includes(name)) {
-        return Promise.resolve({
-          data: null,
-          error: { code: "PGRST202", message: `Could not find the function public.${name}` },
-        });
-      }
       if (rpcError) return Promise.resolve({ data: null, error: rpcError });
       if (rpcResult) return Promise.resolve({ data: rpcResult, error: null });
       return Promise.resolve({
@@ -148,14 +141,13 @@ beforeEach(() => {
   rpcCalls = [];
   rpcError = null;
   rpcResult = null;
-  rpcMissing = [];
   raceOn = null;
   missingColumns = [];
   loseAttachmentInsertResponse = false;
   rows = {
     risk_conversations: [],
     findings: [{ id: FINDING, status: "at_risk" }],
-    tickets: [{ id: TICKET, status: "fix_submitted", risk_conversation_id: CONVERSATION }],
+    tickets: [{ id: TICKET, status: "in_progress", risk_conversation_id: CONVERSATION }],
     retest_runs: [],
   };
 });
@@ -350,20 +342,6 @@ describe("entries", () => {
     });
   });
 
-  it("still attaches the file on a database without migration 0027", async () => {
-    missingColumns = ["storage_provider"];
-    const attachment = await riskConversationData.uploadAttachment(
-      CONVERSATION,
-      "entry-1",
-      new File(["example"], "example-evidence.png", { type: "image/png" }),
-    );
-
-    expect(attachment.file_name).toBe("example-evidence.png");
-    const payloads = written("risk_conversation_attachments").map((write) => write.payload);
-    expect(payloads[1]).not.toHaveProperty("storage_provider");
-    expect(payloads[1]).toMatchObject({ storage_path: uploads[0] });
-  });
-
   it("recovers the metadata row when the insert succeeded but its response was lost", async () => {
     loseAttachmentInsertResponse = true;
     const attachment = await riskConversationData.uploadAttachment(
@@ -377,7 +355,7 @@ describe("entries", () => {
     expect(uploads).toHaveLength(1);
   });
 
-  it("does not use the 0027 fallback for an unrelated metadata refusal", async () => {
+  it("surfaces a metadata refusal instead of retrying the insert", async () => {
     missingColumns = ["entry_id"];
     await expect(
       riskConversationData.uploadAttachment(
@@ -454,23 +432,7 @@ describe("classification", () => {
     expect(result.finding).toMatchObject({ id: FINDING, status: "reduced_risk" });
   });
 
-  it("falls back to the original function on a database without migration 0025", async () => {
-    rpcMissing = ["classify_risk_entry"];
-
-    const result = await findingData.classify({
-      findingId: FINDING,
-      conversationId: CONVERSATION,
-      status: "reduced_risk",
-      reason: "Verified.",
-    });
-
-    expect(rpcCalls.map((call) => call.name)).toEqual(["classify_risk_entry", "classify_risk"]);
-    // Without the new function there is no entry to attach a file to.
-    expect(result.entryId).toBeNull();
-    expect(result.finding).toMatchObject({ id: FINDING, status: "reduced_risk" });
-  });
-
-  it("surfaces a real refusal rather than falling back to the old function", async () => {
+  it("surfaces a real refusal from the classification function", async () => {
     rpcError = { message: "only the security team can change a risk classification" };
 
     await expect(
@@ -512,61 +474,10 @@ describe("classification", () => {
 });
 
 describe("the retest lifecycle", () => {
-  // These document the pre-0030 fallback; the queue RPC has its own block below.
-  beforeEach(() => {
-    rpcMissing = [...rpcMissing, "request_reassessment_entry"];
-  });
+  const queued = { run: { id: "retest-1", status: "queued" }, entry_id: "entry-retest-1" };
 
-  it("records the request, links it to the conversation and moves the ticket", async () => {
-    await retestData.requestRetest({
-      conversationId: CONVERSATION,
-      findingId: FINDING,
-      ticketId: TICKET,
-      submissionId: "submission-1",
-    });
-
-    expect(written("retest_runs")[0].payload).toMatchObject({
-      conversation_id: CONVERSATION,
-      ticket_id: TICKET,
-      finding_id: FINDING,
-      status: "queued",
-    });
-    expect(written("risk_conversation_entries")[0].payload).toMatchObject({
-      kind: "retest_requested",
-      source_ticket_id: TICKET,
-    });
-    expect(written("tickets")[0].payload).toMatchObject({ status: "retest_requested" });
-  });
-
-  it("leaves tickets alone for a retest security runs on its own", async () => {
-    await retestData.requestRetest({
-      conversationId: CONVERSATION,
-      findingId: FINDING,
-      submissionId: "submission-1",
-    });
-
-    expect(written("retest_runs")[0].payload).toMatchObject({ ticket_id: null });
-    expect(written("tickets")).toHaveLength(0);
-    expect(written("risk_conversation_entries")[0].payload).toMatchObject({
-      kind: "retest_requested",
-      source_ticket_id: null,
-    });
-  });
-
-  it("keys the request event to its run, so a retry cannot post it twice", async () => {
-    const first = await retestData.requestRetest({
-      conversationId: CONVERSATION,
-      findingId: FINDING,
-      ticketId: TICKET,
-      submissionId: "submission-1",
-    });
-
-    expect(written("risk_conversation_entries")[0].payload).toMatchObject({
-      sync_key: `retest-requested::${first.run.id}`,
-    });
-  });
-
-  it("carries the requester's context on the request event rather than as a second message", async () => {
+  it("queues the request in one server-side call keyed by the submission", async () => {
+    rpcResult = queued;
     await retestData.requestRetest({
       conversationId: CONVERSATION,
       findingId: FINDING,
@@ -575,15 +486,35 @@ describe("the retest lifecycle", () => {
       submissionId: "submission-1",
     });
 
-    const entries = written("risk_conversation_entries");
-    expect(entries).toHaveLength(1);
-    expect(entries[0].payload).toMatchObject({
-      kind: "retest_requested",
-      message: "Fixed in build 2.1.",
+    expect(rpcCalls).toEqual([
+      {
+        name: "request_reassessment_entry",
+        params: {
+          p_conversation_id: CONVERSATION,
+          p_finding_id: FINDING,
+          p_ticket_id: TICKET,
+          p_message: "Fixed in build 2.1.",
+          p_submission_id: "submission-1",
+        },
+      },
+    ]);
+    // The function owns the request, its event and the ticket move.
+    expect(writes).toHaveLength(0);
+  });
+
+  it("sends no ticket for a reassessment asked from the conversation alone", async () => {
+    rpcResult = queued;
+    await retestData.requestRetest({
+      conversationId: CONVERSATION,
+      findingId: FINDING,
+      submissionId: "submission-1",
     });
+
+    expect(rpcCalls[0].params.p_ticket_id).toBeNull();
   });
 
   it("records no message when the requester added no context", async () => {
+    rpcResult = queued;
     await retestData.requestRetest({
       conversationId: CONVERSATION,
       findingId: FINDING,
@@ -592,111 +523,34 @@ describe("the retest lifecycle", () => {
       submissionId: "submission-1",
     });
 
-    expect(written("risk_conversation_entries")[0].payload).toMatchObject({ message: null });
+    expect(rpcCalls[0].params.p_message).toBeNull();
   });
 
-  it("posts one request event however often the request is retried, context and all", async () => {
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      await retestData.requestRetest({
+  it("returns the request and its event, so a file attaches to that event", async () => {
+    rpcResult = queued;
+    const result = await retestData.requestRetest({
+      conversationId: CONVERSATION,
+      findingId: FINDING,
+      ticketId: TICKET,
+      submissionId: "submission-1",
+    });
+
+    expect(result).toEqual({ run: queued.run, entryId: "entry-retest-1" });
+  });
+
+  it("surfaces a refusal from the database rather than writing anything itself", async () => {
+    rpcError = { code: "P0001", message: "a reassessment needs a risk conversation" };
+
+    await expect(
+      retestData.requestRetest({
         conversationId: CONVERSATION,
         findingId: FINDING,
         ticketId: TICKET,
-        message: "Fixed in build 2.1.",
-      submissionId: "submission-1",
-      });
-    }
-
-    expect(written("risk_conversation_entries")).toHaveLength(1);
-    expect(rows.risk_conversation_entries).toHaveLength(1);
-  });
-
-  it("returns the request event, so a file attaches to it rather than to a second message", async () => {
-    const { entryId } = await retestData.requestRetest({
-      conversationId: CONVERSATION,
-      findingId: FINDING,
-      ticketId: TICKET,
-      submissionId: "submission-1",
-    });
-
-    const entries = written("risk_conversation_entries");
-    expect(entries).toHaveLength(1);
-    expect(entryId).toBe(rows.risk_conversation_entries[0].id);
-  });
-
-  it("returns the entry the first attempt wrote when the request is retried", async () => {
-    const first = await retestData.requestRetest({
-      conversationId: CONVERSATION,
-      findingId: FINDING,
-      ticketId: TICKET,
-      submissionId: "submission-1",
-    });
-    const second = await retestData.requestRetest({
-      conversationId: CONVERSATION,
-      findingId: FINDING,
-      ticketId: TICKET,
-      submissionId: "submission-1",
-    });
-
-    expect(second.entryId).toBe(first.entryId);
-    expect(rows.risk_conversation_entries).toHaveLength(1);
-  });
-
-  it("reuses the reassessment already in flight instead of asking for a second", async () => {
-    rows.retest_runs = [
-      { id: "retest-1", conversation_id: CONVERSATION, ticket_id: TICKET, status: "queued" },
-    ];
-
-    const { run } = await retestData.requestRetest({
-      conversationId: CONVERSATION,
-      findingId: FINDING,
-      ticketId: TICKET,
-      submissionId: "submission-1",
-    });
-
-    expect(run.id).toBe("retest-1");
-    expect(written("retest_runs")).toHaveLength(0);
-  });
-
-  it("does not look at a resolved reassessment when deciding whether one is in flight", async () => {
-    rows.retest_runs = [
-      { id: "retest-1", conversation_id: CONVERSATION, ticket_id: TICKET, status: "completed" },
-    ];
-
-    await retestData.requestRetest({
-      conversationId: CONVERSATION,
-      findingId: FINDING,
-      ticketId: TICKET,
-      submissionId: "submission-1",
-    });
-
-    expect(written("retest_runs")[0].payload).toMatchObject({ status: "queued" });
-  });
-
-  it("does not move a ticket that has already been moved", async () => {
-    rows.tickets = [
-      { id: TICKET, status: "retest_requested", risk_conversation_id: CONVERSATION },
-    ];
-
-    await retestData.requestRetest({
-      conversationId: CONVERSATION,
-      findingId: FINDING,
-      ticketId: TICKET,
-      submissionId: "submission-1",
-    });
-
-    expect(written("tickets")).toHaveLength(0);
-  });
-
-  it("records the previous ticket status through the request, not from the client", async () => {
-    await retestData.requestRetest({
-      conversationId: CONVERSATION,
-      findingId: FINDING,
-      ticketId: TICKET,
-      submissionId: "submission-1",
-    });
-
-    expect(written("retest_runs")[0].payload).not.toHaveProperty("previous_ticket_status");
-    expect(written("retest_runs")[0].payload).toMatchObject({ status: "queued" });
+        submissionId: "submission-1",
+      }),
+    ).rejects.toMatchObject({ message: /needs a risk conversation/ });
+    expect(rpcCalls).toHaveLength(1);
+    expect(writes).toHaveLength(0);
   });
 
   it("claims the queued request before any automation is asked to start", async () => {
@@ -738,7 +592,7 @@ describe("withdrawing a reassessment", () => {
     id: "retest-1",
     ticket_id: TICKET,
     status: "cancelled",
-    previous_ticket_status: "fix_submitted",
+    previous_ticket_status: "in_progress",
   };
 
   it("cancels the request and restores the ticket in one server-side call", async () => {

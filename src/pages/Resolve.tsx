@@ -16,7 +16,7 @@ import {
   useTickets,
 } from "@/hooks/queries/tickets";
 import { useLiveControlKeys, useRiskCatalogue } from "@/hooks/queries/automation";
-import { useAuth } from "@/auth/useAuth";
+import { useAuth } from "@/auth/auth-context";
 import { createDebug } from "@/lib/debug";
 import {
   remediationStatusLabels,

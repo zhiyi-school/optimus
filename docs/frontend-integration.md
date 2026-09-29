@@ -107,18 +107,18 @@ relationships and the RLS rationale: [data-model.md](./data-model.md).
 
 ## Database and API compatibility
 
-Full support requires migrations through `0028`, the backend evidence-ref API,
-and this frontend deployed together. Older states degrade as follows; they are
-compatibility paths, not the recommended steady state.
+This frontend requires migrations through `0032` and the backend evidence-ref
+API. It has no older-schema fallbacks: against an older database the affected
+requests fail with the database's own error rather than taking a legacy path.
 
-| Contract | Full support | Degraded fallback |
+| Contract | Requires | Against an older database |
 | --- | --- | --- |
-| Classification | `classify_risk_entry` from `0025` atomically returns both finding and entry id | If that function is missing, the client calls legacy `classify_risk`; classification is still atomic, but a selected file cannot be attached to the decision and must be posted later as a message |
-| Classification attachment | `0025` present | Without `0025`, the workflow succeeds without the attachment and explains the limitation; it never guesses which entry was created |
+| Classification | `classify_risk_entry` from `0025` atomically returns both finding and entry id | Without `0025`, classification fails |
 | Completed-step reassessment | `0026` present; the database verifies the selected approach has at least one step and all are completed | Without `0026`, the current UI cannot request reassessment from completed steps. The older database still accepts a historical `fix_submitted` ticket, but the current UI creates no new ticket in that state |
-| Attachment provider metadata | `0027` stores `storage_provider` and `size_bytes`; absent artifacts surface a download error | Without `0027`, uploads retry with the original columns, reads treat rows as Supabase-backed, and size is unknown. Server-backed rows cannot be represented |
+| Attachment provider metadata | `0027` stores `storage_provider` and `size_bytes`; absent artifacts surface a download error | Without `0027`, attachment uploads fail; the uploaded bytes are discarded |
 | Workflow RPC grants | `0028` revokes anonymous workflow execution and reserves worker queue claims/recovery for `service_role` | A schema through `0027` has the functional capabilities but retains broader function grants. That state is not a supported security posture; there is no application fallback for missing `0028` |
-| Historical tickets | New work goes directly from completed steps to `retest_requested` | Existing `fix_submitted` tickets and timeline events remain readable; the ticket is still a requestable state, subject to the current selected-approach completion checks. Nothing creates new ones |
+| Reassessment queue | `request_reassessment_entry` from `0030` queues a request and its event, deduplicated on the submission | Without `0030`, reassessment requests fail |
+| Historical tickets | `0032` moves `fix_submitted` tickets to `in_progress` and rejects the status | Before `0032`, a remaining `fix_submitted` ticket cannot be edited, withdrawn or reassessed from this frontend. Timeline events of that kind stay readable either way |
 | Evidence path-to-ref change | New backend returns `ref`/`size_bytes`; new frontend sends `?ref=` and uses `path` only for display/name metadata | New frontend with an old path-only backend cannot download automation evidence because no usable ref exists. Old frontend with a new backend sends `path` and receives `422` for missing `ref`. Arbitrary path downloads are intentionally not restored |
 
 Deployment order for full support is: apply migrations through `0028`, deploy
@@ -130,19 +130,9 @@ back only the backend removes refs expected by the frontend. Roll back the pair
 together only if the old path-based exposure is acceptable, otherwise roll
 forward. See [automation-api.md](./automation-api.md) for evidence behavior.
 
-The compatibility code is intentionally narrow. It falls back only when
-PostgREST reports the recognized missing `classify_risk_entry` function or the
-recognized `storage_provider`/`size_bytes` columns. Authorization, validation,
-network and unrelated schema errors are returned unchanged. A successful legacy
-classification has no entry id: the decision is complete, its selected file is
-not, and the client never repeats the decision or guesses the latest entry.
-
-Retire the `0025` fallback only after every supported database has that
-function, and retire the `0027` fallback only after every supported database has
-both metadata columns and all rollback targets include them. Historical
-`fix_submitted` display and transitions must remain until those rows and events
-have either aged out under an explicit retention policy or been migrated by a
-new additive migration. The authoritative state/action matrix is in
+Deploy this frontend only after every supported database has `0032`. The
+`fix_submitted` event label stays, because those conversation entries are
+retained. The authoritative state/action matrix is in
 [roles-and-workflows.md](./roles-and-workflows.md#authoritative-transition-matrix).
 
 ## Required backend compatibility contract
@@ -293,7 +283,7 @@ backend does not support the feature" and degrades instead of erroring.
 | Types | `src/api/automation-types.ts` | the response shapes above |
 | Query hooks | `src/hooks/queries/` | Domain TanStack Query wrappers, polling intervals, cache invalidation |
 | Supabase services | `src/data/services/` | Domain dashboard reads and writes |
-| Pure logic | `src/data/sync/runs.ts`, `src/lib/` | run matching, sync presentation, SARIF gating — unit-tested |
+| Pure logic | `src/workflows/automation-run.ts`, `src/lib/` | run matching, sync presentation, SARIF gating — unit-tested |
 
 Polling intervals and timeouts: [configuration.md](./configuration.md).
 

@@ -900,7 +900,7 @@ describe("workflow gates", () => {
 
 describe("withdrawal gates", () => {
   it("offers withdrawal while the developer still owns the ticket", () => {
-    for (const status of ["open", "in_progress", "fix_submitted", "rejected"] as TicketStatus[]) {
+    for (const status of ["open", "in_progress", "rejected"] as TicketStatus[]) {
       expect(canWithdrawTicket(ticket({ status })), status).toBe(true);
     }
   });
@@ -1128,7 +1128,7 @@ function retest(overrides: Partial<RetestRun> = {}): RetestRun {
     cancelled_at: null,
     cancelled_by: null,
     cancellation_reason: null,
-    previous_ticket_status: "fix_submitted",
+    previous_ticket_status: "in_progress",
     ...overrides,
   } as RetestRun;
 }

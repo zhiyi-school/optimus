@@ -4,7 +4,7 @@
 
 import { Card, CardContent } from "@/components/ui/card";
 import { StatusBadge } from "@/components/data-display";
-import { mapVerdictToFindingStatus } from "@/data/sync";
+import { mapVerdictToFindingStatus } from "@/lib/status";
 import type { LatestResultDetail } from "@/lib/automation-evidence";
 import type { RiskVerdict } from "@/api/automation-types";
 

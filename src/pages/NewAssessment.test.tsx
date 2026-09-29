@@ -66,12 +66,10 @@ let addApp: () => Promise<unknown>;
 let invalidated: unknown[];
 let submitted: { platform?: string; identifier?: string }[];
 
-vi.mock("@/data/sync", () => ({
-  syncService: {
-    addApp: (input: { platform?: string; identifier?: string }) => {
-      submitted.push(input);
-      return addApp();
-    },
+vi.mock("@/workflows/app-registration", () => ({
+  addApp: (input: { platform?: string; identifier?: string }) => {
+    submitted.push(input);
+    return addApp();
   },
 }));
 

@@ -187,7 +187,7 @@ export function useConversationSubmission(input: {
     classify.reset();
     request.reset();
     try {
-      let entryId: string | null;
+      let entryId: string;
       if (submission.action?.kind === "classification") {
         const result = await classify.mutateAsync({
           status: submission.action.status,
@@ -219,27 +219,6 @@ export function useConversationSubmission(input: {
         debug("phase complete without attachment", { entryId });
         return;
       }
-      if (!entryId) {
-        debug("cannot attach without entry id", { fileName: submission.file.name });
-        const context: RetryContext = {
-          pending: createPendingConversationAttachment(
-            input.conversationId as string,
-            "legacy-classification-without-entry",
-            submission.file,
-          ),
-          bytesUploaded: false,
-          action: submission.action,
-          message: submission.message,
-          retryable: false,
-          error:
-            "The classification was recorded, but this database cannot attach a file to it yet. Apply migration 0025 and attach the file as a message.",
-        };
-        setState({ phase: "attachment_failed", context });
-        const error = new AttachmentError(context.error);
-        setFailure(error);
-        throw error;
-      }
-
       const context: RetryContext = {
         pending: createPendingConversationAttachment(
           input.conversationId as string,

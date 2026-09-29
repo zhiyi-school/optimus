@@ -7,7 +7,6 @@ import type { Application, Finding, RetestRun, RiskAcceptance, RiskAcceptanceDec
 import { requireUserId } from "./common";
 import { activityData } from "./activity";
 import { riskConversationData } from "./conversations";
-import { requestReassessmentWithCompatibility } from "@/data/compatibility/workflow";
 import { createDebug } from "@/lib/debug";
 
 const debug = createDebug("data:tickets");
@@ -449,26 +448,7 @@ export const retestData = {
     return data;
   },
 
-  /** Finds the conversation's newest queued or running retest, or null. */
-  async findActiveForConversation(conversationId: string): Promise<RetestRun | null> {
-    debug("finding active retest", { conversationId });
-    const { data, error } = await supabase
-      .from("retest_runs")
-      .select("*")
-      .eq("conversation_id", conversationId)
-      .in("status", ["queued", "running"])
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (error) {
-      debug("finding active retest failed", { conversationId, code: error.code, message: error.message });
-      throw error;
-    }
-    debug("active retest lookup", { conversationId, runId: data?.id ?? null, status: data?.status });
-    return data;
-  },
-
-  /** Queues a reassessment once per submission, via the 0030 RPC or the pre-0030 single-active fallback. */
+  /** Queues a reassessment once per submission; a retry of the same submission returns the request it made. */
   async requestRetest(input: {
     conversationId: string;
     findingId: string;
@@ -478,89 +458,27 @@ export const retestData = {
     /** One intentional Send. A retry of it resolves to the request it already made. */
     submissionId: string;
   }): Promise<{ run: RetestRun; entryId: string }> {
-    debug("requesting retest", {
+    debug("rpc request_reassessment_entry", {
       conversationId: input.conversationId,
       findingId: input.findingId,
       ticketId: input.ticketId ?? null,
       submissionId: input.submissionId,
       messageLength: input.message?.trim().length ?? 0,
     });
-    const queued = await requestReassessmentWithCompatibility({
-      conversationId: input.conversationId,
-      findingId: input.findingId,
-      ticketId: input.ticketId ?? null,
-      message: input.message?.trim() || null,
-      submissionId: input.submissionId,
+    const { data, error } = await supabase.rpc("request_reassessment_entry", {
+      p_conversation_id: input.conversationId,
+      p_finding_id: input.findingId,
+      p_ticket_id: input.ticketId ?? null,
+      p_message: input.message?.trim() || null,
+      p_submission_id: input.submissionId,
     });
-    if (queued) {
-      debug("retest queued via RPC", { runId: queued.run?.id, entryId: queued.entryId });
-      return { run: queued.run, entryId: queued.entryId as string };
+    if (error) {
+      debug("rpc request_reassessment_entry failed", { code: error.code, message: error.message });
+      throw error;
     }
-
-    debug("reassessment RPC unavailable; using legacy single-active path", {
-      conversationId: input.conversationId,
-    });
-    const userId = await requireUserId();
-    let run = await retestData.findActiveForConversation(input.conversationId);
-    debug("active retest before insert", { runId: run?.id ?? null, status: run?.status });
-    if (!run) {
-      debug("no active retest; inserting one", { conversationId: input.conversationId });
-      const { data, error } = await supabase
-        .from("retest_runs")
-        .insert({
-          conversation_id: input.conversationId,
-          ticket_id: input.ticketId ?? null,
-          finding_id: input.findingId,
-          requested_by: userId,
-          status: "queued",
-        })
-        .select()
-        .single();
-      if (error) {
-        debug("retest insert failed; checking for concurrent insert", {
-          code: error.code,
-          message: error.message,
-        });
-        const raced = await retestData.findActiveForConversation(input.conversationId);
-        if (!raced) {
-          debug("no concurrent retest found; rethrowing", { conversationId: input.conversationId });
-          throw error;
-        }
-        debug("concurrent retest found; reusing", { runId: raced.id });
-        run = raced;
-      } else {
-        run = data as RetestRun;
-        debug("inserted retest", { runId: run?.id });
-      }
-    }
-
-    const entry = await riskConversationData.addEntryOnce({
-      conversation_id: input.conversationId,
-      kind: "retest_requested",
-      message: input.message?.trim() || null,
-      source_ticket_id: input.ticketId ?? null,
-      sync_key: `retest-requested::${run.id}`,
-    });
-
-    debug("recorded retest request entry", { runId: run.id, entryId: entry?.id });
-
-    if (input.ticketId) {
-      const ticket = await ticketData.get(input.ticketId);
-      if (ticket && ticket.status !== "retest_requested") {
-        debug("moving ticket to retest_requested", { ticketId: input.ticketId, from: ticket.status });
-        await ticketData.updateStatus(input.ticketId, "retest_requested");
-        await activityData.log({
-          entity_type: "ticket",
-          entity_id: input.ticketId,
-          action: "retest_requested",
-        });
-      } else {
-        debug("ticket status unchanged", { ticketId: input.ticketId, found: !!ticket });
-      }
-    } else {
-      debug("retest has no ticket; skipping status update");
-    }
-    return { run, entryId: entry.id };
+    const payload = data as { run: RetestRun; entry_id: string };
+    debug("reassessment queued", { runId: payload.run?.id, entryId: payload.entry_id });
+    return { run: payload.run, entryId: payload.entry_id };
   },
 
   /** Claims a queued reassessment before automation starts, so a just-withdrawn request never runs. */

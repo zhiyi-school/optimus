@@ -14,7 +14,7 @@ import { Input, Select } from "@/components/ui/input";
 import { AssessmentStatusBadge, PlatformBadge } from "@/components/data-display";
 import { ApplicationIcon } from "@/components/application-icon";
 import { useAssessments } from "@/hooks/queries/assessments";
-import { syncService } from "@/data/sync";
+import { addApp } from "@/workflows/app-registration";
 import { assessmentRunRequestData } from "@/data/services/assessments";
 import { latestAssessmentPerApp } from "@/lib/assessments";
 import { createDebug } from "@/lib/debug";
@@ -203,7 +203,7 @@ export default function NewAssessment() {
     setSaving(true);
     setError(null);
     try {
-      const { assessment } = await syncService.addApp({
+      const { assessment } = await addApp({
         name: name.trim(),
         platform,
         version: version.trim(),

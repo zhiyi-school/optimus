@@ -11,7 +11,7 @@ import {
   Mail,
   ShieldCheck,
 } from "lucide-react";
-import { useAuth } from "@/auth/useAuth";
+import { useAuth } from "@/auth/auth-context";
 import { defaultRouteFor } from "@/auth/permissions";
 import { Button } from "@/components/ui/button";
 import { LoadingState } from "@/components/common";

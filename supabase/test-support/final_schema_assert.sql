@@ -76,4 +76,30 @@ begin
   if not exists (
     select 1 from pg_policies where schemaname = 'storage' and tablename = 'objects'
   ) then raise exception 'storage object policies are missing'; end if;
+  if exists (select 1 from tickets where status = 'fix_submitted')
+     or exists (select 1 from retest_runs where previous_ticket_status = 'fix_submitted') then
+    raise exception 'rows still carry the retired fix_submitted status';
+  end if;
+  if exists (
+    select 1 from pg_constraint
+    where conname in ('tickets_status_check', 'retest_runs_previous_ticket_status_check')
+      and pg_get_constraintdef(oid) like '%fix_submitted%'
+  ) then raise exception 'a ticket status constraint still accepts fix_submitted'; end if;
+  if exists (
+    select 1 from pg_policies
+    where schemaname = 'public' and tablename = 'risk_conversation_entries'
+      and policyname = 'risk_conversation_entries_insert' and with_check like '%fix_submitted%'
+  ) then raise exception 'clients can still record fix_submitted events'; end if;
+  if exists (
+    select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.proname in ('enforce_ticket_update_permissions', 'enforce_retest_request_permissions',
+                        'withdraw_reassessment')
+      and p.prosrc like '%fix_submitted%'
+  ) then raise exception 'a ticket workflow function still names fix_submitted'; end if;
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'risk_conversation_entries_kind_check'
+      and pg_get_constraintdef(oid) like '%fix_submitted%'
+  ) then raise exception 'historical fix_submitted events are no longer a legal kind'; end if;
 end $$;
