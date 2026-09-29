@@ -137,16 +137,6 @@ export interface Finding {
   updated_at: string;
 }
 
-export interface FindingHistory {
-  id: string;
-  finding_id: string;
-  previous_status: FindingStatus | null;
-  new_status: FindingStatus;
-  changed_by: string | null;
-  reason: string | null;
-  created_at: string;
-}
-
 export interface Ticket {
   id: string;
   finding_id: string | null;

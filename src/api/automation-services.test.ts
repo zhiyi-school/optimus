@@ -55,35 +55,6 @@ describe("getRunSyncStatus", () => {
   });
 });
 
-describe("getWorkerStatus", () => {
-  it("reports operational state without any credential in it", async () => {
-    get.mockResolvedValue({
-      data: {
-        enabled: true,
-        worker_state: "idle",
-        queue_depth: 0,
-        last_success_at: "2026-01-01T00:00:00+08:00",
-        last_failure_at: null,
-        last_error: null,
-        recovery_sweep_enabled: true,
-      },
-    });
-
-    const worker = await syncApi.getWorkerStatus();
-
-    expect(worker?.worker_state).toBe("idle");
-    expect(JSON.stringify(worker)).not.toMatch(/service_role|apikey|SUPABASE/i);
-  });
-
-  it("returns null when the automation host is unreachable", async () => {
-    get.mockRejectedValue(
-      Object.assign(new Error("connection refused"), { status: undefined, detail: undefined }),
-    );
-
-    await expect(syncApi.getWorkerStatus()).resolves.toBeNull();
-  });
-});
-
 describe("resyncRun", () => {
   it("asks the backend to queue another pass", async () => {
     post.mockResolvedValue({ data: { run_id: "r1", status: "queued" } });

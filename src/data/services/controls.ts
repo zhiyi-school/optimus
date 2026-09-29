@@ -225,46 +225,4 @@ export const controlProgressData = {
     });
     return data;
   },
-
-  /** Sets a control's status and optional note, then logs the change. */
-  async setControlStatus(
-    ticketId: string,
-    controlRowId: string,
-    status: ControlProgressStatus,
-    note?: string,
-  ): Promise<TicketControl> {
-    debug("setting control status", {
-      ticketId,
-      controlRowId,
-      status,
-      noteLength: note?.length ?? null,
-    });
-    const userId = await requireUserId();
-    const { data, error } = await supabase
-      .from("ticket_controls")
-      .update({
-        ...completionFields(status, userId),
-        ...(note === undefined ? {} : { developer_note: note || null }),
-      })
-      .eq("id", controlRowId)
-      .select()
-      .single();
-    if (error) {
-      debug("setting control status failed", {
-        controlRowId,
-        code: error.code,
-        message: error.message,
-      });
-      throw error;
-    }
-    debug("set control status", { controlRowId, controlId: data?.control_id, status: data?.status });
-
-    await activityData.log({
-      entity_type: "ticket",
-      entity_id: ticketId,
-      action: "control_updated",
-      metadata: { control_id: data.control_id, status },
-    });
-    return data;
-  },
 };

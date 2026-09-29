@@ -81,16 +81,6 @@ export interface RunSyncStatus {
   counts: RunSyncCounts;
 }
 
-export interface DashboardSyncWorkerStatus {
-  enabled: boolean;
-  worker_state: "idle" | "running";
-  queue_depth: number;
-  last_success_at: string | null;
-  last_failure_at: string | null;
-  last_error: string | null;
-  recovery_sweep_enabled: boolean;
-}
-
 export interface RunProgressEvent {
   type: string;
   timestamp?: string;

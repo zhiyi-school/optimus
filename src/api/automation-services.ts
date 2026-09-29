@@ -8,7 +8,6 @@ import type {
   AppProvisioning,
   AutomationPlatform,
   AutomationResultRow,
-  DashboardSyncWorkerStatus,
   FeatureDefinition,
   RegisterAppRequest,
   RiskDefinition,
@@ -325,23 +324,6 @@ export const syncApi = {
       debug("fetching run sync status failed", { runId, ...errorSummary(err) });
       if (isBackendUnavailable(err)) {
         debug("sync status unavailable; returning null", { runId });
-        return null;
-      }
-      throw err;
-    }
-  },
-
-  /** Fetches the dashboard sync worker's status, or null when the endpoint is unavailable. */
-  async getWorkerStatus(): Promise<DashboardSyncWorkerStatus | null> {
-    debug("fetching sync worker status");
-    try {
-      const { data } = await automationClient.get("/sync/status");
-      debug("fetched sync worker status", { keys: data ? Object.keys(data) : [] });
-      return data;
-    } catch (err) {
-      debug("fetching sync worker status failed", errorSummary(err));
-      if (isBackendUnavailable(err)) {
-        debug("sync worker status unavailable; returning null");
         return null;
       }
       throw err;

@@ -3,7 +3,7 @@
  */
 
 import { supabase } from "@/data/supabase";
-import type { Application, Finding, FindingHistory, FindingStatus } from "@/data/types";
+import type { Application, Finding, FindingStatus } from "@/data/types";
 import { createDebug } from "@/lib/debug";
 
 const debug = createDebug("data:findings");
@@ -22,23 +22,6 @@ export interface FindingFilters {
 }
 
 export const findingData = {
-
-  /** Fetches one finding, or null. */
-  async get(id: string): Promise<Finding | null> {
-    debug("fetching finding", { id });
-    const { data, error } = await supabase
-      .from("findings")
-      .select("*")
-      .eq("id", id)
-      .maybeSingle();
-    if (error) {
-      debug("fetching finding failed", { id, code: error.code, message: error.message });
-      throw error;
-    }
-    debug("fetched finding", { id, found: !!data, status: data?.status });
-    return data;
-  },
-
   /** Lists filtered findings with their application joined, newest first. */
   async listWithApplication(
     filters: FindingFilters = {},
@@ -85,21 +68,6 @@ export const findingData = {
     return data as (Finding & { application: Application | null }) | null;
   },
 
-  /** Lists a finding's status history, newest first. */
-  async history(findingId: string): Promise<FindingHistory[]> {
-    debug("listing finding history", { findingId });
-    const { data, error } = await supabase
-      .from("finding_history")
-      .select("*")
-      .eq("finding_id", findingId)
-      .order("created_at", { ascending: false });
-    if (error) {
-      debug("listing finding history failed", { findingId, code: error.code, message: error.message });
-      throw error;
-    }
-    debug("listed finding history", { findingId, count: data?.length });
-    return data;
-  },
 
 
 

@@ -194,7 +194,6 @@ The dashboard's expectations are encoded in `src/api/automation-types.ts` and
 | `/runs/{run_id}/events` | GET | — | SSE, see below | 200, 404 |
 | `/runs/{run_id}/summary` | GET | — | array of result rows | 200, **409 while running**, **500 with the error if failed** |
 | `/runs/{run_id}/sync-status` | GET | — | sync status object | 200, 404 |
-| `/sync/status` | GET | — | worker status object | 200 |
 | `/runs/{run_id}/sync` | POST | — | sync status object | 202, 409, 503 |
 | `/reports` | GET | — | array of run timestamps, newest first | 200 |
 | `/reports/{run_timestamp}/summary` | GET | — | array of result rows | 200, 404 |
@@ -273,7 +272,6 @@ backend does not support the feature" and degrades instead of erroring.
 | **Supabase dashboard synchronisation** | the worker plus `/runs/{run_id}/sync-status` | sync notices never appear; findings depend entirely on whatever writes Supabase |
 | **Optional: live progress** | `/runs/{run_id}/events` | polling still reports completion, without a timeline |
 | **Optional: SARIF export** | `/reports/{run_timestamp}/sarif` | the download button is hidden |
-| **Optional: worker operations** | `/sync/status` | worker health is unavailable |
 | **Optional: retry** | `POST /runs/{run_id}/sync` | the retry button never appears |
 | **Optional: developer remediation controls** | `/platforms/{platform}/risks/{risk_id}/controls`, `/platforms/{platform}/controls/{control_id}`, `.../assets/{asset_path}`, `.../source`, `/platforms/{platform}/playbook/status` | the Resolve workspace still lists applications, findings and tickets, but every control card reports that remediation instructions are unavailable |
 

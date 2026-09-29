@@ -110,25 +110,6 @@ export const ticketData = {
       | null;
   },
 
-  /** Lists the tickets raised against any of the findings. */
-  async listByFindingIds(findingIds: string[]): Promise<Ticket[]> {
-    if (findingIds.length === 0) {
-      debug("no findings; skipping ticket query");
-      return [];
-    }
-    debug("listing tickets for findings", { findings: findingIds.length });
-    const { data, error } = await supabase
-      .from("tickets")
-      .select("*")
-      .in("finding_id", findingIds);
-    if (error) {
-      debug("listing tickets for findings failed", { findings: findingIds.length, code: error.code, message: error.message });
-      throw error;
-    }
-    debug("listed tickets for findings", { findings: findingIds.length, count: data?.length });
-    return data;
-  },
-
   /** Creates an open remediation ticket and records its start in the risk conversation. */
   async createRemediationTicket(input: {
     finding_id: string;

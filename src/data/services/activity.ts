@@ -1,9 +1,8 @@
 /**
- * Supabase operations on the activity log.
+ * Supabase writes to the activity log.
  */
 
 import { supabase } from "@/data/supabase";
-import type { ActivityLogEntry } from "@/data/types";
 import { createDebug } from "@/lib/debug";
 import { requireUserId } from "./common";
 
@@ -39,25 +38,5 @@ export const activityData = {
       throw error;
     }
     debug("logged activity", { action: entry.action, entityId: entry.entity_id });
-  },
-
-  /** Lists an entity's activity entries, newest first. */
-  async listForEntity(
-    entityType: string,
-    entityId: string,
-  ): Promise<ActivityLogEntry[]> {
-    debug("listing activity", { entityType, entityId });
-    const { data, error } = await supabase
-      .from("activity_log")
-      .select("*")
-      .eq("entity_type", entityType)
-      .eq("entity_id", entityId)
-      .order("created_at", { ascending: false });
-    if (error) {
-      debug("listing activity failed", { entityType, entityId, code: error.code, message: error.message });
-      throw error;
-    }
-    debug("listed activity", { entityType, entityId, count: data?.length });
-    return data;
   },
 };

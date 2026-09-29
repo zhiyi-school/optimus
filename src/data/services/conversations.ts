@@ -54,18 +54,6 @@ export const riskConversationData = {
     return data;
   },
 
-  /** Fetches one conversation, or null. */
-  async get(id: string): Promise<RiskConversation | null> {
-    debug("fetching conversation", { id });
-    const { data, error } = await supabase.from("risk_conversations").select("*").eq("id", id).maybeSingle();
-    if (error) {
-      debug("fetching conversation failed", { id, code: error.code, message: error.message });
-      throw error;
-    }
-    debug("fetched conversation", { id, found: !!data });
-    return data;
-  },
-
   /** Returns the app risk's conversation, creating it or filling in missing links; the unique key settles races. */
   async getOrCreate(owner: RiskConversationOwner): Promise<RiskConversation> {
     debug("getting or creating conversation", owner);
