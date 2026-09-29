@@ -66,7 +66,7 @@ real browser.
 | SARIF export gating and download filename | `src/lib/sarif.test.ts` |
 | Run event stream labels | `src/lib/run-stream.test.ts` |
 | Query-key shapes, entity/prefix distinction, domain invalidation groups | `src/hooks/query-keys.test.ts` |
-| Query polling, mutation invalidation, and conversation subscription cleanup | `src/hooks/queries.test.tsx` |
+| Query polling, mutation invalidation, and conversation subscription cleanup | `src/hooks/queries/queries.test.tsx` |
 | Reassessment claim/start/publish ordering | `src/hooks/use-reassessment-run.test.tsx` |
 | Conversation persistence, attachment fallback, and entry idempotency | `src/data/services/conversations.test.ts` |
 | Message/action submission, attachment-only retry and conversation scoping | `src/hooks/conversation-composer.test.tsx` |

@@ -15,7 +15,7 @@ import {
   ControlSupportingInfo,
 } from "@/components/control-content";
 import { WorkOnRiskButton } from "@/components/ticket-actions/remediation";
-import { useControlDetail, useControlSource } from "@/hooks/queries/tickets";
+import { useControlDetail, useControlSource } from "@/hooks/queries/playbook";
 import { useFinding } from "@/hooks/queries/evidence";
 import { createDebug } from "@/lib/debug";
 import { controlSummary, isRemediationControl, playbookControlStatusLabels } from "@/lib/resolve";

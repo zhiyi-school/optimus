@@ -11,11 +11,10 @@ import { ApplicationIcon } from "@/components/application-icon";
 import { ProgressBar, ToneBadge } from "@/components/resolve-display";
 import { useApplications, useTeams } from "@/hooks/queries/reference";
 import { useFindings } from "@/hooks/queries/evidence";
-import {
-  useControlProgressForTickets,
-  useTickets,
-} from "@/hooks/queries/tickets";
-import { useLiveControlKeys, useRiskCatalogue } from "@/hooks/queries/automation";
+import { useControlProgressForTickets } from "@/hooks/queries/control-progress";
+import { useTickets } from "@/hooks/queries/tickets";
+import { useRiskCatalogue } from "@/hooks/queries/automation";
+import { useLiveControlKeys } from "@/hooks/queries/playbook";
 import { useAuth } from "@/auth/auth-context";
 import { createDebug } from "@/lib/debug";
 import {

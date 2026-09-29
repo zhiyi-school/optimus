@@ -16,15 +16,13 @@ import {
   ControlSupportingInfo,
   type ControlStepProgress,
 } from "@/components/control-content";
-import { usePlaybookRevisionWatch } from "@/hooks/queries/automation";
 import {
-  useControlDetail,
-  useControlSource,
   useSetControlStepStatus,
-  useTicket,
   useTicketControlSteps,
   useTicketControls,
-} from "@/hooks/queries/tickets";
+} from "@/hooks/queries/control-progress";
+import { useControlDetail, useControlSource, usePlaybookRevisionWatch } from "@/hooks/queries/playbook";
+import { useTicket } from "@/hooks/queries/tickets";
 import { createDebug } from "@/lib/debug";
 import { changedSinceCompleted, contentHashes, controlSummary, liveControls } from "@/lib/resolve";
 import { resolveRiskPath } from "@/lib/risk-routes";

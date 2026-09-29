@@ -60,7 +60,6 @@ describe("domain invalidation rules", () => {
       ["ticketControls", "ticket-1"],
       ["ticketControlSteps", "ticket-1"],
       ["ticketControlsBulk"],
-      ["activity", "ticket", "ticket-1"],
     ]);
     expect(conversationEntryInvalidationKeys("conversation-1")).toEqual([
       ["riskConversationEntries", "conversation-1"],

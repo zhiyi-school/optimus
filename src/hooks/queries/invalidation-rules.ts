@@ -2,25 +2,28 @@
  * Query key groups invalidated together after sync, conversation and ticket changes.
  */
 
-import { conversationKeys, evidenceKeys, ticketKeys } from "@/hooks/query-keys";
+import {
+  assessmentKeys,
+  automationKeys,
+  conversationKeys,
+  evidenceKeys,
+  ticketKeys,
+} from "@/hooks/query-keys";
 
 export const dashboardSyncInvalidationPrefixes = [
-  ["findings"],
-  ["finding"],
-  ["findingHistory"],
-  ["findingRetests"],
-  ["assessment"],
-  ["assessments"],
-  ["assessmentRunRequest"],
-  ["tickets"],
-  ["ticket"],
-  ["ticketsWithRelations"],
-  ["ticketRetests"],
-  ["activity"],
-  ["dashboardMetrics"],
-  ["riskConversation"],
-  ["riskConversationEntries"],
-  ["testRunHistory"],
+  evidenceKeys.findings(),
+  evidenceKeys.findingPrefix(),
+  ticketKeys.findingRetestsPrefix(),
+  assessmentKeys.detailPrefix(),
+  assessmentKeys.all(),
+  assessmentKeys.runRequestPrefix(),
+  ticketKeys.listPrefix(),
+  ticketKeys.detailPrefix(),
+  ticketKeys.withRelations(),
+  ticketKeys.metrics(),
+  conversationKeys.byRiskPrefix(),
+  conversationKeys.entriesPrefix(),
+  automationKeys.testHistoryPrefix(),
 ] as const;
 
 /** Keys to refresh after a conversation changes: its entries and all attachments. */
@@ -38,7 +41,7 @@ export function conversationAttachmentInvalidationKeys() {
   return [conversationKeys.attachments()] as const;
 }
 
-/** Keys to refresh after a ticket lifecycle change, plus the linked finding's evidence and activity. */
+/** Keys to refresh after a ticket lifecycle change, plus the linked finding. */
 export function ticketLifecycleInvalidationKeys(
   ticketId: string,
   findingId: string | null | undefined,
@@ -47,12 +50,9 @@ export function ticketLifecycleInvalidationKeys(
     ticketKeys.detail(ticketId),
     ticketKeys.withRelations(),
     ticketKeys.listPrefix(),
-    ticketKeys.activity("ticket", ticketId),
     conversationKeys.entriesPrefix(),
     ticketKeys.metrics(),
-    ...(findingId
-      ? [evidenceKeys.finding(findingId), ticketKeys.activity("finding", findingId)]
-      : []),
+    ...(findingId ? [evidenceKeys.finding(findingId)] : []),
   ] as const;
 }
 
@@ -62,6 +62,5 @@ export function controlProgressInvalidationKeys(ticketId: string) {
     ticketKeys.controls(ticketId),
     ticketKeys.controlSteps(ticketId),
     ticketKeys.controlsBulk(),
-    ticketKeys.activity("ticket", ticketId),
   ] as const;
 }

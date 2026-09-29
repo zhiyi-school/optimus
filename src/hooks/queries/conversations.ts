@@ -1,5 +1,5 @@
 /**
- * Query and mutation hooks for risk conversations, entries, attachments and reassessments.
+ * Query and mutation hooks for risk conversations, entries, attachments and reassessment requests.
  */
 
 import { useEffect } from "react";
@@ -17,7 +17,7 @@ import {
   conversationEntryInvalidationKeys,
   conversationInvalidationKeys,
 } from "./invalidation-rules";
-import { conversationKeys, ticketKeys } from "@/hooks/query-keys";
+import { assessmentKeys, conversationKeys, ticketKeys } from "@/hooks/query-keys";
 import { createDebug } from "@/lib/debug";
 
 const debug = createDebug("hooks:queries:conversations");
@@ -48,20 +48,6 @@ export function useRiskConversation(
       return conversation;
     },
     enabled: !!applicationId && !!riskId,
-  });
-}
-
-/** Fetches one risk conversation by ID. */
-export function useRiskConversationById(conversationId: string | null | undefined) {
-  return useQuery({
-    queryKey: conversationKeys.detail(conversationId),
-    queryFn: async () => {
-      debug("fetches conversation", { conversationId });
-      const conversation = await riskConversationData.get(conversationId as string);
-      debug("fetched conversation", { conversationId, found: Boolean(conversation) });
-      return conversation;
-    },
-    enabled: !!conversationId,
   });
 }
 
@@ -217,39 +203,10 @@ export function useRequestReassessment(conversationId: string | undefined) {
         ticketKeys.findingRetests(variables.findingId),
         ticketKeys.withRelations(),
         ticketKeys.listPrefix(),
-        ["assessment"],
-        ["assessments"],
+        assessmentKeys.detailPrefix(),
+        assessmentKeys.all(),
         ticketKeys.metrics(),
-        ...(variables.ticketId
-          ? [
-              ticketKeys.detail(variables.ticketId),
-              ["ticketRetests", variables.ticketId],
-              ticketKeys.activity("ticket", variables.ticketId),
-            ]
-          : []),
-      ]),
-  });
-}
-
-/** Withdraws a reassessment request and refreshes conversation, retest and ticket keys. */
-export function useWithdrawReassessment(conversationId: string | undefined) {
-  const invalidate = useInvalidateQueries();
-  return useMutation({
-    mutationFn: (input: { retestId: string; reason: string; findingId: string; ticketId: string }) =>
-      retestData.withdraw(input.retestId, input.reason),
-    onMutate: (input) =>
-      debug("withdraws reassessment", { conversationId, retestId: input.retestId, reasonLength: input.reason.length }),
-    onError: (error, input) => debug("withdraw reassessment failed", { conversationId, retestId: input.retestId, error }),
-    onSuccess: (_data, variables) =>
-      invalidate([
-        ...conversationInvalidationKeys(conversationId as string),
-        ticketKeys.findingRetests(variables.findingId),
-        ticketKeys.withRelations(),
-        ticketKeys.listPrefix(),
-        ticketKeys.metrics(),
-        ticketKeys.detail(variables.ticketId),
-        ["ticketRetests", variables.ticketId],
-        ticketKeys.activity("ticket", variables.ticketId),
+        ...(variables.ticketId ? [ticketKeys.detail(variables.ticketId)] : []),
       ]),
   });
 }

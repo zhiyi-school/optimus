@@ -24,16 +24,11 @@ import {
 } from "@/components/ticket-actions/remediation";
 import { PlaybookUpdatedNotice, ToneBadge } from "@/components/resolve-display";
 import {
-  usePlaybookRevisionWatch,
-} from "@/hooks/queries/automation";
-import {
   useReconcileTicketControls,
   useSelectRemediationControl,
-  useRiskControls,
-  useTicket,
-  useTicketControlSteps,
-  useTicketControls,
-} from "@/hooks/queries/tickets";
+} from "@/hooks/queries/control-progress";
+import { usePlaybookRevisionWatch } from "@/hooks/queries/playbook";
+import { useTicket } from "@/hooks/queries/tickets";
 import { useProfiles } from "@/hooks/queries/reference";
 import { createDebug } from "@/lib/debug";
 import {
@@ -41,10 +36,10 @@ import {
   canWithdrawTicket,
   controlProgress,
 } from "@/lib/resolve";
-import { remediationWorkflow } from "@/lib/remediation-workflow";
 import { remediationBlockMessage } from "@/lib/remediation-workflow-messages";
 import { useRemediationReconciliation } from "@/hooks/remediation-reconciliation";
-import { useEnsureRemediation } from "@/hooks/use-ensure-remediation";
+import { useEnsureRemediation } from "@/hooks/ensure-remediation";
+import { useRemediationReadiness } from "@/hooks/remediation-readiness";
 import { cn, errorMessage } from "@/lib/utils";
 import type { ControlDetail } from "@/api/playbook-types";
 import type { Finding } from "@/data/types";
@@ -58,9 +53,6 @@ export default function ResolveTicket({ ticketId, finding: fallback }: { ticketI
   const finding = ticket.data?.finding ?? fallback;
 
   const { data: profiles } = useProfiles();
-  const controls = useTicketControls(ticketId);
-  const steps = useTicketControlSteps(ticketId);
-  const definitions = useRiskControls(finding?.platform, finding?.test_id);
   const reconcile = useReconcileTicketControls(ticketId);
 
   const profileMap = useMemo(
@@ -71,21 +63,14 @@ export default function ResolveTicket({ ticketId, finding: fallback }: { ticketI
   const selectControl = useSelectRemediationControl(ticketId, finding?.id);
 
   const mayEdit = can("update_control_progress");
-  const workflow = useMemo(
-    () => remediationWorkflow({
-      ticket: ticket.data,
-      definitions: definitions.data,
-      definitionsState: definitions.isLoading ? "loading" : definitions.isError ? "error" : "ready",
-      controls: controls.data,
-      steps: steps.data,
-      controlsLoading: controls.isLoading,
-      stepsLoading: steps.isLoading,
-      retests: undefined,
-      mayEdit,
-      mayRequest: false,
-    }),
-    [ticket.data, definitions.data, definitions.isLoading, definitions.isError, controls.data, controls.isLoading, steps.data, steps.isLoading, mayEdit],
-  );
+  const { workflow, definitions, controls, steps } = useRemediationReadiness({
+    ticketId,
+    ticket: ticket.data,
+    finding,
+    retests: undefined,
+    mayEdit,
+    mayRequest: false,
+  });
   const {
     candidates,
     storedControlId: storedSelection,

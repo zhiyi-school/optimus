@@ -160,11 +160,15 @@ src/
 ├── pages/                 # One file per route (see Routes below)
 ├── hooks/
 │   ├── query-keys.ts      # Exact entity and prefix key factories
-│   ├── queries/           # Hooks grouped by assessment, automation,
-│   │                      # conversation, evidence, reference, and ticket
-│   ├── remediation-reconciliation.ts
+│   ├── queries/           # Hooks grouped by assessment, automation, control
+│   │                      # progress, conversation, evidence, playbook,
+│   │                      # reference, risk acceptance, and ticket
+│   ├── attachment-download.ts
+│   ├── conversation-composer.ts
 │   ├── conversation-submission.ts
-│   ├── use-remediation-readiness.ts
+│   ├── ensure-remediation.ts
+│   ├── remediation-readiness.ts
+│   ├── remediation-reconciliation.ts
 │   └── use-reassessment-run.ts
 ├── lib/                   # Pure domain helpers and neutral presentation models
 ├── App.tsx
@@ -211,11 +215,11 @@ The playbook parser remains backend-owned. The frontend keeps only the generated
 without copying parser rules or the external playbook into application code.
 
 Remediation availability is calculated once in
-`lib/remediation-workflow.ts`; pages and the conversation composer consume the
-same selection, reconciliation, completion and reassessment result. The pure
-calculator returns reason codes and a separate module owns their text. Data
-fetching stays in `use-remediation-readiness.ts`, while
-`conversation-submission.ts` owns the record-then-attach state machine.
+`lib/remediation-workflow.ts`. The pure calculator returns reason codes and a
+separate module owns their text. `remediation-readiness.ts` owns the queries
+that feed it, `remediation-reconciliation.ts` persists the selection and
+progress it plans, and `conversation-submission.ts` owns the record-then-attach
+state machine.
 
 ## Maintenance and extension points
 

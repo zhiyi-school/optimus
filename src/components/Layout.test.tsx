@@ -37,6 +37,9 @@ vi.mock("@/hooks/queries/conversations", async () => await import("@/test-suppor
 vi.mock("@/hooks/queries/evidence", async () => await import("@/test-support/query-hooks"));
 vi.mock("@/hooks/queries/reference", async () => await import("@/test-support/query-hooks"));
 vi.mock("@/hooks/queries/tickets", async () => await import("@/test-support/query-hooks"));
+vi.mock("@/hooks/queries/control-progress", async () => await import("@/test-support/query-hooks"));
+vi.mock("@/hooks/queries/playbook", async () => await import("@/test-support/query-hooks"));
+vi.mock("@/hooks/queries/risk-acceptance", async () => await import("@/test-support/query-hooks"));
 
 vi.mock("@/test-support/query-hooks", () => ({
   useTeams: () => ({ data: [{ id: "example-team-id", name: "Example Developer Team" }] }),

@@ -3,7 +3,8 @@
  */
 
 import { useCallback } from "react";
-import { useRiskControls, useStartRemediation } from "@/hooks/queries/tickets";
+import { useRiskControls } from "@/hooks/queries/playbook";
+import { useStartRemediation } from "@/hooks/queries/tickets";
 import {
   effectiveSelectedControlId,
   selectableControls,

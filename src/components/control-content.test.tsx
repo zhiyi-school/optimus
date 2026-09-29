@@ -197,7 +197,6 @@ describe("preview mode", () => {
     for (const mutation of [
       "useInitializeTicketControls",
       "useSetControlStepStatus",
-      "useSetControlStatus",
       "controlProgressData",
       "useTicketControls",
       "useTicketControlSteps",

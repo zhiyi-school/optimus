@@ -3,7 +3,7 @@
  */
 
 import { Download, Paperclip } from "lucide-react";
-import { useAttachmentDownload } from "@/hooks/attachments";
+import { useAttachmentDownload } from "@/hooks/attachment-download";
 import { attachmentMeta } from "@/lib/attachments";
 import { createDebug } from "@/lib/debug";
 import type { RiskConversationAttachment } from "@/data/types";

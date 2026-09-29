@@ -10,11 +10,11 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import {
   useFindingTickets,
   useResumeTicket,
-  useRiskControls,
   useStartRemediation,
   useUpdateTicketStatus,
   useWithdrawTicket,
 } from "@/hooks/queries/tickets";
+import { useRiskControls } from "@/hooks/queries/playbook";
 import { useSendRiskMessage } from "@/hooks/queries/conversations";
 import { activeRemediationTicket, effectiveSelectedControlId, resumableRemediationTicket, selectableControls, selectedControl, selectedControlReconciliationPlan } from "@/lib/resolve";
 import { createDebug } from "@/lib/debug";
