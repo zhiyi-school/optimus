@@ -14,7 +14,7 @@ All examples use placeholders — `Example App`, `example-app`,
 | | Requirement |
 | --- | --- |
 | Node.js | 22 with its bundled npm (CI runtime); Vite also supports 20.19+ |
-| Supabase | a project with `supabase/migrations/*.sql` applied |
+| Supabase | a project with `supabase/migrations/*.sql` and then `supabase/fixes/*.sql` applied |
 | Automation backend | only for automation features — the dashboard renders existing Supabase data without it |
 
 ## 1. Install and configure
@@ -64,53 +64,29 @@ A local Supabase (CLI) option is documented at the bottom for development.
 
 1. **Create the project** at [supabase.com](https://supabase.com) (free
    tier is sufficient to start).
-2. **Apply the schema**: in the Supabase SQL Editor, run the files in
-   `supabase/migrations/` **in order**, from `0001_schema.sql` through the
-   highest-numbered file present. `0013_sync_idempotency_keys.sql` adds the
-   `sync_key` columns the dashboard sync worker writes; until it is applied
-   the worker fails with `column ... does not exist`.
-   `0016_application_icon_refs.sql` is optional — without it every application
-   shows the placeholder icon and nothing else changes.
-   `0017_ticket_controls.sql` and `0018_ticket_withdrawal.sql` add the developer
-   remediation workflow: control progress, the ticket-status guardrail, and the
-   `withdrawn` state. Without `0018`, withdrawing a remediation fails with
-   `violates check constraint "tickets_status_check"`.
-   `0025_classification_entry.sql` adds `classify_risk_entry()`, which returns
-   the conversation entry a classification created so a file can be attached to
-   the decision itself. It is optional: without it classification still works,
-   and the composer says a file cannot be attached to it yet.
-   `0026_reassessment_from_completed_steps.sql` retires the fix-submission step:
-   a reassessment is requested straight from an in-progress remediation, and the
-   database checks that every step of the selected approach is completed. Without
-   it, requesting one fails with `a reassessment can only be requested once a fix
-   has been submitted`.
-   `0027_attachment_storage_provider.sql` records the attachment provider and
-   byte size. Without it, Supabase-backed uploads and downloads still work with
-   unknown sizes, but server-backed attachment rows cannot be represented.
-   `0028_workflow_function_grants.sql` is required for the supported security
-   posture: it revokes anonymous workflow execution and reserves assessment
-   queue claim/recovery functions for the worker's `service_role`.
-   The full-support requirements, fallbacks, deployment order and rollback
-   limits are centralized in the
-   [compatibility matrix](./frontend-integration.md#database-and-api-compatibility).
-   Before applying a new migration to a shared environment, run the disposable
-   fresh-install and supported-upgrade workflow in
-   [Database maintenance](./database-maintenance.md).
-   (Or, with the Supabase CLI linked to your project: `supabase db push`.)
-   Migrations are additive — if you already applied earlier ones, just run
-   whichever ones are new.
+2. **Apply the schema**: in the Supabase SQL Editor, run every file in
+   `supabase/migrations/` **in order** (`0001` to `0006`), then every file in
+   `supabase/fixes/` in order. The baseline builds the final schema directly;
+   the fixes are corrections made since. See
+   [Database maintenance](./database-maintenance.md#layout) for what each file
+   holds.
+
+   A project that already ran the historical chain, now kept in
+   `supabase/legacy-migrations/`, must **not** run the baseline. Apply only the
+   files in `supabase/fixes/` it has not applied yet. Before applying a fix to
+   a shared environment, run the disposable workflow in
+   [Database maintenance](./database-maintenance.md#disposable-verification).
 
    The SQL Editor will prompt you to enable Row Level Security before
-   running `0001_schema.sql` (it creates tables with no policies yet) —
-   choose **Enable RLS**. That locks the tables down completely until
-   `0002_rls.sql` adds the real policies immediately after; the
-   alternative briefly leaves every table open to the `anon`/`authenticated`
-   keys, which is worse even for a few minutes.
+   running `0001_extensions_and_tables.sql` (it creates tables with no policies
+   yet) — choose **Enable RLS**. That locks the tables down completely until
+   `0004_rls_policies.sql` adds the real policies; the alternative briefly
+   leaves every table open to the `anon`/`authenticated` keys.
 3. **Configure authentication**: Authentication → Providers → ensure
    Email is enabled. Turn off "Confirm email" while testing locally if you
    want to sign in immediately after sign-up, or configure an SMTP
    provider for production.
-4. **Storage buckets**: already created by `0003_storage.sql`
+4. **Storage buckets**: already created by `0006_storage.sql`
    (`ticket-attachments`, `evidence`, both private). Nothing further to do
    unless you want custom size/MIME limits (Storage → bucket settings).
 5. **Create the first users**: Authentication → Users → Add user (or have
@@ -141,14 +117,13 @@ A local Supabase (CLI) option is documented at the bottom for development.
 ### Role assignment
 
 Every new sign-up automatically gets a `profiles` row with the
-least-privileged role, `developer` (see the `handle_new_user` trigger in
-`0001_schema.sql`). Getting your first `admin` requires direct SQL access,
+least-privileged role, `developer` (see `handle_new_user` in
+`0002_functions.sql`). Getting your first `admin` requires direct SQL access,
 as above — after that, `admin` users manage everyone else's roles from the
 Admin page.
 
 Two safeguards stay true regardless of who's asking, enforced by the
-`prevent_role_escalation` trigger (`0002_rls.sql`, updated in
-`0006_multi_role_admin.sql`):
+`prevent_role_escalation` trigger (`0002_functions.sql`):
 
 - **`id` can never change**, for anyone, ever, through the app.
 - **No one can change their own `roles`** — not even an admin. Changing
@@ -200,19 +175,21 @@ result is enforced by the database, not just by the page.
 ```bash
 npx supabase init          # if you don't already have a supabase/ CLI config
 npx supabase start         # starts local Postgres, Auth, Storage, Studio
-npx supabase db push       # applies supabase/migrations/*.sql
+npx supabase db push       # applies supabase/migrations/*.sql only
 ```
 
-Local Studio prints a local URL/anon key on `supabase start` — put those in
+`db push` does not read `supabase/fixes/`; run those files afterwards with
+`psql` against the local database. Local Studio prints a local URL/anon key on
+`supabase start` — put those in
 `.env`. Local Supabase is useful for development but every dashboard user
 needs to hit the *same* Supabase project, so use hosted Supabase for any
 real multi-user usage.
 
 ### Schema reference
 
-See `supabase/migrations/0001_schema.sql` for the authoritative schema and
-`0002_rls.sql` / `0003_storage.sql` for row-level security and storage
-policies — see [ARCHITECTURE.md](./architecture.md) for the entity diagram
+See `supabase/migrations/0001_extensions_and_tables.sql` for the authoritative
+schema, `0004_rls_policies.sql` / `0006_storage.sql` for row-level security and
+storage policies, and `supabase/fixes/` for anything changed since — see [ARCHITECTURE.md](./architecture.md) for the entity diagram
 and data-ownership summary.
 
 ## 3. Connect the automation backend

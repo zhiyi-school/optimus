@@ -37,7 +37,7 @@ export const metricsData = {
       message: rpcError?.message ?? "RPC returned no data",
     });
     console.warn(
-      "dashboard_metrics RPC unavailable; using per-table counts instead. Check that supabase/migrations/0012_dashboard_metrics_rpc.sql is applied.",
+      "dashboard_metrics RPC unavailable; using per-table counts instead. Check that supabase/migrations/ and supabase/fixes/ are applied.",
       rpcError ?? "RPC returned no data",
     );
 

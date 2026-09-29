@@ -168,32 +168,23 @@ src/
 ├── App.tsx
 └── main.tsx
 
-supabase/migrations/
-├── 0001_schema.sql
-├── 0002_rls.sql
-├── 0003_storage.sql
-├── 0004_application_contacts.sql
-├── 0005_admin_policies.sql
-├── 0006_multi_role_admin.sql
-├── 0007_app_provisioning.sql
-├── 0008_assessment_messages.sql
-├── 0009_application_contact_emails.sql
-├── 0010_applications_delete.sql
-├── 0011_application_provisioning.sql
-├── ...
-├── 0020_risk_conversations.sql
-├── 0021_application_risk_conversations.sql
-├── 0022_selected_remediation_control.sql
-├── 0023_assessment_run_requests.sql
-├── 0024_reassessment_withdrawal.sql
-├── 0025_classification_entry.sql
-├── 0026_reassessment_from_completed_steps.sql
-├── 0027_attachment_storage_provider.sql
-└── 0028_workflow_function_grants.sql
+supabase/
+├── migrations/            # Fresh-install baseline, applied to new projects only
+│   ├── 0001_extensions_and_tables.sql
+│   ├── 0002_functions.sql
+│   ├── 0003_triggers.sql
+│   ├── 0004_rls_policies.sql
+│   ├── 0005_grants.sql
+│   └── 0006_storage.sql
+├── fixes/                 # Numbered corrections not yet in the baseline, applied everywhere
+├── legacy-migrations/     # Historical chain that live projects ran
+├── tests/                 # SQL suites against the final schema
+│   └── legacy/            # Suites pinned to a historical migration version
+└── test-support/          # Disposable-runner bootstrap, seeds and assertions
 ```
 
 `supabase/test-support/` and `scripts/test-database.sh` own the synthetic fresh
-installation and `0024` upgrade contract. See
+installation, legacy-chain, `0024` upgrade and baseline-equivalence contract. See
 [Database maintenance](./database-maintenance.md); application modules never
 invoke that explicitly disposable workflow.
 
@@ -229,10 +220,10 @@ fetching stays in `use-remediation-readiness.ts`, while
 | Change | Owner and required verification |
 | --- | --- |
 | Automation API field, enum or request | `src/api/automation-types.ts` and `automation-services.ts`; extend `automation-services.test.ts` and coordinate the backend contract tests |
-| Supabase read/write | One domain module under `src/data/services/`; correct older schemas with a new migration, not client fallbacks, and add service tests |
+| Supabase read/write | One domain module under `src/data/services/`; correct older schemas with a new fix, not client fallbacks, and add service tests |
 | Query behavior | The matching `src/hooks/queries/` module; query keys belong to `query-keys.ts`, narrow invalidation groups to `queries/invalidation-rules.ts` |
-| Workflow/submission behavior | Pure rules under `src/lib/`, coordination under focused hooks, database enforcement in a new migration and SQL test |
-| Migration | Next numbered `supabase/migrations/` file plus fresh, `0024` upgrade, final-schema and RLS coverage through `npm run test:database` |
+| Workflow/submission behavior | Pure rules under `src/lib/`, coordination under focused hooks, database enforcement in a new fix and SQL test |
+| Database fix | Next numbered `supabase/fixes/` file plus fresh, legacy-chain, `0024` upgrade, equivalence, final-schema and RLS coverage through `npm run test:database` |
 | Playbook rendering | Backend parser fixture plus `src/test-fixtures/playbook-control-v1.json` and `playbook-contract.test.tsx`; do not copy parser rules into the frontend |
 | Regression fixture | Prefer a small local factory with fresh objects; add to `src/test-fixtures/` or `src/test-support/` only for a shared stable domain contract |
 

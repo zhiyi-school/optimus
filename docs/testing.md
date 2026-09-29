@@ -122,22 +122,26 @@ The command requires a working Docker daemon and the PostgreSQL 15 image. It
 creates and removes uniquely named containers and reads no Supabase credentials.
 It is intentionally separate from the fast checks.
 
-Eleven SQL files in `supabase/tests/` check the rules the developer workflow
-depends on at the table level, where they are actually enforced:
+SQL files in `supabase/tests/` check the rules the developer workflow depends
+on at the table level, where they are actually enforced. Files at the top level
+assert the final schema and run on both the fresh baseline and the legacy chain.
+Files in `supabase/tests/legacy/` assert behaviour a later migration replaced,
+so they run only along the legacy chain at the version their fixtures need:
 
 | File | What it proves |
 |---|---|
-| `0017_ticket_controls_rls.sql` | team scoping on control progress, a developer with no team seeing nothing, and every security-owned action refused for a developer |
-| `0018_ticket_withdrawal_rls.sql` | a withdrawal must carry a reason and name its author, is refused once security verification has started, never sets `closed_at`, leaves the finding unresolved, cannot be edited afterwards, resumes only as `in_progress`, and never lets a developer reopen or close what security finalised |
-| `0020_risk_conversations_rls.sql` | entries that belong to one conversation only, security-only classification and retest events, a reassessment request that still needs an eligible remediation ticket, a read-only CIO, an append-only feed, a ticket that keeps the conversation it was opened against, and legacy message tables no policy exposes |
-| `0021_application_risk_conversations_rls.sql` | one conversation per application risk that cannot be moved and is reached from any of that application's assessments, a merge that carries every entry, attachment, ticket link and retest record into the oldest thread, a ticket that keeps the assessment it was raised against, access decided by the application so no other organisation is reachable, a classification function that writes all three records or none and refuses anyone but security, one reassessment in flight per risk, and an idempotent historical placement |
+| `legacy/0017_ticket_controls_rls.sql` | team scoping on control progress, a developer with no team seeing nothing, and every security-owned action refused for a developer |
+| `legacy/0018_ticket_withdrawal_rls.sql` | a withdrawal must carry a reason and name its author, is refused once security verification has started, never sets `closed_at`, leaves the finding unresolved, cannot be edited afterwards, resumes only as `in_progress`, and never lets a developer reopen or close what security finalised |
+| `legacy/0020_risk_conversations_rls.sql` | entries that belong to one conversation only, security-only classification and retest events, a reassessment request that still needs an eligible remediation ticket, a read-only CIO, an append-only feed, a ticket that keeps the conversation it was opened against, and legacy message tables no policy exposes |
+| `legacy/0021_application_risk_conversations_rls.sql` | one conversation per application risk that cannot be moved and is reached from any of that application's assessments, a merge that carries every entry, attachment, ticket link and retest record into the oldest thread, a ticket that keeps the assessment it was raised against, access decided by the application so no other organisation is reachable, a classification function that writes all three records or none and refuses anyone but security, one reassessment in flight per risk, and an idempotent historical placement |
 | `0022_selected_remediation_control_rls.sql` | one chosen remediation approach per ticket, changeable only while the developer still owns it |
 | `0023_assessment_run_requests_rls.sql` | only security may queue a run and only where it has access, one active request per assessment however often it is asked for, an atomic claim two workers cannot both win, an expired lease returned to the queue, a manual retry that wakes the existing request rather than opening another, a queue no client can write to directly, and assessment transitions that refuse to restart a completed assessment |
-| `0024_reassessment_withdrawal_rls.sql` | only the requester may withdraw a queued reassessment, a withdrawal must carry a reason, one that security has already started is refused, and two concurrent withdrawals cannot both win |
-| `0026_reassessment_from_completed_steps_rls.sql` | a reassessment requested from a remediation whose selected approach is finished rather than from a fix submission, refused while any step is outstanding, and still open to security without a checklist |
+| `legacy/0024_reassessment_withdrawal_rls.sql` | only the requester may withdraw a queued reassessment, a withdrawal must carry a reason, one that security has already started is refused, and two concurrent withdrawals cannot both win |
+| `legacy/0026_reassessment_from_completed_steps_rls.sql` | a reassessment requested from a remediation whose selected approach is finished rather than from a fix submission, refused while any step is outstanding, and still open to security without a checklist |
 | `0027_attachment_download_rls.sql` | a conversation attachment readable by its uploader and by every other participant but by nobody outside the application, the same for the stored object itself, a file on a workflow event behaving like one on a message, an upload defaulting to the Supabase provider, and a storage key that can be neither absolute nor walked out of its folder |
-| `0029_reassessment_without_completion_rls.sql` | a reassessment requested with no recorded progress and with only some steps done, progress left untouched by the request, and the surviving conditions — a remediation ticket, an allowed state, a selected approach, application access — still refusing |
-| `0030_reassessment_queue_rls.sql` | two intentional submissions creating two requests where a retried submission creates none, oldest-first starts, one running reassessment per risk across two reviewers, a queued request never downgrading a running remediation, completing one leaving the others queued, and ownership, access and finalised-ticket rules still refusing |
+| `legacy/0029_reassessment_without_completion_rls.sql` | a reassessment requested with no recorded progress and with only some steps done, progress left untouched by the request, and the surviving conditions — a remediation ticket, an allowed state, a selected approach, application access — still refusing |
+| `legacy/0030_reassessment_queue_rls.sql` | two intentional submissions creating two requests where a retried submission creates none, oldest-first starts, one running reassessment per risk across two reviewers, a queued request never downgrading a running remediation, completing one leaving the others queued, and ownership, access and finalised-ticket rules still refusing |
+| `0034_reconcile_reassessment_internal_only_rls.sql` | signed-in clients refused permission to call `reconcile_reassessment_ticket_state()` directly, the worker role keeping its grant, and the reassessment RPCs that reconcile internally staying callable |
 
 None is part of `npm test` — they need a disposable database. The supported
 runner creates its own isolated PostgreSQL container. Each suite creates its own placeholder fixtures,
@@ -151,7 +155,8 @@ passed`, `0023 assessment run request checks passed`,
 `0026 reassessment readiness checks passed` or
 `0027 attachment download checks passed` or
 `0029 reassessment eligibility checks passed` or
-`0030 reassessment queue checks passed`.
+`0030 reassessment queue checks passed` or
+`0034 reconcile privilege checks passed`.
 
 **A migration that replaces a shared trigger has to carry forward what earlier
 ones added.** `0022` rewrote `enforce_ticket_update_permissions` with
@@ -162,8 +167,8 @@ an earlier migration also touched, diff the bodies rather than assuming.
 
 **Test the migration's own logic, not a copy of it.** `0021`'s merge and
 historical placement live in `merge_duplicate_risk_conversations()` and
-`place_unlinked_ticket_conversations()`, which the migration calls and the suite
-calls too. An earlier version mirrored those statements inside the test file,
+`place_unlinked_ticket_conversations()`, which the migration calls and the legacy
+suite calls too. An earlier version mirrored those statements inside the test file,
 and mutation testing showed the mirror hid three real defects in the migration:
 the copy passed while the migration was wrong.
 

@@ -16,7 +16,7 @@
 - `src/hooks/queries/` owns domain query hooks. `src/hooks/query-keys.ts` owns key shapes; invalidation groups belong in `src/hooks/queries/invalidation-rules.ts`. Preserve entity-versus-prefix semantics, polling, enabled conditions, and subscription cleanup.
 - `src/lib/remediation-workflow.ts` owns shared selection/readiness decisions; messages belong in `src/lib/remediation-workflow-messages.ts`. Reuse the readiness and reconciliation hooks instead of adding competing page rules.
 - `src/hooks/conversation-submission.ts` owns record-then-attach coordination. Conversation persistence and attachment persistence have their own data services.
-- The frontend requires the schema through the latest migration and has no older-schema fallbacks. Correct the database with a new migration rather than adding client-side compatibility code.
+- The frontend requires the schema through the latest fix and has no older-schema fallbacks. Correct the database with a new fix rather than adding client-side compatibility code.
 - `src/components/ticket-actions/` contains focused actions and composition. Keep domain types outside UI components when non-UI code consumes them.
 - Import the owning modules directly. Do not recreate the removed query/service/action barrels solely for old test mocks. Test support is not a production compatibility layer.
 
@@ -34,7 +34,7 @@
 
 ## Database and fixtures
 
-- Add new numbered migrations for corrections; never cosmetically rewrite migrations that may have been applied. Test effective final grants/functions/triggers as well as fresh and supported upgrade behavior.
+- `supabase/migrations/` is the fresh-install baseline, `supabase/fixes/` holds numbered corrections applied to new and live projects, and `supabase/legacy-migrations/` is the historical chain live projects ran. Add corrections as the next numbered file in `supabase/fixes/`; never cosmetically rewrite a fix, legacy migration or baseline file that may have been applied. Test effective final grants/functions/triggers as well as fresh, legacy-chain, supported upgrade and baseline-equivalence behavior.
 - Use the disposable runner documented in [database maintenance](docs/database-maintenance.md). Never point SQL tests at a live project or reset an existing developer database as test setup.
 - Keep fixtures synthetic and isolated. Preserve fake constraints and meaningful regression assertions; avoid global mutable fixture state.
 - `src/test-fixtures/playbook-control-v1.json` is generated from the backend's sanitized parser fixture. Verify the destination against the consuming contract test when regenerating it, and check both repositories instead of hand-editing the artifact.

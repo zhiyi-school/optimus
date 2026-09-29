@@ -47,7 +47,7 @@ describe("metricsData.getOverview", () => {
     const metrics = await metricsData.getOverview();
 
     expect(warn).toHaveBeenCalledTimes(1);
-    expect(String(warn.mock.calls[0][0])).toContain("0012_dashboard_metrics_rpc.sql");
+    expect(String(warn.mock.calls[0][0])).toContain("supabase/migrations/");
     expect(from).toHaveBeenCalled();
     expect(metrics.applicationsCount).toBe(0);
   });

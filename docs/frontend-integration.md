@@ -36,7 +36,7 @@ see [data-model.md](./data-model.md).
 | Node.js | 22 with its bundled npm (CI runtime); Vite also supports 20.19+ |
 | Build | `npm ci`, then `npm run build` (runs `tsc -b` then `vite build`) |
 | Output | static files in `dist/`, servable by any static host |
-| Supabase | project with `supabase/migrations/*.sql` applied |
+| Supabase | project with `supabase/migrations/*.sql`, then `supabase/fixes/*.sql`, applied |
 | Backend | only for automation features |
 
 ```bash
@@ -72,7 +72,7 @@ rebuild; a Docker image must be rebuilt with new `--build-arg` values.
 Authentication is Supabase Auth with email/password. The dashboard assumes:
 
 - a `profiles` row exists per auth user, created by the `handle_new_user`
-  trigger in `0001_schema.sql`;
+  trigger (`0002_functions.sql`, bound in `0003_triggers.sql`);
 - roles live in `profiles.roles` (a text array) — `developer`, `security`,
   `admin`, `cio`;
 - capabilities are derived from roles in `src/auth/`, and RLS enforces the same
@@ -85,21 +85,24 @@ There is no SSO, no MFA and no session management beyond Supabase's own. See
 
 ## Required Supabase objects
 
-Applying `supabase/migrations/*.sql` in order gives you everything. If you are
-merging into an existing project, these are the dependencies:
+Applying `supabase/migrations/*.sql` and then `supabase/fixes/*.sql` in order
+gives a new project everything. A project that ran the historical chain in
+`supabase/legacy-migrations/` applies only the fixes it has not run yet. If you
+are merging into an existing project, these are the dependencies. Numbers in
+parentheses name the legacy migration that introduced an object:
 
 | Kind | Objects |
 | --- | --- |
-| Tables | `profiles`, `teams`, `applications`, `assessments`, `findings`, `finding_history`, `evidence`, `tickets`, `retest_runs`, `risk_acceptance`, `activity_log`, `ticket_controls`, `ticket_control_steps`, `risk_conversations` (one per `(application_id, risk_id)`), `risk_conversation_entries`, `risk_conversation_attachments`, `assessment_run_requests` (the durable execution queue). `assessment_messages`, `ticket_messages` and `ticket_attachments` are created by `0001`/`0008` and archived by `0020`: they keep their historical rows but no policy grants access to them |
+| Tables | `profiles`, `teams`, `applications`, `assessments`, `findings`, `finding_history`, `evidence`, `tickets`, `retest_runs`, `risk_acceptance`, `activity_log`, `ticket_controls`, `ticket_control_steps`, `risk_conversations` (one per `(application_id, risk_id)`), `risk_conversation_entries`, `risk_conversation_attachments`, `assessment_run_requests` (the durable execution queue). On projects built from the legacy chain, `assessment_messages`, `ticket_messages` and `ticket_attachments` remain as archived tables that keep their historical rows but no policy grants access to them; the baseline does not create them |
 | Team scoping | a `team_id` column on `profiles`, `developer_team_id` on `applications`, `assigned_team_id` on `tickets` — there is no join table |
 | Contacts | columns on `applications` (`owner_email`, `developer_contact_*`, `contact_emails[]`), added by `0004` and `0009` — not a separate table |
 | RPC | `dashboard_metrics()` — the overview page's fast path; the UI falls back to per-table queries if it is absent. `classify_risk()` (`0021`) is the legacy atomic classification operation; `classify_risk_entry()` (`0025`) additionally returns the conversation entry id so the same decision can own an attachment. |
-| Execution RPC | `request_assessment_run()` (`0023`) — **required**: creating or retrying an assessment run goes through it, and there is no client-side fallback, because it is what keeps one active request per assessment. `claim_assessment_run_request()` and `recover_expired_assessment_run_leases()` are for the worker's service role only |
-| Migration helpers | `merge_duplicate_risk_conversations()` and `place_unlinked_ticket_conversations()` (`0021`) — called by the migration and kept in the schema so the RLS suite exercises them; `execute` is revoked from `public` |
-| Storage | `ticket-attachments` and `evidence` buckets, both private (`0003_storage.sql`) |
-| RLS | policies from `0002_rls.sql`, extended by `0005`, `0006`, `0010`, `0011`, `0017`, `0018`, `0020`, `0021`, `0023` |
-| Idempotency | `sync_key` columns and their partial unique indexes (`0013_sync_idempotency_keys.sql`) — **the sync worker fails without these** |
-| Grants | `0014_dashboard_metrics_grants.sql`, then `0015_dashboard_metrics_revoke_anon.sql` |
+| Execution RPC | `request_assessment_run()` (`0023`) — **required**: creating or retrying an assessment run goes through it, and there is no client-side fallback, because it is what keeps one active request per assessment. `claim_assessment_run_request()` and `recover_expired_assessment_run_leases()` are for the worker's service role only. `reconcile_reassessment_ticket_state()` is internal to the reassessment RPCs and not callable by clients (`0034`) |
+| Migration helpers | `merge_duplicate_risk_conversations()` and `place_unlinked_ticket_conversations()` (`0021`) — exist only on legacy-chain projects, where the migration called them; the baseline does not create them and nothing in the dashboard calls them |
+| Storage | `ticket-attachments` and `evidence` buckets, both private (`0006_storage.sql`) |
+| RLS | every table policy in `0004_rls_policies.sql` |
+| Idempotency | `sync_key` columns and their partial unique indexes (`0013`) — **the sync worker fails without these** |
+| Grants | execute privileges in `0005_grants.sql` (`0014`, `0015` and `0028` on the legacy chain), then any grant corrections in `supabase/fixes/` |
 | Icon refs | `artifact_sha256`, `icon_ref`, `icon_extraction_status` on `applications` (`0016_application_icon_refs.sql`) — **required if the backend syncs icon references**, since the worker writes these fields on every application row |
 
 Migrations are additive and must be applied in numeric order. Table
@@ -343,9 +346,9 @@ or a trusted LAN needs an authenticating proxy or VPN in front of it. See
 | CORS error in the console | the dashboard's origin is not in the backend's `CORS_ALLOWED_ORIGINS` | add the exact origin — scheme, host and port; `*` is rejected |
 | Every automation call fails, Supabase works | `VITE_API_BASE_URL` wrong, or the backend is down | `curl $VITE_API_BASE_URL/health` |
 | Blank page, console complains about Supabase | `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` missing | they are build-time; restart the dev server or rebuild |
-| Queries return empty for a signed-in user | migrations not applied, or RLS excludes them | apply `supabase/migrations/*.sql` in order; check `profiles.roles` and team membership |
-| Console warns about `0012_dashboard_metrics_rpc.sql` | the metrics RPC is missing | apply that migration; the UI is using the slow fallback |
-| Sync worker fails with `column ... does not exist` | `0013_sync_idempotency_keys.sql` not applied | apply it |
+| Queries return empty for a signed-in user | schema not applied, or RLS excludes them | apply `supabase/migrations/*.sql` and `supabase/fixes/*.sql` in order; check `profiles.roles` and team membership |
+| Console warns that the `dashboard_metrics` RPC is unavailable | the metrics RPC is missing | apply the schema; the UI is using the slow fallback |
+| Sync worker fails with `column ... does not exist` | the schema is incomplete (on the legacy chain, `0013` not applied) | apply the missing files |
 | Automation features hidden or inert | the backend is unreachable and the client degraded | expected behaviour; check `/health` |
 | Timeline never populates but runs complete | SSE blocked or buffered by a proxy | disable proxy buffering; polling still reports completion |
 | Dashboard shows old results after a run | the sync is still `queued`/`running` | eventual consistency — watch the sync notice |

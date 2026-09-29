@@ -1,30 +1,23 @@
 # Database Design Notes
 
-The schema itself lives in `supabase/migrations/` (`0001_schema.sql` /
-`0002_rls.sql` / `0003_storage.sql` / `0004_application_contacts.sql` /
-`0005_admin_policies.sql` / `0006_multi_role_admin.sql` /
-`0007_app_provisioning.sql` / `0008_assessment_messages.sql` /
-`0009_application_contact_emails.sql` / `0010_applications_delete.sql` /
-`0011_application_provisioning.sql` / `0012_dashboard_metrics_rpc.sql` /
-`0013_sync_idempotency_keys.sql` / `0014_dashboard_metrics_grants.sql` /
-`0015_dashboard_metrics_revoke_anon.sql` / `0016_application_icon_refs.sql` /
-`0017_ticket_controls.sql` / `0018_ticket_withdrawal.sql` /
-`0019_live_playbook_progress.sql` / `0020_risk_conversations.sql` /
-`0021_application_risk_conversations.sql` /
-`0022_selected_remediation_control.sql` /
-`0023_assessment_run_requests.sql`) —
+The schema is built by the fresh-install baseline in `supabase/migrations/`
+(`0001_extensions_and_tables.sql` / `0002_functions.sql` / `0003_triggers.sql` /
+`0004_rls_policies.sql` / `0005_grants.sql` / `0006_storage.sql`) plus any
+corrections in `supabase/fixes/`. Numbers such as `0017` or `0021` below name
+the historical migration in `supabase/legacy-migrations/` that introduced a
+design, which is what projects created before the baseline ran —
 this doc covers the *why* behind a few decisions that aren't obvious from
 reading the SQL alone.
 
-Migration ordering, the supported `0024` upgrade baseline, preservation
-fixtures, and rollback limitations are documented in
+The baseline and fixes layout, the supported `0024` upgrade origin,
+preservation fixtures, and rollback limitations are documented in
 [Database maintenance](./database-maintenance.md).
 
 ## Row Level Security
 
 Frontend capability checks (`src/auth/permissions.ts`) are UX only. The
-policies in `0002_rls.sql` (as amended by later RLS migrations) are the actual
-authorization boundary.
+policies in `0004_rls_policies.sql` (and `0006_storage.sql` for objects) are the
+actual authorization boundary.
 
 - **Role checks go through `SECURITY DEFINER` helper functions**
   (`has_role(role)`, `current_team_id()`, `can_access_application()`,
@@ -201,12 +194,12 @@ events in one feed.
   `(application_id, risk_id)` into the oldest of the set — `created_at` then
   `id`, so the choice is deterministic — moving entries, retests and ticket
   links first and refusing to delete anything that still holds a reference.
-  Both it and `place_unlinked_ticket_conversations()` are kept in the schema
-  rather than inlined in the migration, so the RLS suite exercises the
-  migration's own logic instead of a copy that can drift from it.
+  Both it and `place_unlinked_ticket_conversations()` exist only on projects
+  built from the legacy chain, where the migration called them; the baseline
+  does not create them.
 
-`supabase/tests/0020_risk_conversations_rls.sql` covers the model and its
-policies; `supabase/tests/0021_application_risk_conversations_rls.sql` covers
+`supabase/tests/legacy/0020_risk_conversations_rls.sql` covers the model and its
+policies; `supabase/tests/legacy/0021_application_risk_conversations_rls.sql` covers
 the identity, the merge and the historical placement. Both run against a live
 database, own fixtures and all, ending in `rollback`.
 
@@ -302,7 +295,7 @@ through a finding's remediation. They hold **workflow state only**.
   `completed_by is null or completed_by = auth.uid()`, so the audit trail cannot
   name someone else.
 
-`supabase/tests/0017_ticket_controls_rls.sql` exercises all of this against a
+`supabase/tests/legacy/0017_ticket_controls_rls.sql` exercises all of this against a
 live database. It builds its own fixtures, impersonates each role, and ends in
 `rollback`. Run it only against a disposable local/test database, never a live
 project.
@@ -336,7 +329,7 @@ A developer who decides not to continue needs a way out that is not `closed`.
   and close a withdrawn ticket, and a developer can never reopen a ticket
   security has closed or accepted.
 
-`supabase/tests/0018_ticket_withdrawal_rls.sql` exercises all of this the same
+`supabase/tests/legacy/0018_ticket_withdrawal_rls.sql` exercises all of this the same
 way `0017`'s does: own fixtures, one role at a time, ending in `rollback`.
 
 ## Admin page (Teams, Users, Applications, Roles)
@@ -369,7 +362,7 @@ roles itself.
 
 Both buckets are private; the frontend reads files via short-lived signed
 URLs (`src/data/services/conversation-attachments.ts`), never public URLs. The storage RLS policies
-in `0003_storage.sql` parse access from the object path, so upload code and
+in `0006_storage.sql` parse access from the object path, so upload code and
 policy must agree on these conventions:
 
 - `ticket-attachments/conversation-<conversation_id>/<filename>` —
@@ -419,7 +412,7 @@ renders its placeholder. Check constraints reject anything that is not a hex
 digest, not the exact `icons/<64 hex>.png` shape, or not one of the three
 statuses, so a malformed reference cannot reach the frontend and be turned into a
 request. Access is unchanged: the `applications_select`/`applications_update`
-policies in `0002_rls.sql` are row-level, so the new columns inherit them without
+policies in `0004_rls_policies.sql` are row-level, so the new columns inherit them without
 a policy change.
 
 The migration is **required** for icon-enabled synchronisation, not optional: the

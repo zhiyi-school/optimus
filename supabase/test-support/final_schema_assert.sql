@@ -58,6 +58,9 @@ begin
   if has_function_privilege('authenticated', 'public.recover_expired_assessment_run_leases()', 'EXECUTE') then
     raise exception 'authenticated unexpectedly has worker recovery execute grant';
   end if;
+  if has_function_privilege('authenticated', 'public.reconcile_reassessment_ticket_state(uuid)', 'EXECUTE') then
+    raise exception 'authenticated unexpectedly has reconcile execute grant';
+  end if;
   if not has_function_privilege('service_role', 'public.claim_assessment_run_request(text,integer)', 'EXECUTE') then
     raise exception 'service_role lacks worker claim execute grant';
   end if;
@@ -76,6 +79,10 @@ begin
   if not exists (
     select 1 from pg_policies where schemaname = 'storage' and tablename = 'objects'
   ) then raise exception 'storage object policies are missing'; end if;
+  if (select count(*) from storage.buckets
+      where id in ('ticket-attachments', 'evidence') and not public) <> 2 then
+    raise exception 'the private storage buckets are missing';
+  end if;
   if exists (select 1 from tickets where status = 'fix_submitted')
      or exists (select 1 from retest_runs where previous_ticket_status = 'fix_submitted') then
     raise exception 'rows still carry the retired fix_submitted status';

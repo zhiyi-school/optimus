@@ -8,8 +8,8 @@ All role-gated UI goes through a single capability model
 (`src/auth/permissions.ts`) — components call `can("run_test")`, never
 `profile.roles.includes("security")`; a capability is granted if *any* of
 a user's roles grants it. Frontend checks are UX only; **Supabase RLS is
-the real authorization boundary** (`supabase/migrations/0002_rls.sql`,
-`0003_storage.sql`, `0006_multi_role_admin.sql`).
+the real authorization boundary** (`supabase/migrations/0004_rls_policies.sql`,
+`0006_storage.sql`, and the trigger functions in `0002_functions.sql`).
 
 | Capability | developer | security | cio | admin |
 |---|---|---|---|---|
