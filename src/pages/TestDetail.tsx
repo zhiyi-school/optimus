@@ -65,7 +65,7 @@ import { activeRemediationTicket, nextReassessment, resumableRemediationTicket }
 import { cn, errorMessage, formatDate } from "@/lib/utils";
 import type { Application, Finding } from "@/data/types";
 import { assessmentKeys, automationKeys, evidenceKeys, ticketKeys } from "@/hooks/query-keys";
-import { retestData } from "@/data/services/tickets";
+import { retestData } from "@/data/services/retests";
 
 const debug = createDebug("page:TestDetail");
 

@@ -25,73 +25,8 @@ export const applicationData = {
     return data;
   },
 
-  /** Fetches one application, or null. */
-  async get(id: string): Promise<Application | null> {
-    debug("fetching application", { id });
-    const { data, error } = await supabase
-      .from("applications")
-      .select("*")
-      .eq("id", id)
-      .maybeSingle();
-    if (error) {
-      debug("fetching application failed", { id, code: error.code, message: error.message });
-      throw error;
-    }
-    debug("fetched application", { id, found: !!data });
-    return data;
-  },
 
-  /** Inserts or updates an application keyed on its backend `external_id`. */
-  async upsertByExternalId(
-    app: Partial<Application> & { external_id: string },
-  ): Promise<Application> {
-    debug("upserting application by external id", {
-      externalId: app.external_id,
-      fields: Object.keys(app),
-    });
-    const { data, error } = await supabase
-      .from("applications")
-      .upsert(app, { onConflict: "external_id" })
-      .select()
-      .single();
-    if (error) {
-      debug("upserting application failed", {
-        externalId: app.external_id,
-        code: error.code,
-        message: error.message,
-      });
-      throw error;
-    }
-    debug("upserted application", { id: data?.id, externalId: app.external_id });
-    return data;
-  },
 
-  /** Finds a never-linked (`external_id` null) app by name and platform so the first sync adopts it. */
-  async findUnlinkedByNameAndPlatform(
-    name: string,
-    platform: Application["platform"],
-  ): Promise<Application | null> {
-    debug("finding unlinked application", { name, platform });
-    const { data, error } = await supabase
-      .from("applications")
-      .select("*")
-      .is("external_id", null)
-      .eq("platform", platform)
-      .ilike("name", name)
-      .limit(1)
-      .maybeSingle();
-    if (error) {
-      debug("finding unlinked application failed", {
-        name,
-        platform,
-        code: error.code,
-        message: error.message,
-      });
-      throw error;
-    }
-    debug("unlinked application lookup", { name, platform, id: data?.id ?? null });
-    return data;
-  },
 
   /** Finds any app with this name and platform, linked or not, to block duplicate creation. */
   async findByNameAndPlatform(

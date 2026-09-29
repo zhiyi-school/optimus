@@ -93,25 +93,6 @@ export const controlProgressData = {
     return data;
   },
 
-  /** Lists one control row's steps by step key. */
-  async listSteps(ticketControlId: string): Promise<TicketControlStep[]> {
-    debug("listing control steps", { ticketControlId });
-    const { data, error } = await supabase
-      .from("ticket_control_steps")
-      .select("*")
-      .eq("ticket_control_id", ticketControlId)
-      .order("step_key", { ascending: true });
-    if (error) {
-      debug("listing control steps failed", {
-        ticketControlId,
-        code: error.code,
-        message: error.message,
-      });
-      throw error;
-    }
-    debug("listed control steps", { ticketControlId, count: data?.length });
-    return data;
-  },
 
   /** Lists every step row across a ticket's controls. */
   async listStepsForTicket(ticketId: string): Promise<TicketControlStep[]> {

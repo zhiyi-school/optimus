@@ -8,7 +8,9 @@ import { controlProgressData, type ControlReconciliation } from "@/data/services
 import { findingData } from "@/data/services/findings";
 import { metricsData } from "@/data/services/metrics";
 import { riskConversationData } from "@/data/services/conversations";
-import { retestData, riskAcceptanceData, ticketData, type TicketFilters } from "@/data/services/tickets";
+import { retestData } from "@/data/services/retests";
+import { riskAcceptanceData } from "@/data/services/risk-acceptance";
+import { ticketData, type TicketFilters } from "@/data/services/tickets";
 import { playbookApi } from "@/api/playbook-services";
 import type { AutomationPlatform } from "@/api/automation-types";
 import type { ControlProgressStatus, FindingStatus, RiskAcceptanceDecision, TicketControl, TicketControlStep, TicketStatus } from "@/data/types";
@@ -244,7 +246,7 @@ export function useResumeTicket(ticketId: string, findingId: string | null | und
 export function useCreateRiskAcceptanceTicket() {
   const invalidate = useInvalidateQueries();
   return useMutation({
-    mutationFn: ticketData.createRiskAcceptanceTicket,
+    mutationFn: riskAcceptanceData.createTicket,
     onMutate: (variables) => debug("creates risk acceptance ticket", { findingId: variables.finding_id }),
     onError: (error, variables) =>
       debug("create risk acceptance ticket failed", { findingId: variables.finding_id, error }),

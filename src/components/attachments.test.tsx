@@ -12,8 +12,8 @@ let signed: { data: { signedUrl: string } | null; error: unknown } = {
 };
 const signRequests: string[] = [];
 
-vi.mock("@/data/services/conversations", () => ({
-  riskConversationData: {
+vi.mock("@/data/services/conversation-attachments", () => ({
+  conversationAttachmentData: {
     getSignedUrl: (path: string) => {
       signRequests.push(path);
       return Promise.resolve(signed);

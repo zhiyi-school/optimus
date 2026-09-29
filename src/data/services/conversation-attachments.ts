@@ -1,5 +1,5 @@
 /**
- * Supabase storage and metadata operations for risk conversation attachments.
+ * Supabase storage and metadata operations for risk conversation attachments: listing, staged upload and signing.
  */
 
 import { supabase, ATTACHMENTS_BUCKET } from "@/data/supabase";
@@ -32,6 +32,30 @@ export function createPendingConversationAttachment(
 }
 
 export const conversationAttachmentData = {
+  /** Lists the attachments of the given entries in upload order. */
+  async listForEntries(entryIds: string[]): Promise<RiskConversationAttachment[]> {
+    if (entryIds.length === 0) {
+      debug("no entries; skipping attachment query");
+      return [];
+    }
+    debug("listing conversation attachments", { entries: entryIds.length });
+    const { data, error } = await supabase
+      .from("risk_conversation_attachments")
+      .select("*")
+      .in("entry_id", entryIds)
+      .order("created_at", { ascending: true });
+    if (error) {
+      debug("listing conversation attachments failed", {
+        entries: entryIds.length,
+        code: error.code,
+        message: error.message,
+      });
+      throw error;
+    }
+    debug("listed conversation attachments", { entries: entryIds.length, count: data?.length });
+    return data;
+  },
+
   /** Uploads the attachment's bytes to its storage path. */
   async uploadBytes(pending: PendingConversationAttachment): Promise<void> {
     debug("uploading attachment bytes", {

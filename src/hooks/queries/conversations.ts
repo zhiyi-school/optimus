@@ -9,7 +9,7 @@ import {
   conversationAttachmentData,
   type PendingConversationAttachment,
 } from "@/data/services/conversation-attachments";
-import { retestData } from "@/data/services/tickets";
+import { retestData } from "@/data/services/retests";
 import type { RiskConversationAttachment, RiskConversationEntry } from "@/data/types";
 import { useInvalidateQueries } from "./invalidation";
 import {
@@ -104,7 +104,7 @@ export function useRiskConversationAttachments(entryIds: string[]) {
     queryKey: conversationKeys.attachments(key),
     queryFn: async () => {
       debug("fetches conversation attachments", { entryCount: key.length });
-      const attachments = await riskConversationData.listAttachments(key);
+      const attachments = await conversationAttachmentData.listForEntries(key);
       debug("fetched conversation attachments", { entryCount: key.length, count: attachments.length });
       return attachments;
     },

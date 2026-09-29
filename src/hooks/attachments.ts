@@ -3,7 +3,7 @@
  */
 
 import { useState } from "react";
-import { riskConversationData } from "@/data/services/conversations";
+import { conversationAttachmentData } from "@/data/services/conversation-attachments";
 import { attachmentSource } from "@/lib/attachments";
 import { createDebug } from "@/lib/debug";
 import { downloadFile } from "@/lib/download";
@@ -21,7 +21,7 @@ async function attachmentUrl(attachment: RiskConversationAttachment): Promise<st
       "This file is held by the automation server, which cannot serve it to the dashboard yet.",
     );
   }
-  const { data, error } = await riskConversationData.getSignedUrl(source.path);
+  const { data, error } = await conversationAttachmentData.getSignedUrl(source.path);
   if (error || !data?.signedUrl) {
     debug("signed url unavailable", { attachmentId: attachment.id, error });
     throw new UserFacingError(

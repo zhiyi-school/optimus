@@ -134,11 +134,13 @@ src/
 │   └── automation-types.ts
 ├── data/                 # Supabase client + grouped data services
 │   ├── supabase.ts
-│   ├── services/
+│   ├── services/         # One module per table group
 │   │   ├── assessments.ts
-│   │   ├── conversations.ts
-│   │   ├── conversation-attachments.ts
-│   │   └── tickets.ts
+│   │   ├── conversations.ts            # conversations, entries, realtime
+│   │   ├── conversation-attachments.ts # attachment rows, bucket, signing
+│   │   ├── tickets.ts                  # tickets
+│   │   ├── retests.ts                  # reassessment requests (retest_runs)
+│   │   └── risk-acceptance.ts          # risk acceptance requests and reviews
 │   └── types.ts
 ├── workflows/            # Browser-side operations spanning both backends
 │   ├── app-registration.ts   # addApp: register, create rows, roll back

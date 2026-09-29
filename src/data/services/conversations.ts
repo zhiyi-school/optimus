@@ -1,15 +1,10 @@
 /**
- * Supabase operations on risk conversations, their entries, attachments and realtime updates.
+ * Supabase operations on risk conversations, their entries and realtime updates.
  */
 
 import { supabase } from "@/data/supabase";
-import {
-  conversationAttachmentData,
-  createPendingConversationAttachment,
-} from "./conversation-attachments";
 import type {
   RiskConversation,
-  RiskConversationAttachment,
   RiskConversationEntry,
   RiskConversationEntryKind,
 } from "@/data/types";
@@ -151,30 +146,6 @@ export const riskConversationData = {
     return data;
   },
 
-  /** Lists the attachments of the given entries in upload order. */
-  async listAttachments(entryIds: string[]): Promise<RiskConversationAttachment[]> {
-    if (entryIds.length === 0) {
-      debug("no entries; skipping attachment query");
-      return [];
-    }
-    debug("listing conversation attachments", { entries: entryIds.length });
-    const { data, error } = await supabase
-      .from("risk_conversation_attachments")
-      .select("*")
-      .in("entry_id", entryIds)
-      .order("created_at", { ascending: true });
-    if (error) {
-      debug("listing conversation attachments failed", {
-        entries: entryIds.length,
-        code: error.code,
-        message: error.message,
-      });
-      throw error;
-    }
-    debug("listed conversation attachments", { entries: entryIds.length, count: data?.length });
-    return data;
-  },
-
   /** Inserts a conversation entry authored by the signed-in user. */
   async addEntry(input: RiskConversationEntryInput): Promise<RiskConversationEntry> {
     debug("adding conversation entry", {
@@ -244,28 +215,6 @@ export const riskConversationData = {
       }
       throw error;
     }
-  },
-
-  /** Uploads a file for an entry and records its attachment row. */
-  async uploadAttachment(
-    conversationId: string,
-    entryId: string,
-    file: File,
-  ): Promise<RiskConversationAttachment> {
-    debug("uploading conversation attachment", {
-      conversationId,
-      entryId,
-      fileName: file.name,
-      size: file.size,
-    });
-    const pending = createPendingConversationAttachment(conversationId, entryId, file);
-    await conversationAttachmentData.uploadBytes(pending);
-    return conversationAttachmentData.saveMetadata(pending);
-  },
-
-  /** Creates a signed URL for an attachment. */
-  getSignedUrl(storagePath: string) {
-    return conversationAttachmentData.getSignedUrl(storagePath);
   },
 
   /** Calls `onChange` on each new entry in the conversation; returns the unsubscribe function. */

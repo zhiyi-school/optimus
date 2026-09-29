@@ -128,8 +128,19 @@ vi.mock("@/data/supabase", () => ({
 }));
 
 const { riskConversationData } = await import("./conversations");
+const { conversationAttachmentData, createPendingConversationAttachment } = await import(
+  "./conversation-attachments"
+);
 const { findingData } = await import("./findings");
-const { retestData, ticketData } = await import("./tickets");
+const { retestData } = await import("./retests");
+const { ticketData } = await import("./tickets");
+
+// The staged upload the app uses: bytes first, then the metadata row.
+async function uploadAttachment(conversationId: string, entryId: string, file: File) {
+  const pending = createPendingConversationAttachment(conversationId, entryId, file);
+  await conversationAttachmentData.uploadBytes(pending);
+  return conversationAttachmentData.saveMetadata(pending);
+}
 
 function written(name: string) {
   return writes.filter((write) => write.table === name);
@@ -314,7 +325,7 @@ describe("entries", () => {
       kind: "message",
       message: "With a screenshot.",
     });
-    await riskConversationData.uploadAttachment(
+    await uploadAttachment(
       CONVERSATION,
       entry.id,
       new File(["x"], "example-evidence.png", { type: "image/png" }),
@@ -329,7 +340,7 @@ describe("entries", () => {
   });
 
   it("records where the bytes live and how large they are", async () => {
-    await riskConversationData.uploadAttachment(
+    await uploadAttachment(
       CONVERSATION,
       "entry-1",
       new File(["example"], "example-evidence.png", { type: "image/png" }),
@@ -344,7 +355,7 @@ describe("entries", () => {
 
   it("recovers the metadata row when the insert succeeded but its response was lost", async () => {
     loseAttachmentInsertResponse = true;
-    const attachment = await riskConversationData.uploadAttachment(
+    const attachment = await uploadAttachment(
       CONVERSATION,
       "entry-1",
       new File(["example"], "example-evidence.png", { type: "image/png" }),
@@ -358,7 +369,7 @@ describe("entries", () => {
   it("surfaces a metadata refusal instead of retrying the insert", async () => {
     missingColumns = ["entry_id"];
     await expect(
-      riskConversationData.uploadAttachment(
+      uploadAttachment(
         CONVERSATION,
         "entry-1",
         new File(["example"], "example-evidence.png", { type: "image/png" }),
@@ -368,7 +379,7 @@ describe("entries", () => {
   });
 
   it("keeps a space-and-Unicode name on the row but not in the storage key", async () => {
-    await riskConversationData.uploadAttachment(
+    await uploadAttachment(
       CONVERSATION,
       "entry-1",
       new File(["x"], "評価 report (final).pdf", { type: "application/pdf" }),
@@ -381,7 +392,7 @@ describe("entries", () => {
   });
 
   it("cannot be talked out of its own conversation folder by a file name", async () => {
-    await riskConversationData.uploadAttachment(
+    await uploadAttachment(
       CONVERSATION,
       "entry-1",
       new File(["x"], "../../etc/passwd", { type: "" }),
