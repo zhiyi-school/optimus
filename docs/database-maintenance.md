@@ -75,16 +75,21 @@ status. It:
   longer record new `fix_submitted` events.
 
 Conversation entries of kind `fix_submitted` are kept, and the kind stays legal,
-because they are the audit trail of what happened. `dashboard_metrics()` still
-returns a `fix_submitted` ticket count, which is now always `0`; it is removed
-together with the frontend's handling of the status.
+because they are the audit trail of what happened, as are `activity_log` rows
+whose free-text action is `fix_submitted`. The frontend keeps labels for both.
+
+Migration `0033_dashboard_metrics_without_fix_submitted.sql` then drops the
+always-zero `fix_submitted` key from `dashboard_metrics()`'s `ticketCounts`.
+`create or replace` keeps its `0014`/`0015` grants. No page reads that key, so
+`0033` and the frontend may deploy in either order.
 
 **Rollout order.** Apply `0032` to every supported database before deploying
 the frontend that removed its older-schema fallbacks and `fix_submitted` ticket
 handling. That frontend cannot edit, withdraw or reassess a ticket still in
 `fix_submitted`, and it no longer falls back when `0025`, `0027` or `0030` is
-missing. A frontend that predates the removal works unchanged against `0032`. The status rewrite is not reversible from the
-activity rows alone; roll forward if it needs correcting.
+missing. A frontend that predates the removal works unchanged against `0032`.
+The status rewrite is not reversible from the activity rows alone; roll forward
+if it needs correcting.
 
 ## Reassessment queue (0030)
 

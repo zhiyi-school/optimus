@@ -50,7 +50,6 @@ export type TicketType =
 export type TicketStatus =
   | "open"
   | "in_progress"
-  | "fix_submitted"
   | "retest_requested"
   | "retest_in_progress"
   | "under_review"
@@ -64,7 +63,7 @@ export type RiskAcceptanceDecision = "pending" | "accepted" | "rejected";
 export type RetestStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
 
 /** The ticket state a reassessment request interrupted, restored when it is withdrawn. */
-export type RetestPreviousTicketStatus = Extract<TicketStatus, "fix_submitted" | "rejected">;
+export type RetestPreviousTicketStatus = Extract<TicketStatus, "open" | "in_progress" | "rejected">;
 
 export type ControlProgressStatus = "not_started" | "in_progress" | "completed" | "needs_changes";
 

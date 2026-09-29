@@ -92,11 +92,8 @@ begin
   ) then raise exception 'clients can still record fix_submitted events'; end if;
   if exists (
     select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-    where n.nspname = 'public'
-      and p.proname in ('enforce_ticket_update_permissions', 'enforce_retest_request_permissions',
-                        'withdraw_reassessment')
-      and p.prosrc like '%fix_submitted%'
-  ) then raise exception 'a ticket workflow function still names fix_submitted'; end if;
+    where n.nspname = 'public' and p.prosrc like '%fix_submitted%'
+  ) then raise exception 'a database function still names fix_submitted'; end if;
   if not exists (
     select 1 from pg_constraint
     where conname = 'risk_conversation_entries_kind_check'

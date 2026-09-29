@@ -7,7 +7,6 @@ const SECURITY = "00000000-0000-0000-0000-000000000002";
 const STATUSES: TicketStatus[] = [
   "open",
   "in_progress",
-  "fix_submitted",
   "retest_requested",
   "retest_in_progress",
   "under_review",

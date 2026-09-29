@@ -28,7 +28,6 @@ const debug = createDebug("lib:resolve");
 export const developerTicketLabels: Record<TicketStatus, { label: string; tone: Tone }> = {
   open: { label: "Action required", tone: "danger" },
   in_progress: { label: "In progress", tone: "info" },
-  fix_submitted: { label: "Fix submitted", tone: "neutral" },
   retest_requested: { label: "Awaiting reassessment", tone: "warning" },
   retest_in_progress: { label: "Security verification in progress", tone: "warning" },
   under_review: { label: "Under security review", tone: "warning" },

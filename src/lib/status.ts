@@ -92,7 +92,6 @@ export const ticketStatusConfig: Record<
 > = {
   open: { label: "Open", tone: "neutral" },
   in_progress: { label: "In Progress", tone: "info" },
-  fix_submitted: { label: "Fix Submitted", tone: "info" },
   retest_requested: { label: "Retest Requested", tone: "warning" },
   retest_in_progress: { label: "Retest In Progress", tone: "warning" },
   under_review: { label: "Under Review", tone: "warning" },

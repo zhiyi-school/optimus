@@ -520,7 +520,6 @@ The Resolve workspace renames every ticket status for a developer audience:
 |---|---|
 | `open` | Action required |
 | `in_progress` | In progress |
-| `fix_submitted` | Fix submitted — retired by `0032`; no ticket carries it |
 | `retest_requested` | Awaiting reassessment |
 | `retest_in_progress` | Security verification in progress |
 | `under_review` | Under security review |

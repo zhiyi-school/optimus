@@ -49,7 +49,6 @@ export const metricsData = {
     const ticketCounts = {
       open: 0,
       in_progress: 0,
-      fix_submitted: 0,
       retest_requested: 0,
       retest_in_progress: 0,
       under_review: 0,

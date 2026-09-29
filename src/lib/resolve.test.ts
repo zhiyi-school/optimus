@@ -172,7 +172,6 @@ describe("developer labels", () => {
     const expected: Record<TicketStatus, string> = {
       open: "Action required",
       in_progress: "In progress",
-      fix_submitted: "Fix submitted",
       retest_requested: "Awaiting reassessment",
       retest_in_progress: "Security verification in progress",
       under_review: "Under security review",
@@ -409,7 +408,7 @@ describe("summarizeApplication", () => {
 
   it("counts every reassessment awaiting security together", () => {
     const tickets = [
-      ticket({ id: "t1", status: "fix_submitted" }),
+      ticket({ id: "t1", status: "in_progress" }),
       ticket({ id: "t2", status: "retest_requested" }),
       ticket({ id: "t3", status: "retest_in_progress" }),
       ticket({ id: "t4", status: "under_review" }),
