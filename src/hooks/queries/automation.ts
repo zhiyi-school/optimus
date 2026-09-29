@@ -10,10 +10,8 @@ import { findActiveRun, findPlatformRun, type ActiveRunFilter } from "@/workflow
 import { syncPollInterval } from "@/lib/dashboard-sync";
 import { dashboardSyncInvalidationPrefixes } from "./invalidation-rules";
 import { automationKeys } from "@/hooks/query-keys";
-import type { RunEventStreamState } from "@/lib/run-event-types";
+import type { RunEventStreamState } from "@/lib/run-stream";
 import { createDebug } from "@/lib/debug";
-
-export type { RunEventStreamState } from "@/lib/run-event-types";
 
 const debug = createDebug("hooks:queries:automation");
 

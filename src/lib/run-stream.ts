@@ -1,8 +1,13 @@
 /**
- * Display helpers for a run's live event stream.
+ * Connection states of a run's live event stream and how they are labelled.
  */
 
-import type { RunEventStreamState } from "@/lib/run-event-types";
+export type RunEventStreamState =
+  | "idle"
+  | "connecting"
+  | "open"
+  | "unavailable"
+  | "closed";
 
 /** Label for the live event stream's state; it says nothing about any caller's polling. */
 export function streamStateLabel(streamState: RunEventStreamState) {

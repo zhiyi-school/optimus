@@ -1,37 +1,27 @@
 import { describe, expect, it } from "vitest";
 import type { ControlDetail } from "@/api/playbook-types";
 import type {
-  ControlProgressStatus,
   Finding,
-  RetestRun,
-  Ticket,
   TicketControl,
   TicketControlStep,
   TicketStatus,
 } from "@/data/types";
 import {
   SECURITY_FINALISED,
-  activeReassessment,
   activeRemediationTicket,
-  canWithdrawReassessment,
-  controlSummary,
-  introRepeatsSummary,
-  canRequestReassessment,
   canResumeTicket,
   canWithdrawTicket,
   resumableRemediationTicket,
   canEditRemediation,
-  changedSinceCompleted,
-  contentHashes,
   controlProgress,
   isReconciled,
   liveControlStatus,
   liveControls,
   effectiveSelectedControlId,
   selectableControls,
+  selectedControl,
   selectedControlReconciliationPlan,
   selectionWasReplaced,
-  selectedControlProgress,
   selectedApproachComplete,
   developerTicketLabel,
   developerTicketLabels,
@@ -41,8 +31,15 @@ import {
   preferredDeveloperRisk,
   summarizeApplication,
 } from "./resolve";
-
-const APP = "app-1";
+import {
+  APP,
+  REVOKE,
+  ROTATE,
+  control,
+  definition,
+  step,
+  ticket,
+} from "@/test-support/resolve-fixtures";
 
 function finding(overrides: Partial<Finding> = {}): Finding {
   return {
@@ -64,108 +61,6 @@ function finding(overrides: Partial<Finding> = {}): Finding {
   };
 }
 
-function ticket(overrides: Partial<Ticket> = {}): Ticket {
-  return {
-    id: "ticket-1",
-    finding_id: "finding-1",
-    application_id: APP,
-    type: "remediation",
-    status: "open",
-    title: "Remediate: Example finding",
-    description: null,
-    created_by: "user-1",
-    assigned_user_id: null,
-    assigned_team_id: null,
-    target_version: null,
-    risk_conversation_id: "conversation-1",
-    origin_assessment_id: "assessment-1",
-    withdrawn_at: null,
-    withdrawn_by: null,
-    withdrawal_reason: null,
-    selected_control_id: "example-feature-01-risk-01-control-01",
-    created_at: "2026-01-01T00:00:00Z",
-    updated_at: "2026-01-01T00:00:00Z",
-    closed_at: null,
-    ...overrides,
-  };
-}
-
-function control(overrides: Partial<TicketControl> = {}): TicketControl {
-  return {
-    id: "tc-1",
-    ticket_id: "ticket-1",
-    control_id: "example-feature-01-risk-01-control-01",
-    status: "not_started",
-    completed_at: null,
-    completed_by: null,
-    developer_note: null,
-    created_at: "2026-01-01T00:00:00Z",
-    updated_at: "2026-01-01T00:00:00Z",
-    ...overrides,
-  };
-}
-
-function step(
-  ticketControlId: string,
-  stepKey: string,
-  status: ControlProgressStatus = "not_started",
-): TicketControlStep {
-  return {
-    id: `${ticketControlId}-${stepKey}`,
-    ticket_control_id: ticketControlId,
-    step_key: stepKey,
-    status,
-    completed_at: null,
-    completed_by: null,
-    developer_note: null,
-    created_at: "2026-01-01T00:00:00Z",
-    updated_at: "2026-01-01T00:00:00Z",
-  };
-}
-
-function definition(overrides: Partial<ControlDetail> = {}): ControlDetail {
-  return {
-    control_id: "example-feature-01-risk-01-control-01",
-    risk_id: "example-feature-01-risk-01",
-    platform: "ios",
-    title: "Control 1",
-    status: "active",
-    required: true,
-    step_count: 2,
-    playbook_revision: "sha256:aaa",
-    has_source_archive: false,
-    summary: "Example control summary.",
-    source_file: "example-feature-01-risk-01-control-01.md",
-    status_source: "default",
-    intro: [],
-    steps: [
-      {
-        step_key: "rotate-example-key",
-        step_id_source: "declared",
-        content_hash: "sha256:one",
-        step_index: 0,
-        number: 1,
-        step_title: "First",
-        text: "First",
-        content: [],
-      },
-      {
-        step_key: "revoke-example-key",
-        step_id_source: "declared",
-        content_hash: "sha256:two",
-        step_index: 1,
-        number: 2,
-        step_title: "Second",
-        text: "Second",
-        content: [],
-      },
-    ],
-    references: [],
-    source_archives: [],
-    source_download_url: null,
-    ...overrides,
-  };
-}
 
 describe("developer labels", () => {
   it("renames every internal ticket status for a developer audience", () => {
@@ -189,9 +84,6 @@ describe("developer labels", () => {
     expect(developerTicketLabel(undefined)).toBeUndefined();
   });
 });
-
-const ROTATE = "rotate-example-key";
-const REVOKE = "revoke-example-key";
 
 describe("liveControls", () => {
   it("pairs each playbook step with the progress row that carries its stable id", () => {
@@ -693,6 +585,16 @@ describe("effectiveSelectedControlId", () => {
   });
 });
 
+function selectedLiveControl(
+  definitions: ControlDetail[],
+  selectedControlId: string,
+  controls: TicketControl[],
+  steps: TicketControlStep[],
+) {
+  const chosen = selectedControl(selectableControls(definitions), selectedControlId);
+  return chosen ? liveControls([chosen], controls, steps)[0] : undefined;
+}
+
 describe("selected-control progress", () => {
   const first = definition({ control_id: "example-feature-01-risk-01-control-01" });
   const second = definition({
@@ -701,7 +603,7 @@ describe("selected-control progress", () => {
   });
 
   it("counts only the selected control's current steps", () => {
-    const live = selectedControlProgress(
+    const live = selectedLiveControl(
       [first, second],
       first.control_id,
       [control(), control({ id: "tc-2", control_id: second.control_id })],
@@ -719,15 +621,15 @@ describe("selected-control progress", () => {
     const rows = [control(), control({ id: "tc-2", control_id: second.control_id })];
     const steps = [step("tc-1", ROTATE, "completed"), step("tc-1", REVOKE, "completed")];
 
-    expect(selectedControlProgress([first, second], first.control_id, rows, steps)?.progress)
+    expect(selectedLiveControl([first, second], first.control_id, rows, steps)?.progress)
       .toEqual({ completed: 2, total: 2, ratio: 1 });
-    expect(selectedControlProgress([first, second], second.control_id, rows, steps)?.progress)
+    expect(selectedLiveControl([first, second], second.control_id, rows, steps)?.progress)
       .toEqual({ completed: 0, total: 1, ratio: 0 });
   });
 
   it("counts a step the playbook has added as outstanding", () => {
     const grown = definition({ steps: [...first.steps, { ...first.steps[0], step_key: "new-step" }] });
-    const live = selectedControlProgress(
+    const live = selectedLiveControl(
       [grown],
       grown.control_id,
       [control()],
@@ -739,7 +641,7 @@ describe("selected-control progress", () => {
 
   it("stops counting a step the playbook has removed", () => {
     const shrunk = definition({ steps: [first.steps[0]] });
-    const live = selectedControlProgress(
+    const live = selectedLiveControl(
       [shrunk],
       shrunk.control_id,
       [control()],
@@ -751,7 +653,7 @@ describe("selected-control progress", () => {
 
   it("keeps progress when the playbook reorders the same stable steps", () => {
     const reordered = definition({ steps: [first.steps[1], first.steps[0]] });
-    const live = selectedControlProgress(
+    const live = selectedLiveControl(
       [reordered],
       reordered.control_id,
       [control()],
@@ -763,7 +665,7 @@ describe("selected-control progress", () => {
   });
 
   it("has no progress at all when the selection is not on offer", () => {
-    expect(selectedControlProgress([first], "example-removed-control", [control()], []))
+    expect(selectedLiveControl([first], "example-removed-control", [control()], []))
       .toBeUndefined();
   });
 });
@@ -796,36 +698,6 @@ describe("isReconciled", () => {
   });
 });
 
-describe("changedSinceCompleted", () => {
-  const live = () =>
-    liveControls([definition()], [control()], [
-      step("tc-1", ROTATE, "completed"),
-      step("tc-1", REVOKE),
-    ])[0].steps;
-
-  it("flags a completed step whose content changed during the session", () => {
-    const atLoad = new Map([[ROTATE, "sha256:before"]]);
-    expect([...changedSinceCompleted(live(), atLoad)]).toEqual([ROTATE]);
-  });
-
-  it("says nothing when the content is unchanged", () => {
-    expect([...changedSinceCompleted(live(), contentHashes(definition().steps))]).toEqual([]);
-  });
-
-  it("does not flag a step the developer has not completed", () => {
-    const atLoad = new Map([[REVOKE, "sha256:before"]]);
-    expect([...changedSinceCompleted(live(), atLoad)]).toEqual([]);
-  });
-
-  it("says nothing about a step that did not exist when the page loaded", () => {
-    expect([...changedSinceCompleted(live(), new Map())]).toEqual([]);
-  });
-
-  it("says nothing before any content has been seen", () => {
-    expect([...changedSinceCompleted(live(), undefined)]).toEqual([]);
-  });
-});
-
 describe("workflow gates", () => {
   it("lets the developer record progress while they still own the ticket", () => {
     for (const status of ["open", "in_progress", "rejected"] as TicketStatus[]) {
@@ -845,31 +717,13 @@ describe("workflow gates", () => {
     }
   });
 
-  it("offers a reassessment request from the developer's own states and from outstanding ones", () => {
-    for (const status of [
-      "open",
-      "in_progress",
-      "rejected",
-      "retest_requested",
-      "retest_in_progress",
-      "under_review",
-    ] as TicketStatus[]) {
-      expect(canRequestReassessment(ticket({ status })), status).toBe(true);
-    }
-    for (const status of ["closed", "accepted", "withdrawn"] as TicketStatus[]) {
-      expect(canRequestReassessment(ticket({ status })), status).toBe(false);
-    }
-  });
-
-  it("offers neither on a risk-acceptance ticket", () => {
+  it("offers no progress edits on a risk-acceptance ticket", () => {
     const acceptance = ticket({ type: "risk_acceptance", status: "open" });
     expect(canEditRemediation(acceptance)).toBe(false);
-    expect(canRequestReassessment(acceptance)).toBe(false);
   });
 
-  it("offers neither with no ticket at all", () => {
+  it("offers no progress edits with no ticket at all", () => {
     expect(canEditRemediation(null)).toBe(false);
-    expect(canRequestReassessment(undefined)).toBe(false);
   });
 
   it("calls an approach complete only when it has steps and they are all done", () => {
@@ -877,7 +731,7 @@ describe("workflow gates", () => {
     const rows = [control()];
     expect(
       selectedApproachComplete(
-        selectedControlProgress([first], first.control_id, rows, [
+        selectedLiveControl([first], first.control_id, rows, [
           step("tc-1", ROTATE, "completed"),
           step("tc-1", REVOKE, "completed"),
         ]),
@@ -885,12 +739,12 @@ describe("workflow gates", () => {
     ).toBe(true);
     expect(
       selectedApproachComplete(
-        selectedControlProgress([first], first.control_id, rows, [step("tc-1", ROTATE, "completed")]),
+        selectedLiveControl([first], first.control_id, rows, [step("tc-1", ROTATE, "completed")]),
       ),
     ).toBe(false);
     expect(
       selectedApproachComplete(
-        selectedControlProgress([definition({ steps: [] })], first.control_id, rows, []),
+        selectedLiveControl([definition({ steps: [] })], first.control_id, rows, []),
       ),
     ).toBe(false);
     expect(selectedApproachComplete(undefined)).toBe(false);
@@ -1105,157 +959,5 @@ describe("the risk a developer lands on when they open an application", () => {
     expect(preferredDeveloperRisk([finding({ test_id: null })], [])).toBeNull();
     expect(preferredDeveloperRisk([], [])).toBeNull();
     expect(preferredDeveloperRisk(undefined, undefined)).toBeNull();
-  });
-});
-
-const DEVELOPER = "00000000-0000-0000-0000-000000000001";
-const OTHER_DEVELOPER = "00000000-0000-0000-0000-000000000002";
-
-function retest(overrides: Partial<RetestRun> = {}): RetestRun {
-  return {
-    id: "retest-1",
-    conversation_id: "conversation-1",
-    ticket_id: "ticket-1",
-    finding_id: "finding-1",
-    external_test_run_id: null,
-    requested_by: DEVELOPER,
-    executed_by: null,
-    status: "queued",
-    result: null,
-    created_at: "2026-01-01T00:00:00Z",
-    completed_at: null,
-    cancelled_at: null,
-    cancelled_by: null,
-    cancellation_reason: null,
-    previous_ticket_status: "in_progress",
-    ...overrides,
-  } as RetestRun;
-}
-
-describe("activeReassessment", () => {
-  it("finds a queued request", () => {
-    expect(activeReassessment([retest()])?.id).toBe("retest-1");
-  });
-
-  it("finds a running request", () => {
-    expect(activeReassessment([retest({ status: "running" })])?.id).toBe("retest-1");
-  });
-
-  it("treats a cancelled request as history, not as work in flight", () => {
-    expect(activeReassessment([retest({ status: "cancelled" })])).toBeUndefined();
-  });
-
-  it("ignores completed and failed requests the same way", () => {
-    expect(activeReassessment([retest({ status: "completed" })])).toBeUndefined();
-    expect(activeReassessment([retest({ status: "failed" })])).toBeUndefined();
-  });
-
-  it("finds the new request made after one was withdrawn", () => {
-    const runs = [retest({ id: "retest-2" }), retest({ status: "cancelled" })];
-    expect(activeReassessment(runs)?.id).toBe("retest-2");
-  });
-});
-
-describe("canWithdrawReassessment", () => {
-  const awaiting = ticket({ id: "ticket-1", status: "retest_requested" });
-
-  it("lets the requester take back a queued request on their own remediation", () => {
-    expect(canWithdrawReassessment(retest(), awaiting, DEVELOPER)).toBe(true);
-  });
-
-  it("allows it just as well when the request came from a rejected fix", () => {
-    expect(
-      canWithdrawReassessment(retest({ previous_ticket_status: "rejected" }), awaiting, DEVELOPER),
-    ).toBe(true);
-  });
-
-  it("refuses a request that security has already started", () => {
-    expect(canWithdrawReassessment(retest({ status: "running" }), awaiting, DEVELOPER)).toBe(false);
-  });
-
-  it("refuses a completed or failed request", () => {
-    for (const status of ["completed", "failed"] as const) {
-      expect(canWithdrawReassessment(retest({ status }), awaiting, DEVELOPER), status).toBe(false);
-    }
-  });
-
-  it("refuses one that is already cancelled", () => {
-    expect(canWithdrawReassessment(retest({ status: "cancelled" }), awaiting, DEVELOPER)).toBe(
-      false,
-    );
-  });
-
-  it("refuses anyone but the developer who asked for it", () => {
-    expect(canWithdrawReassessment(retest(), awaiting, OTHER_DEVELOPER)).toBe(false);
-    expect(canWithdrawReassessment(retest(), awaiting, undefined)).toBe(false);
-  });
-
-  it("refuses a security-created request that has no remediation to restore", () => {
-    expect(canWithdrawReassessment(retest({ ticket_id: null }), null, DEVELOPER)).toBe(false);
-  });
-
-  it("refuses when the request belongs to a different remediation", () => {
-    expect(
-      canWithdrawReassessment(retest({ ticket_id: "ticket-9" }), awaiting, DEVELOPER),
-    ).toBe(false);
-  });
-
-  it("refuses once the remediation has moved past waiting for the reassessment", () => {
-    for (const status of ["retest_in_progress", "closed", "withdrawn"] as TicketStatus[]) {
-      expect(
-        canWithdrawReassessment(retest(), ticket({ id: "ticket-1", status }), DEVELOPER),
-        status,
-      ).toBe(false);
-    }
-  });
-
-  it("refuses on a ticket that is not a remediation", () => {
-    expect(
-      canWithdrawReassessment(
-        retest(),
-        ticket({ id: "ticket-1", status: "retest_requested", type: "risk_acceptance" }),
-        DEVELOPER,
-      ),
-    ).toBe(false);
-  });
-});
-
-describe("control summary presentation", () => {
-  function definition(overrides: Partial<ControlDetail> = {}): ControlDetail {
-    return {
-      control_id: "example-feature-01-risk-01-control-01",
-      title: "Detect an example repackaging attempt",
-      summary: "Detect an example repackaging attempt",
-      intro: [{ type: "paragraph", text: "Detect an example repackaging attempt" }],
-      ...overrides,
-    } as ControlDetail;
-  }
-
-  it("hides the summary when the Description already supplied the title", () => {
-    expect(controlSummary(definition())).toBeUndefined();
-  });
-
-  it("shows a summary that says more than the title", () => {
-    expect(
-      controlSummary(definition({ title: "Control 1", summary: "A longer placeholder summary." })),
-    ).toBe("A longer placeholder summary.");
-  });
-
-  it("hides an intro that only repeats the summary", () => {
-    expect(introRepeatsSummary(definition())).toBe(true);
-  });
-
-  it("keeps an intro that carries more than the summary", () => {
-    const control = definition({
-      intro: [
-        { type: "paragraph", text: "Detect an example repackaging attempt" },
-        { type: "paragraph", text: "Extra background the header does not show." },
-      ],
-    });
-    expect(introRepeatsSummary(control)).toBe(false);
-  });
-
-  it("hides an empty intro", () => {
-    expect(introRepeatsSummary(definition({ intro: [] }))).toBe(true);
   });
 });

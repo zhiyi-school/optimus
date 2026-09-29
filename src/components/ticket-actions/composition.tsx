@@ -5,7 +5,8 @@
 import { Button } from "@/components/ui/button";
 import type { RiskConversationContext } from "@/hooks/conversation-composer";
 import { useUpdateTicketStatus } from "@/hooks/queries/tickets";
-import { canResumeTicket, canWithdrawTicket, outstandingReassessments } from "@/lib/resolve";
+import { canResumeTicket, canWithdrawTicket } from "@/lib/resolve";
+import { outstandingReassessments } from "@/lib/reassessments";
 import { createDebug } from "@/lib/debug";
 import { formatDate } from "@/lib/utils";
 import type { Ticket } from "@/data/types";

@@ -10,7 +10,7 @@ import {
   isTransitionalRunState,
   normalizeAssessmentStages,
   type AssessmentStagePresentation,
-} from "@/lib/status";
+} from "@/lib/assessment-run-state";
 import { createDebug } from "@/lib/debug";
 import { cn, errorMessage, formatDate } from "@/lib/utils";
 import { useAssessmentRunRequest, useRequestAssessmentRun } from "@/hooks/queries/assessments";

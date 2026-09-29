@@ -1,5 +1,5 @@
 /**
- * Pure Resolve workspace rules: status labels, approach selection, progress and reassessment queueing.
+ * Pure Resolve workspace rules: status labels, approach selection, progress and ticket workflow gates.
  */
 
 import type {
@@ -8,19 +8,16 @@ import type {
   ControlStep,
   ControlSummary,
 } from "@/api/playbook-types";
-import type { ControlReconciliation } from "@/data/services/controls";
 import type {
   ControlProgressStatus,
+  ControlReconciliation,
   Finding,
-  RetestRun,
   Ticket,
   TicketControl,
   TicketControlStep,
   TicketStatus,
 } from "@/data/types";
 import type { Tone } from "@/lib/status";
-import { remediationBlockMessage } from "@/lib/remediation-workflow-messages";
-import type { RemediationBlock } from "@/lib/remediation-workflow";
 import { createDebug } from "@/lib/debug";
 
 const debug = createDebug("lib:resolve");
@@ -79,17 +76,6 @@ export const APPROACH_SELECTABLE_FROM: TicketStatus[] = [
 ];
 
 export const REMEDIATION_EDITABLE_FROM: TicketStatus[] = ["open", "in_progress", "rejected"];
-
-/** Mirrors `requestable_from` in enforce_retest_request_permissions. */
-export const REASSESSMENT_REQUESTABLE_FROM: TicketStatus[] = [
-  "open",
-  "in_progress",
-  "rejected",
-  // Requests may stack while earlier ones are outstanding; other actions keep narrower sets.
-  "retest_requested",
-  "retest_in_progress",
-  "under_review",
-];
 
 export interface Progress {
   completed: number;
@@ -199,19 +185,6 @@ export function controlProgress(live: LiveControl[]): Progress {
   const total = live.reduce((sum, control) => sum + control.progress.total, 0);
   const completed = live.reduce((sum, control) => sum + control.progress.completed, 0);
   return progress(completed, total);
-}
-
-/** The live progress of the selected approach, if it is selectable. */
-export function selectedControlProgress(
-  definitions: ControlDetail[] | undefined,
-  selectedControlId: string | null,
-  controls: TicketControl[],
-  steps: TicketControlStep[],
-): LiveControl | undefined {
-  const candidates = selectableControls(definitions);
-  const chosen = selectedControl(candidates, selectedControlId);
-  if (!chosen) return undefined;
-  return liveControls([chosen], controls, steps)[0];
 }
 
 /** Tested risks out of the catalogue; any completed automated test counts, whatever the verdict. */
@@ -404,75 +377,6 @@ export function canSelectApproach(ticket: Ticket | null | undefined): boolean {
   return APPROACH_SELECTABLE_FROM.includes(ticket.status);
 }
 
-/** The message explaining why the approach cannot change, or null when it can. */
-export function approachChangeBlockedReason(
-  ticket: Ticket | null | undefined,
-  mayEdit: boolean,
-): string | null {
-  let block: RemediationBlock | null = null;
-  if (!mayEdit) block = { code: "approach_permission" };
-  else if (!ticket || ticket.type !== "remediation") block = { code: "approach_not_remediation" };
-  else if (ticket.status === "withdrawn") block = { code: "approach_withdrawn" };
-  else if (SECURITY_FINALISED.includes(ticket.status)) block = { code: "approach_security_finalised" };
-  else if (!canSelectApproach(ticket)) block = { code: "approach_security_owned" };
-  return remediationBlockMessage(block);
-}
-
-/** True when a remediation's status allows requesting a reassessment. */
-export function canRequestReassessment(ticket: Ticket | null | undefined): boolean {
-  if (!ticket || ticket.type !== "remediation") return false;
-  return REASSESSMENT_REQUESTABLE_FROM.includes(ticket.status);
-}
-
-/** Deterministic queue order: oldest first, id breaking a tie. */
-function byQueueOrder(a: RetestRun, b: RetestRun): number {
-  const left = a.created_at ?? "";
-  const right = b.created_at ?? "";
-  return left === right ? a.id.localeCompare(b.id) : left.localeCompare(right);
-}
-
-/** The reassessment currently running, if any. */
-export function runningReassessment(retests: RetestRun[] | undefined): RetestRun | undefined {
-  return (retests ?? []).find((retest) => retest.status === "running");
-}
-
-/** Queued reassessments in queue order. */
-export function queuedReassessments(retests: RetestRun[] | undefined): RetestRun[] {
-  return (retests ?? []).filter((retest) => retest.status === "queued").sort(byQueueOrder);
-}
-
-/** The queued reassessment security may start next, or none while one is running. */
-export function nextReassessment(retests: RetestRun[] | undefined): RetestRun | undefined {
-  return runningReassessment(retests) ? undefined : queuedReassessments(retests)[0];
-}
-
-/** Queued and running reassessments in queue order. */
-export function outstandingReassessments(retests: RetestRun[] | undefined): RetestRun[] {
-  return (retests ?? [])
-    .filter((retest) => retest.status === "queued" || retest.status === "running")
-    .sort(byQueueOrder);
-}
-
-/** Any queued or running reassessment. */
-export function activeReassessment(retests: RetestRun[] | undefined): RetestRun | undefined {
-  return (retests ?? []).find(
-    (retest) => retest.status === "queued" || retest.status === "running",
-  );
-}
-
-/** True when the requester may withdraw their queued request while its remediation still awaits it. */
-export function canWithdrawReassessment(
-  retest: RetestRun | null | undefined,
-  ticket: Ticket | null | undefined,
-  profileId: string | null | undefined,
-): boolean {
-  if (!retest || retest.status !== "queued") return false;
-  if (!profileId || retest.requested_by !== profileId) return false;
-  if (!ticket || ticket.type !== "remediation") return false;
-  if (retest.ticket_id !== ticket.id) return false;
-  return ticket.status === "retest_requested";
-}
-
 /** True when a remediation's status allows withdrawing it. */
 export function canWithdrawTicket(ticket: Ticket | null | undefined): boolean {
   if (!ticket || ticket.type !== "remediation") return false;
@@ -545,41 +449,4 @@ export function preferredDeveloperRisk(
     linkedCount: linked.length,
   });
   return riskId;
-}
-
-/** Keys of completed steps whose content changed since the hashes were captured. */
-export function changedSinceCompleted(
-  live: LiveStep[],
-  hashesAtLoad: Map<string, string> | undefined,
-): Set<string> {
-  const changed = new Set<string>();
-  if (!hashesAtLoad) return changed;
-  for (const entry of live) {
-    const before = hashesAtLoad.get(entry.step.step_key);
-    if (!before) continue;
-    if (entry.row?.status === "completed" && before !== entry.step.content_hash) {
-      changed.add(entry.step.step_key);
-    }
-  }
-  if (changed.size > 0) debug("completed steps changed since load", { stepKeys: [...changed] });
-  return changed;
-}
-
-/** Each step's content hash by step key. */
-export function contentHashes(steps: ControlStep[]): Map<string, string> {
-  return new Map(steps.map((step) => [step.step_key, step.content_hash]));
-}
-
-/** A control's summary when it adds something beyond the title. */
-export function controlSummary(control: ControlDetail): string | undefined {
-  const summary = (control.summary ?? "").trim();
-  return summary && summary !== control.title.trim() ? summary : undefined;
-}
-
-/** True when a control's intro is empty or just its summary paragraph. */
-export function introRepeatsSummary(control: ControlDetail): boolean {
-  if (control.intro.length === 0) return true;
-  if (control.intro.length > 1) return false;
-  const [block] = control.intro;
-  return block.type === "paragraph" && (block.text ?? "").trim() === (control.summary ?? "").trim();
 }

@@ -155,7 +155,7 @@ export interface RiskDefinition {
   is_blocking: boolean;
   tactic: string | null;
   tactic_id?: string | null;
-  automation_available?: boolean;
+  automation_available: boolean;
   demonstration: DemonstrationBlock[];
   controls?: ControlSummary[];
   controls_available?: boolean;

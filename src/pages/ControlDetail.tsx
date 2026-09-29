@@ -24,7 +24,8 @@ import {
 import { useControlDetail, useControlSource, usePlaybookRevisionWatch } from "@/hooks/queries/playbook";
 import { useTicket } from "@/hooks/queries/tickets";
 import { createDebug } from "@/lib/debug";
-import { changedSinceCompleted, contentHashes, controlSummary, liveControls } from "@/lib/resolve";
+import { changedSinceCompleted, contentHashes, controlSummary } from "@/lib/control-content";
+import { liveControls } from "@/lib/resolve";
 import { resolveRiskPath } from "@/lib/risk-routes";
 import { stepCountLabel } from "@/lib/utils";
 

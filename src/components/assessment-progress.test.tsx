@@ -4,7 +4,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { EnvironmentSetupStages } from "@/components/assessment-progress";
 import type { ProvisioningStage } from "@/api/automation-types";
-import type { AssessmentRunState, Tone } from "@/lib/status";
+import type { AssessmentRunState } from "@/lib/assessment-run-state";
+import type { Tone } from "@/lib/status";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

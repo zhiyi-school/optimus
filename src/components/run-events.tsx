@@ -4,8 +4,7 @@
 
 import { CheckCircle2, Circle, Radio, WifiOff, XCircle } from "lucide-react";
 import type { RunProgressEvent } from "@/api/automation-types";
-import type { RunEventStreamState } from "@/lib/run-event-types";
-import { streamStateLabel } from "@/lib/run-stream";
+import { streamStateLabel, type RunEventStreamState } from "@/lib/run-stream";
 import { cn, formatDate } from "@/lib/utils";
 
 /** Human-readable text for a run event, preferring its own message. */

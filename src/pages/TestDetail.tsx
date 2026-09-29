@@ -55,13 +55,13 @@ import { useAuth } from "@/auth/auth-context";
 import { hasRole } from "@/auth/permissions";
 import { createDebug } from "@/lib/debug";
 import { riskIcon } from "@/lib/entity-icons";
-import { hasAutomation } from "@/lib/risk-automation";
 import { conversationTimeline } from "@/lib/conversation-timeline";
 import { combinedEvidence, latestResult, latestResultDetail } from "@/lib/automation-evidence";
 import { PlaintextLiteralsCard } from "@/components/plaintext-literals";
 import { analysisArtifact, plaintextLiterals } from "@/lib/plaintext-literals";
 import { LatestResultPanel } from "@/components/latest-result";
-import { activeRemediationTicket, nextReassessment, resumableRemediationTicket } from "@/lib/resolve";
+import { nextReassessment } from "@/lib/reassessments";
+import { activeRemediationTicket, resumableRemediationTicket } from "@/lib/resolve";
 import { cn, errorMessage, formatDate } from "@/lib/utils";
 import type { Application, Finding } from "@/data/types";
 import { assessmentKeys, automationKeys, evidenceKeys, ticketKeys } from "@/hooks/query-keys";
@@ -273,7 +273,7 @@ function TestPage() {
   }
 
   const RiskIcon = riskIcon(risk.name);
-  const automated = hasAutomation(risk);
+  const automated = risk.automation_available;
 
   return (
     <RiskWorkspace

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { ControlReconciliation } from "./controls";
+import type { ControlReconciliation } from "@/data/types";
 
 const CONTROL_ID = "example-feature-01-risk-01-control-01";
 

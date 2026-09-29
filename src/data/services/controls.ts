@@ -5,6 +5,7 @@
 import { supabase } from "@/data/supabase";
 import type {
   ControlProgressStatus,
+  ControlReconciliation,
   TicketControl,
   TicketControlStep,
 } from "@/data/types";
@@ -13,11 +14,6 @@ import { requireUserId } from "./common";
 import { activityData } from "./activity";
 
 const debug = createDebug("data:controls");
-
-export interface ControlReconciliation {
-  control_id: string;
-  step_keys: string[];
-}
 
 /** Status fields to write, stamping completion time and user only when completed. */
 function completionFields(status: ControlProgressStatus, userId: string) {

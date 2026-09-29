@@ -284,6 +284,11 @@ export interface TicketControlStep {
   updated_at: string;
 }
 
+export interface ControlReconciliation {
+  control_id: string;
+  step_keys: string[];
+}
+
 export interface ActivityLogEntry {
   id: string;
   actor_id: string | null;

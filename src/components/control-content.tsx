@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/input";
 import { PlaybookContent } from "@/components/playbook-content";
 import { playbookApi } from "@/api/playbook-services";
 import { createDebug } from "@/lib/debug";
-import { introRepeatsSummary } from "@/lib/resolve";
+import { introRepeatsSummary } from "@/lib/control-content";
 import { errorMessage, formatBytes } from "@/lib/utils";
 import type { AutomationPlatform } from "@/api/automation-types";
 import type { ControlDetail, ControlSourceMetadata, ControlStep } from "@/api/playbook-types";

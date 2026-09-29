@@ -4,7 +4,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { assessmentData, assessmentRunRequestData } from "@/data/services/assessments";
-import { isTransitionalRunState } from "@/lib/status";
+import { isTransitionalRunState } from "@/lib/assessment-run-state";
 import type { Application, Assessment } from "@/data/types";
 import { useInvalidateQueries } from "./invalidation";
 import { assessmentKeys } from "@/hooks/query-keys";

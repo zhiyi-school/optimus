@@ -132,6 +132,7 @@ vi.mock("@/test-support/query-hooks", () => {
           name: "Example Risk",
           description:
             "Example risk description. (MITRE ATT&CK: ***Discovery*** - TA0032).",
+          automation_available: true,
           test_cases: [{ id: "example_case" }],
         },
       ],

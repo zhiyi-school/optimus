@@ -3,8 +3,7 @@
  */
 
 import { useEffect, useRef } from "react";
-import type { ControlReconciliation } from "@/data/services/controls";
-import type { TicketControl, TicketControlStep } from "@/data/types";
+import type { ControlReconciliation, TicketControl, TicketControlStep } from "@/data/types";
 import { createDebug } from "@/lib/debug";
 import { isReconciled } from "@/lib/resolve";
 

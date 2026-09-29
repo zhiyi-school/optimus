@@ -74,6 +74,9 @@ real browser.
 | Test page keying (state must not leak between tests) | `src/pages/TestDetail.test.tsx` |
 | Capability model, `/resolve` access states, post-login routing | `src/auth/permissions.test.ts` |
 | Remediation progress formulas, control seeding, workflow gates | `src/lib/resolve.test.ts` |
+| Reassessment withdrawal eligibility | `src/lib/reassessments.test.ts` |
+| Control summary presentation and changed-step detection | `src/lib/control-content.test.ts` |
+| Assessment run state, blocker labels and stage sequencing | `src/lib/assessment-run-state.test.ts` |
 | Shared approach selection, reconciliation and reassessment reason codes | `src/lib/remediation-workflow.test.ts` |
 | The whole developer lifecycle, sign-in to closure | `src/lib/resolve-workflow.test.ts` |
 | Playbook block allowlist and inline-link safety | `src/lib/playbook.test.tsx` |

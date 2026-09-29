@@ -11,7 +11,6 @@ import type {
 import { defaultRouteFor, resolveAccess, roleCan } from "@/auth/permissions";
 import {
   activeRemediationTicket,
-  canRequestReassessment,
   canResumeTicket,
   canEditRemediation,
   canWithdrawTicket,
@@ -234,7 +233,6 @@ describe("developer remediation, end to end", () => {
 
     // The completed checklist is the readiness signal: no submission step stands between.
     expect(canEditRemediation(state.ticket)).toBe(true);
-    expect(canRequestReassessment(state.ticket)).toBe(true);
     state.move("retest_requested");
     expect(canEditRemediation(state.ticket)).toBe(false);
     expect(developerTicketLabel(state.ticket.status)?.label).toBe("Awaiting reassessment");
@@ -344,8 +342,6 @@ describe("developer remediation from a control preview, end to end", () => {
     state.completeStep("revoke-example-key");
     expect(state.live()[0].status).toBe("completed");
     expect(state.finding.status).toBe("at_risk");
-
-    expect(canRequestReassessment(state.ticket)).toBe(true);
     state.move("retest_requested");
 
     summary = summarizeApplication(APP, [state.finding], tickets, state.controls, state.steps);
@@ -579,6 +575,5 @@ describe("a playbook that changes while a ticket is open", () => {
 
     expect(state.ticket.status).toBe("in_progress");
     expect(state.finding.status).toBe("at_risk");
-    expect(canRequestReassessment(state.ticket)).toBe(true);
   });
 });
