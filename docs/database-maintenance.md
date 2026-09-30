@@ -93,6 +93,38 @@ backfills, and irreversible data changes. Production rollback therefore means
 a reviewed forward correction or a tested restore plan, not assuming every
 fix can be run backward.
 
+## Pending fixes
+
+The notes below describe the files currently in `supabase/fixes/`. Apply each to
+every live project.
+
+### Restoring ticket guards (0035)
+
+`0030` replaced `enforce_ticket_update_permissions()` with `create or replace`
+to recognise the reassessment reconciler, and the new body left out three guards
+that `0026` still had. `0032` and the baseline inherited the gap. From `0030`
+onwards a developer with access to the application could, through the REST API,
+change a ticket's `type`, `finding_id`, `application_id`, `created_by`,
+`assigned_user_id` or `assigned_team_id`, set `closed_at` outside a withdrawal,
+and edit `withdrawn_at`, `withdrawn_by` or `withdrawal_reason` after the fact.
+The dashboard never makes those writes, so nothing failed; only the legacy
+`0017` and `0018` suites asserted the guards, and they run before `0030`.
+
+Fix `0035_restore_ticket_ownership_guards.sql` redefines the function with
+the guards restored for callers holding neither `security` nor `admin`:
+
+- withdrawal details are written only by the withdrawing update, which must
+  also record `withdrawn_at`;
+- only security sets or clears `closed_at`;
+- the ownership fields above cannot change.
+
+The reconciler and reassessment-withdrawal paths return before these checks and
+are unaffected, as are the service-role workers. The fix changes no rows and
+needs no frontend change, so it can be applied at any time.
+`supabase/tests/0035_restore_ticket_ownership_guards_rls.sql` and
+`final_schema_assert.sql` cover it. When it is folded, the baseline's
+`0002_functions.sql` must carry the same function body.
+
 ## Re-baselining
 
 Fold fixes into the baseline only when every live project has applied them.

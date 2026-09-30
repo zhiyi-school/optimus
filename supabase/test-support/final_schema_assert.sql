@@ -106,4 +106,12 @@ begin
     where conname = 'risk_conversation_entries_kind_check'
       and pg_get_constraintdef(oid) like '%fix_submitted%'
   ) then raise exception 'historical fix_submitted events are no longer a legal kind'; end if;
+  if not exists (
+    select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'enforce_ticket_update_permissions'
+      and p.prosrc like '%new.created_by is distinct from old.created_by%'
+      and p.prosrc like '%new.assigned_user_id is distinct from old.assigned_user_id%'
+      and p.prosrc like '%withdrawal details are recorded once%'
+      and p.prosrc like '%only the security team can close or reopen a ticket%'
+  ) then raise exception 'the ticket trigger has lost its ownership, closure or withdrawal guards'; end if;
 end $$;

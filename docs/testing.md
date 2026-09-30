@@ -145,6 +145,7 @@ so they run only along the legacy chain at the version their fixtures need:
 | `legacy/0029_reassessment_without_completion_rls.sql` | a reassessment requested with no recorded progress and with only some steps done, progress left untouched by the request, and the surviving conditions — a remediation ticket, an allowed state, a selected approach, application access — still refusing |
 | `legacy/0030_reassessment_queue_rls.sql` | two intentional submissions creating two requests where a retried submission creates none, oldest-first starts, one running reassessment per risk across two reviewers, a queued request never downgrading a running remediation, completing one leaving the others queued, and ownership, access and finalised-ticket rules still refusing |
 | `0034_reconcile_reassessment_internal_only_rls.sql` | signed-in clients refused permission to call `reconcile_reassessment_ticket_state()` directly, the worker role keeping its grant, and the reassessment RPCs that reconcile internally staying callable |
+| `0035_restore_ticket_ownership_guards_rls.sql` | a developer refused when changing a ticket's type, finding, application, creator or assignment, setting `closed_at`, or editing withdrawal details after withdrawing; withdrawing, resuming, choosing an approach and the reassessment RPCs still working; and security still able to reassign and close |
 
 None is part of `npm test` — they need a disposable database. The supported
 runner creates its own isolated PostgreSQL container. Each suite creates its own placeholder fixtures,
@@ -159,7 +160,8 @@ passed`, `0023 assessment run request checks passed`,
 `0027 attachment download checks passed` or
 `0029 reassessment eligibility checks passed` or
 `0030 reassessment queue checks passed` or
-`0034 reconcile privilege checks passed`.
+`0034 reconcile privilege checks passed` or
+`0035 ticket guard checks passed`.
 
 **A migration that replaces a shared trigger has to carry forward what earlier
 ones added.** `0022` rewrote `enforce_ticket_update_permissions` with

@@ -548,7 +548,7 @@ The Resolve workspace renames every ticket status for a developer audience:
 Hiding a button is not authorization. Every row above is also enforced in the
 database: `findings_update`, `retest_runs_update` and `risk_acceptance_update`
 require the `security` role, and `enforce_ticket_update_permissions`
-(`0018_ticket_withdrawal.sql`) rejects a developer's attempt to set a ticket to
+(`0002_functions.sql`; fix `0035` restores its field guards) rejects a developer's attempt to set a ticket to
 `closed`/`accepted`/`retest_in_progress`, to reopen one security has finalised,
 to withdraw one security is already verifying, or to change its ownership
 fields — so the generic status mutation cannot be used to skip the workflow.

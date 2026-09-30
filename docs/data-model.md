@@ -34,9 +34,10 @@ actual authorization boundary.
   `tickets_update` deliberately lets a developer write to a ticket their team
   owns — which meant the generic status mutation could set `closed` and skip
   the reassessment workflow entirely. `enforce_ticket_update_permissions`
-  (`0017_ticket_controls.sql`) closes that: a caller holding neither
-  `security` nor `admin` may only move a ticket to `open`, `in_progress` or
-  `retest_requested`, cannot touch `closed_at`, and cannot
+  (`0002_functions.sql`, with the field guards restored by fix `0035`) closes
+  that: a caller holding neither `security` nor `admin` may only move a ticket
+  to `open`, `in_progress`, `retest_requested` or `withdrawn`, cannot touch
+  `closed_at`, and cannot
   change `type`, `finding_id`, `application_id`, `created_by` or either
   assignment column. It is a guardrail on the security-owned transitions, not
   a full state machine — which step is *sensible* next is still the
