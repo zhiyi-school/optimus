@@ -31,12 +31,13 @@ VITE_API_BASE_URL=http://localhost:8080
 VITE_SUPABASE_URL=https://<PROJECT_REF>.supabase.co
 VITE_SUPABASE_ANON_KEY=<ANON_KEY>
 VITE_APP_NAME=Mobile Application Security Assessment
+VITE_DEBUG=false
 ```
 
 Every `VITE_` variable is **compiled into the browser bundle and is public**.
 Use the Supabase `anon` key, which row-level security constrains. The
 `service_role` key must never appear here — it belongs only to the automation
-host's sync worker.
+host's workers.
 
 Variables are read at build time, so a change requires restarting `npm run dev`
 or rebuilding.
@@ -113,8 +114,9 @@ A local Supabase (CLI) option is documented at the bottom for development.
 
 7. **Get your API keys**: Project Settings → API → copy the Project URL
    and the `anon` `public` key.
-8. **Configure `.env`**: see the root README for the exact variables. Use
-   the `anon` key only — never the `service_role` key.
+8. **Configure `.env`**: see [Install and configure](#1-install-and-configure)
+   for the exact variables. Use the `anon` key only — never the `service_role`
+   key.
 
 ### Role assignment
 
@@ -191,7 +193,7 @@ real multi-user usage.
 
 See `supabase/migrations/0001_extensions_and_tables.sql` for the authoritative
 schema, `0004_rls_policies.sql` / `0006_storage.sql` for row-level security and
-storage policies, and `supabase/fixes/` for anything changed since — see [ARCHITECTURE.md](./architecture.md) for the entity diagram
+storage policies, and `supabase/fixes/` for anything changed since — see [architecture.md](./architecture.md) for the entity diagram
 and data-ownership summary.
 
 ## 3. Connect the automation backend
@@ -212,6 +214,17 @@ CORS_ALLOWED_ORIGINS="http://localhost:5173"
 Exact origins only — scheme, host and port must all match, and `*` is rejected.
 An exported shell variable of the same name takes precedence over the backend's
 `.env`.
+
+The automation host also runs two workers that hold the Supabase `service_role`
+key, separately from the API:
+
+- `python -m mobile_playbook.assessment_worker` claims the runs the dashboard
+  queues for new assessments and starts them. Without it a new assessment stays
+  queued. Point its `AUTOMATION_API_URL` at the API's port.
+- `python -m mobile_playbook.dashboard_sync` imports finished reports into
+  Supabase. Without it findings and history never appear.
+
+Their options and health checks are in the backend's `operations.md`.
 
 ## 4. Start and verify
 

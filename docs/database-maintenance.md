@@ -39,7 +39,8 @@ npm run test:database
 ```
 
 This same maintained command runs in the CI database job. Locally and in CI it
-requires Docker and a PostgreSQL 15 image; it never uses a linked Supabase
+requires Docker and a PostgreSQL 15 image, `postgres:15-alpine` by default or
+the image named by `DATABASE_TEST_IMAGE`; it never uses a linked Supabase
 project or credentials.
 
 The command requires Docker and the literal `--docker` guard embedded in the
@@ -54,9 +55,10 @@ The script verifies these paths:
 | Path | Starting point | Coverage |
 | --- | --- | --- |
 | Fresh installation | Empty database | The baseline, then every fix, the current SQL suites in `supabase/tests/`, and the final-schema assertions |
-| Legacy chain | Empty database | Every file in `legacy-migrations/`, with the version-specific suites in `supabase/tests/legacy/` run at the version their fixtures need, then every fix, the current suites and the final-schema assertions |
+| Legacy chain | Empty database | Every file in `legacy-migrations/`, with the version-specific suites in `supabase/tests/legacy/` and each top-level `supabase/tests/NNNN_*` suite run at the version their fixtures need, then every fix, the current suites and the final-schema assertions |
 | Supported upgrade | Schema through `0024` | Synthetic application/team/roles, findings, conversations/events/attachments, remediation tickets including `fix_submitted`, selected controls and completed/incomplete steps, and a historical reassessment; then `0025` onward, every fix, the `0032` move of `fix_submitted` to `in_progress`, and preservation/final-schema assertions |
 | Schema equivalence | Fresh and legacy results | `pg_dump --schema-only` of both must match once the archived objects are dropped from the legacy copy |
+| Degraded grant compatibility | Bootstrap only | Legacy `0028` applied to a database that has none of the workflow RPCs, proving its grant corrections skip functions that are absent |
 
 `0024` is the single supported historical test baseline because `0025`–`0027`
 are the documented classification, reassessment, and attachment compatibility
@@ -93,38 +95,6 @@ backfills, and irreversible data changes. Production rollback therefore means
 a reviewed forward correction or a tested restore plan, not assuming every
 fix can be run backward.
 
-## Pending fixes
-
-The notes below describe the files currently in `supabase/fixes/`. Apply each to
-every live project.
-
-### Restoring ticket guards (0035)
-
-`0030` replaced `enforce_ticket_update_permissions()` with `create or replace`
-to recognise the reassessment reconciler, and the new body left out three guards
-that `0026` still had. `0032` and the baseline inherited the gap. From `0030`
-onwards a developer with access to the application could, through the REST API,
-change a ticket's `type`, `finding_id`, `application_id`, `created_by`,
-`assigned_user_id` or `assigned_team_id`, set `closed_at` outside a withdrawal,
-and edit `withdrawn_at`, `withdrawn_by` or `withdrawal_reason` after the fact.
-The dashboard never makes those writes, so nothing failed; only the legacy
-`0017` and `0018` suites asserted the guards, and they run before `0030`.
-
-Fix `0035_restore_ticket_ownership_guards.sql` redefines the function with
-the guards restored for callers holding neither `security` nor `admin`:
-
-- withdrawal details are written only by the withdrawing update, which must
-  also record `withdrawn_at`;
-- only security sets or clears `closed_at`;
-- the ownership fields above cannot change.
-
-The reconciler and reassessment-withdrawal paths return before these checks and
-are unaffected, as are the service-role workers. The fix changes no rows and
-needs no frontend change, so it can be applied at any time.
-`supabase/tests/0035_restore_ticket_ownership_guards_rls.sql` and
-`final_schema_assert.sql` cover it. When it is folded, the baseline's
-`0002_functions.sql` must carry the same function body.
-
 ## Re-baselining
 
 Fold fixes into the baseline only when every live project has applied them.
@@ -144,6 +114,41 @@ Fold fixes into the baseline only when every live project has applied them.
 
 The notes below describe the rollout of migrations in
 `supabase/legacy-migrations/`. Every live project has applied them.
+
+### Restoring ticket guards (0035)
+
+`0030` replaced `enforce_ticket_update_permissions()` with `create or replace`
+to recognise the reassessment reconciler, and the new body left out three guards
+that `0026` still had. `0032` and the baseline inherited the gap until `0035`. From `0030`
+onwards a developer with access to the application could, through the REST API,
+change a ticket's `type`, `finding_id`, `application_id`, `created_by`,
+`assigned_user_id` or `assigned_team_id`, set `closed_at` outside a withdrawal,
+and edit `withdrawn_at`, `withdrawn_by` or `withdrawal_reason` after the fact.
+The dashboard never makes those writes, so nothing failed; only the legacy
+`0017` and `0018` suites asserted the guards, and they run before `0030`.
+
+Migration `0035_restore_ticket_ownership_guards.sql` redefines the function
+with
+the guards restored for callers holding neither `security` nor `admin`:
+
+- withdrawal details are written only by the withdrawing update, which must
+  also record `withdrawn_at`;
+- only security sets or clears `closed_at`;
+- the ownership fields above cannot change.
+
+The reconciler and reassessment-withdrawal paths return before these checks and
+are unaffected, as are the service-role workers. The migration changes no rows
+and needs no frontend change, so it could be applied at any time. The baseline's
+`0002_functions.sql` carries the same function body.
+`supabase/tests/0035_restore_ticket_ownership_guards_rls.sql` and
+`final_schema_assert.sql` cover it.
+
+### Internal reassessment reconciliation (0034)
+
+Migration `0034_reconcile_reassessment_internal_only.sql` revokes execution of
+`reconcile_reassessment_ticket_state()` from `authenticated`. Only the
+reassessment RPCs, which run as the owner, and `service_role` call it, so a
+signed-in client can no longer rewrite or read a ticket's status through it.
 
 ### Retiring `fix_submitted` (0032)
 
@@ -166,7 +171,9 @@ status. It:
 
 Conversation entries of kind `fix_submitted` are kept, and the kind stays legal,
 because they are the audit trail of what happened, as are `activity_log` rows
-whose free-text action is `fix_submitted`. The frontend keeps labels for both.
+whose free-text action is `fix_submitted`. The frontend keeps a label only for
+the conversation entry (`src/domain/status-labels.ts`); it never reads
+`activity_log` labels.
 
 Migration `0033_dashboard_metrics_without_fix_submitted.sql` then drops the
 always-zero `fix_submitted` key from `dashboard_metrics()`'s `ticketCounts`.
@@ -180,6 +187,15 @@ handling. That frontend cannot edit, withdraw or reassess a ticket still in
 missing. A frontend that predates the removal works unchanged against `0032`.
 The status rewrite is not reversible from the activity rows alone; roll forward
 if it needs correcting.
+
+### Reassessment without a remediation (0031)
+
+Migration `0031_reassessment_without_remediation.sql` replaces
+`enforce_retest_request_permissions()` so a developer may request a reassessment
+from the risk conversation alone, with no remediation ticket. A request that
+names a ticket must still name a remediation ticket opened against this risk;
+remediation state, a selected approach and progress are no longer conditions.
+`withdraw_reassessment()` restores a ticket only when the request has one.
 
 ### Reassessment queue (0030)
 

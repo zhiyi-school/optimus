@@ -172,7 +172,8 @@ src/
 │   ├── queries/           # TanStack Query hooks grouped by assessment, automation,
 │   │                      # control progress, conversation, evidence, playbook,
 │   │                      # reference, risk acceptance, and ticket
-│   │   └── keys.ts        # Exact entity and prefix key factories
+│   │   ├── keys.ts        # Exact entity and prefix key factories
+│   │   └── invalidation-rules.ts # Shared invalidation groups
 │   ├── conversation/      # composer, record-then-attach submission, attachment download
 │   ├── remediation/       # ensure-remediation, readiness, reconciliation
 │   └── risk-workspace-data.ts
@@ -211,9 +212,10 @@ invoke that explicitly disposable workflow.
 Query implementations and consumers import domain modules directly. Repeated
 invalidation groups live beside their domain hooks in
 `hooks/queries/invalidation-rules.ts` and retain narrow prefix-versus-entity
-semantics. Ticket action modules own their controls directly; the test page
-claims a queued reassessment before starting its run through
-`workflows/automation-run.ts`.
+semantics. Two pages still call a database module directly rather than a
+hook: the test page claims a queued reassessment through `database/retests.ts`
+before starting its run through `workflows/automation-run.ts`, and the new
+assessment page queues the assessment's run through `database/assessments.ts`.
 
 Conversation persistence belongs to `database/conversations.ts`.
 Attachment byte and metadata stages belong to
@@ -231,9 +233,9 @@ without copying parser rules or the external playbook into application code.
 
 Remediation availability is calculated once in
 `domain/remediation/workflow.ts`. The pure calculator returns reason codes and a
-separate module owns their text. `remediation-readiness.ts` owns the queries
-that feed it, `remediation-reconciliation.ts` persists the selection and
-progress it plans, and `hooks/conversation/submission.ts` owns the record-then-attach
+separate module owns their text. `hooks/remediation/readiness.ts` owns the
+queries that feed it, `hooks/remediation/reconciliation.ts` persists the
+selection and progress it plans, and `hooks/conversation/submission.ts` owns the record-then-attach
 state machine.
 
 Both roles' feature-risk workspaces, `TestDetail` and `ResolveRisk`, load the
@@ -262,12 +264,14 @@ outside this repository.
 ## Routes
 
 ```text
+/login                                                  Sign in
 /                                                       Dashboard
 /assessments                                            Assessments
 /assessments/new                                         New assessment (Security Team)
-/assessments/:assessmentId                               Assessment details + tests
+/assessments/:assessmentId                               Redirects to the list row, or to the preferred test once completed
 /assessments/:assessmentId/tests/:testId                 Test workspace + run history
 /assessments/:assessmentId/tests/:testId/runs/:runId     One run's detail, scoped to a single test
+/assessments/:assessmentId/tests/:testId/manual          Manual testing steps from the playbook
 /runs/:runTimestamp                                      One backend run's progress + full result summary
 /resolve                                                 Developer workspace: applications in the team's scope
 /resolve/applications/:applicationId                     One application's remediation progress
@@ -275,6 +279,7 @@ outside this repository.
 /resolve/applications/:applicationId/risks/:riskId       One feature-risk: conversation, evidence, remediation
 /resolve/tickets/:ticketId/controls/:controlId           One control's ordered steps, writable
 /settings                                                Profile + automation defaults
+/learn                                                   Learning resources (placeholder), every role
 /admin                                                   Teams, users, roles, applications (admin role only)
 ```
 
@@ -303,28 +308,30 @@ ticked is decided separately by `update_control_progress`. A preview reads no
 progress rows and creates none.
 
 `/assessments/new` (Security Team only) registers the app with **both**
-systems: an `applications` row plus a placeholder ("Not Started")
-`assessments` row and an `app_provisioning` ticket in Supabase, and an entry
-in the automation backend's `configs/<platform>.yaml` so runs can actually
-target it. See
-[AUTOMATION_API.md](./automation-api.md#app-provisioning) for that exchange
-and [DATABASE.md](./data-model.md#manual-assessment-creation) for how it
+systems: an `applications` row and a `queued` `assessments` row in Supabase,
+plus an `app_provisioning` ticket when the backend reports that the app is
+not ready yet, and an entry in the automation backend's
+`configs/<platform>.yaml` so runs can actually target it. The page then
+requests the assessment's run with `request_assessment_run`, which the
+backend's assessment worker claims. See
+[automation-api.md](./automation-api.md#app-provisioning) for that exchange
+and [data-model.md](./data-model.md#manual-assessment-creation) for how it
 interacts with automation sync.
 
-On submit it navigates to the new assessment's own page rather than back to
-the list, because **assessment creation is the only point in the flow with a
-real wait**: the app has to be provisioned before anything can run against
-it. `AssessmentDetail` polls
-`GET /config/{platform}/apps/{app_id}/provisioning` while that's pending and
-renders the backend's own stage list, falling back to the
-`app_provisioning` ticket's state when the backend isn't tracking the app.
+On submit it returns to the assessments list. An assessment that has not
+completed has no page of its own yet: `/assessments/:assessmentId` redirects
+to the list with that row expanded (`?expanded=`), and once the assessment
+completes it redirects to the preferred risk's test page. The expanded row's
+`AssessmentStatusPanel` (`src/components/assessment/assessment-progress.tsx`)
+shows the run request's state and, while that is unsettled, polls
+`GET /config/{platform}/apps/{app_id}/provisioning` to render the backend's own
+stage list through `EnvironmentSetupStages`, falling back to the
+`app_provisioning` ticket's state when the backend has no readiness endpoint.
 
 By the time a user is inside a specific test, setup is already done, so
 "Run automated test" on `/assessments/:id/tests/:testId` starts executing
 immediately — it shows only execution/reporting progress
-(`TestRunStages`), never the environment-setup stages
-(`EnvironmentSetupStages`). Both live in
-`src/components/assessment/assessment-progress.tsx`.
+(`TestRunStages`), never the environment-setup stages.
 
 The two run-detail routes answer different questions. A backend run can
 cover many apps and risks at once (e.g. "run every configured iOS app"),
@@ -333,15 +340,7 @@ one summary row per (app, risk) tested, sourced straight from the backend
 via `useRunStatus`, `useRunEvents`, and `useRunResults` regardless of whether
 anything has synced into Supabase yet. `/assessments/:id/tests/:testId(/runs/:runId)` is scoped the
 other way — one risk's whole story on one application, which is why it fans out
-across `GET /reports` (see [AUTOMATION_API.md](./automation-api.md)) instead of
+across `GET /reports` (see [automation-api.md](./automation-api.md)) instead of
 reading a single run. Those runs are merged with the risk's stored conversation
 entries into one timeline, so every assessment of the application contributes to
 the same page; `:runId` highlights one of them.
-
-## Spelling and compatibility identifiers
-
-Human-facing prose uses the spelling “artifact”. Existing wire, database and
-configuration identifiers retain `artifact` where it is part of a compatibility
-contract, such as the provisioning request field, `/artifacts` route and
-`artifact_sha256` column. Those names change only through a coordinated,
-versioned frontend/backend or database migration.

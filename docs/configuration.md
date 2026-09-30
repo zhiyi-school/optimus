@@ -1,7 +1,7 @@
 # Configuration
 
 Environment variables (`VITE_API_BASE_URL`, `VITE_SUPABASE_URL`, etc.) are
-covered in [DEPLOYMENT.md](./deployment.md#environment-variables). This
+covered in [deployment.md](./deployment.md#environment-variables). This
 doc covers everything else that's configurable but isn't an env var —
 ports, hosts, timeouts, and other constants that live directly in source.
 
@@ -74,9 +74,12 @@ is allowed to run (see below).
 
 ## Run polling (start → watch)
 
-`src/workflows/automation-run.ts`'s `runAndWait` — the shared logic behind every "Run
-Automated Test" / "Run Retest" action — polls the backend for run status
-rather than waiting on a single long request:
+`src/workflows/automation-run.ts`'s `runAndWait` — behind the single-risk "Run
+Automated Test" / "Run Again" button on `src/pages/assess/test-detail.tsx`, its
+only caller — polls the backend for run status rather than waiting on a single
+long request. Whole-assessment runs don't use it; they go through the
+assessment run queue (see
+[automation-api.md](./automation-api.md#starting-tests)).
 
 ```ts
 const RUN_POLL_INTERVAL_MS = 3000;   // poll every 3s
@@ -92,7 +95,7 @@ and the dashboard sync worker records its result. Reopening the page picks the
 run back up: `useActiveRun` finds it again in `GET /runs` by the app and risk it
 covers. There is no `POST /runs/{id}/cancel` endpoint in this phase.
 
-Every "Running…" button also has a **Stop waiting** action next to it
+The "Running…" button also has a **Stop waiting** action next to it
 (`RunCancelToken` in `src/workflows/automation-run.ts`) — it stops the dashboard's
 polling loop early without pretending to cancel anything on the backend (there's
 no cancel-a-run endpoint), so it's purely a way to get the UI back under
@@ -109,13 +112,38 @@ backend-side lock.
 
 ## Live progress elsewhere
 
+- **Assessment run request**: `useAssessmentRunRequest`
+  (`src/hooks/queries/assessments.ts`) re-reads the assessment's queued run
+  request every 10 seconds (`RUN_REQUEST_POLL_INTERVAL_MS = 10_000`) while it or
+  the assessment is transitional, and stops once both settle.
+- **App provisioning**: `useAppProvisioning` (`src/hooks/queries/automation.ts`)
+  polls the provisioning endpoint every 30 seconds
+  (`PROVISIONING_POLL_INTERVAL_MS = 30_000`) while the assessment's run is
+  unsettled.
 - **In-flight run discovery**: `useActiveRun` (`src/hooks/queries/automation.ts`) polls
-  `GET /runs` every 5 seconds so a page that was closed mid-run can pick the run
-  back up. It does not synchronise anything — the automation host's worker is
-  the only writer of dashboard rows.
-- **Focused run views**: use `GET /runs/{run_id}/events` via `EventSource`
-  for live progress while the page is open, and keep their normal `GET /runs`
-  polling active as the fallback if the stream is unavailable or drops.
+  `GET /runs` every 5 seconds (`ACTIVE_RUN_POLL_INTERVAL_MS = 5000`) so a page
+  that was closed mid-run can pick the run back up. It does not synchronise
+  anything — the automation host's worker is the only writer of dashboard rows.
+- **Run detail**: `useRunStatus` polls `GET /runs/{run_id}` every 2 seconds
+  while the run is `running`, when its caller asks it to poll (the
+  `/runs/:runTimestamp` page does).
+- **Live run events**: the run detail page and the test page open
+  `GET /runs/{run_id}/events` via `EventSource` for live progress while a run is
+  active. The run detail page keeps its `GET /runs/{run_id}` polling as the
+  fallback if the stream is unavailable or drops; the test page keeps
+  `runAndWait`'s `GET /runs/{run_id}` polling and `useActiveRun`'s `GET /runs`.
+- **Dashboard sync status**: `useRunSyncStatus` polls
+  `GET /runs/{run_id}/sync-status` every 4 seconds
+  (`SYNC_STATUS_POLL_INTERVAL_MS = 4000` in `src/domain/run/dashboard-sync.ts`)
+  while the sync is `queued` or `running`. While the backend has no record yet
+  it stops after `SYNC_STATUS_POLL_MAX_ATTEMPTS` (15) attempts, so a backend
+  without the endpoint isn't polled forever.
+- **Playbook revision**: `src/hooks/queries/playbook.ts` polls the playbook
+  status every 45 seconds (`PLAYBOOK_POLL_INTERVAL_MS = 45_000`) while enabled;
+  its control queries use a 5-minute stale time.
+- **Reference data and analysis**: profiles, teams and applications
+  (`src/hooks/queries/reference.ts`) and a run's analysis document
+  (`useIpaAnalysis`) are not polled and stay fresh for 5 minutes.
 - **Risk conversations**: not polled — pushed instantly via the scoped Supabase
   Realtime subscription in `src/database/conversations.ts`.
 

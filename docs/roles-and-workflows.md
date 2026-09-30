@@ -39,7 +39,7 @@ never authorization.
 Supabase Auth (email/password) plus a `profiles` table for
 application-specific data (`display_name`, `roles`, `team_id`,
 `is_active`). `profiles.id` is the Supabase Auth user id. See
-[SUPABASE_SETUP.md](./setup.md#role-assignment) for how initial
+[setup](./setup.md#role-assignment) for how initial
 roles are assigned, and the [Admin page](./data-model.md#admin-page-teams-users-applications-roles)
 for how roles get managed day-to-day.
 
@@ -54,15 +54,16 @@ AuthProvider loads the profile: roles + team_id
         ↓
 defaultRouteFor(profile) picks the landing route
         ↓
-developer-only account  → /resolve
-anything holding a security or admin capability → /
+holds `developer`, whatever else it holds → /resolve
+everyone else                           → /
 ```
 
 `defaultRouteFor()` and `resolveAccess()` in `src/auth/permissions.ts` are pure
 functions over the profile, so the routing rules are unit-tested rather than
-inferred from component behaviour. Neither reads `primaryRole()` — a user who
-holds both `developer` and `security` keeps every security route *and* the
-Resolve workspace.
+inferred from component behaviour. Neither reads `primaryRole()`. A user who
+holds both `developer` and `security` lands on `/resolve`, and still keeps every
+security route *and* the Resolve workspace; `RoleHome` in `src/app.tsx` renders
+the dashboard at `/` only for profiles that land there.
 
 ### Developer account requirements
 
@@ -165,26 +166,37 @@ re-reading; the old version is never stored and never shown.
 
 ### Reading a control before committing to it
 
-A control can be read in full without a ticket. A finding page lists every
-control the playbook links to the risk — title, summary, whether it is required,
-how many steps, and whether the playbook marks it `active`, `deprecated` or
-`deprioritized` — and each one opens a **preview**: the complete instructions,
-screenshots, references and implementation example, with nothing writable.
+A control can be read in full without a ticket. The remediation approaches for a
+risk are its **active, required** controls (`isRemediationControl()` in
+`src/domain/remediation/resolve-rules.ts`). The risk page's remediation section
+shows only the selected approach — the stored choice, or the first candidate
+until one is stored. When there is more than one candidate, **View other
+approaches** lists every candidate with its title, summary, step count and a
+**Preview** link, and offers **Use this approach** on the ones not selected. The
+**Exposed plaintext literals** card also links each item's control to the
+preview. The preview shows the complete instructions, screenshots, references
+and implementation example, with nothing writable, together with the playbook's
+`active`, `deprecated` or `deprioritized` status and whether the control is a
+remediation approach.
 
 The current read-only preview is
 `/resolve/findings/:findingId/controls/:controlId`.
 
 Preview mode creates no `ticket_controls` or `ticket_control_steps` rows.
-Steps cannot be ticked, notes cannot be added, and no fix or reassessment can be
-submitted. The developer decides whether to start remediation only after
-reading; stopping at the preview leaves no trace.
+Steps cannot be ticked, notes cannot be added, and no reassessment can be
+requested from it. The developer decides whether to start remediation only
+after reading; stopping at the preview leaves no trace.
 
-The same page is what a security or CIO account sees, because it is guarded by
-`view_findings` rather than developer access. Whether progress can be recorded
-is decided separately, by `update_control_progress`.
+The preview sits inside `ResolveGuard`, like every `/resolve` route, so it needs
+developer access rather than `view_findings`. The Assess test page's plaintext
+literals card links there too; a reader without developer access who follows
+that link sees "You do not have developer access". Whether progress can be
+recorded is decided separately, by `update_control_progress`.
 
-Every control card — in the preview list and on a ticket — is a single link
-covering the whole card, so a click anywhere on it opens the control.
+The selected approach's card covers the whole card, so a click anywhere on it
+opens the control. Once a remediation ticket exists it is a link to the writable
+control page. Before one exists it is a button: clicking it creates a
+remediation ticket with that approach selected, then opens the writable page.
 
 ## The conversation
 
@@ -256,16 +268,17 @@ holding `security` alongside any other role is still security for this purpose.
 The Resolve workspace has never shown the card.
 
 Everything else links or redirects to the conversation rather than repeating
-it. Legacy finding and ticket URLs resolve into the assessment or Resolve risk
-workspace; there are no standalone detail pages with separate composers. A ticket records the
+it. There are no standalone finding or ticket detail pages with separate
+composers, and legacy finding and ticket URLs are no longer routed: like any
+unknown path, the catch-all route redirects them to `/`. A ticket records the
 conversation *and* the assessment it was opened against, and keeps both for
 good, so a later run that moves the finding's own assessment reference on cannot
 send the ticket somewhere else.
 
 | Who | May |
 |---|---|
-| Security | read, post, change the classification, run a test or retest |
-| Developer | read and post on their own team's applications, request a reassessment when their remediation ticket is eligible |
+| Security | read, post, change the classification; tests and reassessments are run from the risk's Assess test page, not from the conversation |
+| Developer | read and post on their own team's applications, request a reassessment once the risk has a result |
 | CIO | read |
 
 A developer reaches the risk page for an application their team owns without
@@ -274,11 +287,12 @@ and RLS still decides what is visible, so an assessment outside their scope
 comes back empty and the page says so. Reading a conversation grants nothing
 else - a developer never gets test execution or classification.
 
-Requesting a reassessment is gated on the remediation workflow, and not only in
-the UI: `enforce_retest_request_permissions` requires a non-security caller to
-name an eligible remediation with an approach selected, and refuses a ticket
-raised against a different risk. A developer with no eligible ticket can still
-post a message and ask a question.
+Requesting a reassessment is not gated on the remediation workflow. A developer
+holding `request_retest` may ask from the conversation once the risk has a
+result; no ticket, approach or progress is required. If the request is linked to
+a ticket, `enforce_retest_request_permissions` requires it to be a remediation
+ticket opened against this risk, and a linked remediation ticket is reconciled
+to `retest_requested`.
 
 **Several requests may be outstanding at once.** Each intentional Send creates
 its own request, even while an earlier one is queued or running, and each gets
@@ -295,12 +309,8 @@ that submission identity.
 reassessment with none, some or all of the approach's steps marked complete, and
 whether progress rows exist or have finished reconciling makes no difference to
 eligibility. Ticking steps records the developer's own tracking; security still
-runs the reassessment and decides the classification from its result. Migration
-`0029` removed the progress-row, non-zero-step and completion checks from the
-trigger while keeping every other condition. A dashboard offering a request on
-incomplete progress against a database still on `0028` or earlier is refused by
-that older trigger with "complete every step of the selected remediation
-approach first", so `0029` must be applied before that frontend is deployed.
+runs the reassessment and decides the classification from its result. The
+trigger checks neither progress nor a selected approach.
 
 Both actions live inside the conversation composer rather than as buttons above
 the thread, and both are *additions* to an ordinary message rather than a
@@ -328,8 +338,10 @@ the browser to search for it, which would race a concurrent classification of
 the same risk.
 
 Submission has one coordinator for messages, classifications and reassessment
-requests. Its state is `idle → recording → attaching → complete`. A failure in
-`recording` preserves the draft and may retry the workflow operation. Once
+requests. Its state is `idle → recording → attaching → complete`, and
+`attaching` moves to `attachment_failed` when the file cannot be stored. A
+failure in `recording` returns to `idle`, preserves the draft and may retry the
+workflow operation. Once
 recording succeeds, the coordinator retains the exact conversation, entry id,
 action, message, file object and storage key. A later attachment failure cannot
 repeat the workflow operation: the composer is locked to **Retry file** or the
@@ -368,20 +380,26 @@ classification with no reason, or a send already in flight all do nothing. An
 input method's Enter, which accepts a candidate rather than finishing a
 sentence, never sends.
 
-**Run Retest** acts immediately and so stays outside the composer.
+Security does not run a reassessment from the conversation. For a reader with
+`run_test`, the conversation lists the outstanding requests in queue order and
+says to run the risk from its test page. There, **Run Automated Test** or **Run
+Again** claims the oldest queued request through `start_reassessment()` before
+the automated run starts.
 
-Developers no longer withdraw a reassessment from the dashboard: the control is
-gone from the conversation actions. This is a UI removal only — the
-`withdraw_reassessment()` RPC, its permissions and its `retest_withdrawn`
-history are untouched, and past withdrawal events still read in the feed.
+**Reassessment withdrawal is work in progress and is not wired into the UI.**
+The `withdraw_reassessment()` RPC (last changed by legacy fixes `0031` and
+`0032`), its permissions and `retestData.withdraw()` exist but are intentionally
+unused, so the dashboard offers no withdrawal control. Past `retest_withdrawn`
+events still read in the feed.
 
 When an action cannot be used it stays visible and says why, rather than
-disappearing: a developer with no remediation ticket is told to start one, one
-with no approach chosen is told to choose one, and one whose reassessment is
-already queued is told security has it. Security sees the same
-treatment on the classification control when no result has been published for
-the risk yet. Only one reassessment can be in flight per risk, and that is
-enforced by the database, not just by hiding the button.
+disappearing. A developer's reassessment offer is blocked only while no result
+has been published for the risk ("No result has been published for this risk
+yet, so there is nothing to reassess."); an outstanding request does not block
+another. Security sees the same treatment on the classification control when no
+result has been published for the risk yet. Any number of requests may be
+queued, but only one may be running per risk, and that is enforced by the
+database, not just by the UI.
 
 ### Classification versus severity
 
@@ -393,7 +411,7 @@ required reason. `classify_risk_entry()` writes
 the finding cannot change without the record of who changed it and why. The risk
 workspace shows that history without offering a separate classification page.
 
-The frontend requires migration `0025` for this. See the
+The frontend requires the schema through the latest fix. See the
 [compatibility matrix](./frontend-integration.md#database-and-api-compatibility).
 
 **Severity** - Critical, High, Medium, Low, Info - is test-result data and is
@@ -408,18 +426,19 @@ authority, and a later real result supersedes it.
 Developer opens an At Risk / Inconclusive finding
    → reads the risk and the controls that address it
    → opens a control and reads every remediation step (no ticket yet)
-   → "Start remediation" creates a remediation ticket
-     (never edits the finding directly)
-   → the ticket's required controls are initialised from the playbook
-   → Developer works through each control's steps, marking them complete
+   → opening the selected approach, or "Start remediation" on the preview,
+     creates a remediation ticket (never edits the finding directly)
+   → only the selected approach and its steps are initialised from the playbook
+   → Developer works through the approach's steps, marking them complete
    → in the conversation composer, Developer adds "Request reassessment"
-     (offered once an approach is selected, whatever the step progress)
-     → ticket → retest_requested
-   → in the same conversation, Security Team clicks "Run Retest"
+     (offered once the risk has a result; no ticket, approach or progress needed)
+     → a linked remediation ticket → retest_requested
+   → on the risk's Assess test page, Security Team clicks "Run Automated Test"
+     or "Run Again", which claims the oldest queued request
      → automation API runs the test
      → result synced back → finding status updated → ticket → under_review
      → the conversation records the outcome
-   → Security Team closes the ticket
+   → closing the ticket is a database-only step; the dashboard has no control
 ```
 
 Discussion, classification and reassessment all live in the conversation on
@@ -444,11 +463,11 @@ for permissions and persisted transitions.
 | Finding needs work; no active remediation | developer assigned to the application's team | Start remediation | ticket `open`, `remediation_started` event, selected approach and progress rows | capability, application scope, live approach selection | ticket/application RLS and insert policies; the database does not know which controls the playbook currently offers |
 | `open`, `in_progress`, `rejected` | owning developer | Select or replace approach | `selected_control_id` changes; old progress remains history | live active/required candidates, permission and state | `enforce_ticket_update_permissions`; it validates lifecycle and ownership, not playbook membership |
 | editable remediation with a live selected approach | owning developer | Record step progress | step row status changes | live definition matched by stable control/step keys; missing/new steps are incomplete | progress RLS and ticket access |
-| an approach selected, any step progress; earlier requests may be outstanding | owning developer | Request reassessment in the conversation | retest `queued`, ticket `retest_requested`, one `retest_requested` event | approach load/error/replacement, selection and capability checks — neither progress nor an outstanding request is consulted | `enforce_retest_request_permissions` rechecks ticket state and the selected approach; a unique index permits one *running* run per risk and deduplicates a retried submission |
-| queued reassessment | — | no dashboard withdrawal; `withdraw_reassessment()` remains available to future callers | run `cancelled`, ticket restored to its recorded prior state, `retest_withdrawn` event | RPC verifies requester, access, run and ticket state | `withdraw_reassessment()` locks and verifies requester, access, run and ticket state |
-| queued reassessment | security | Run reassessment | run `running`, ticket `retest_in_progress`, `retest_started` event | security capability and current run | `start_reassessment()` atomically claims only a queued request |
+| the risk has a result; no ticket, approach or progress needed; earlier requests may be outstanding | developer with `request_retest` on the owning team | Request reassessment in the conversation | retest `queued`, one `retest_requested` event; a linked remediation ticket reconciles to `retest_requested` | conversation and result loaded, and the capability — neither a ticket, an approach, progress nor an outstanding request is consulted | `enforce_retest_request_permissions` requires a linked ticket to be a remediation ticket opened against this risk; a unique index permits one *running* run per risk, and another deduplicates a retried submission |
+| queued reassessment | requester (work in progress, not wired into the UI) | no dashboard withdrawal; `withdraw_reassessment()` and `retestData.withdraw()` are intentionally unused | run `cancelled`, ticket restored to its recorded prior state once nothing else is outstanding, `retest_withdrawn` event | none | `withdraw_reassessment()` locks and verifies requester, reason, access, run and ticket state |
+| queued reassessment | security | **Run Automated Test** / **Run Again** on the Assess test page | oldest queued request claimed: run `running`, ticket `retest_in_progress`, `retest_started` event | security capability; the page claims the oldest queued request only when none is running | `start_reassessment()` atomically claims only the oldest queued request, one running per risk |
 | automation result arrives | sync worker / security-owned processing | Reconcile result | run completes or fails; finding/ticket/events follow the result | progress display and polling only | sync idempotency keys and server-side writes |
-| `under_review` or verification result | security | Close or request changes | ticket `closed`, or `rejected` plus conversation message | security capability | ticket update trigger/RLS reserve finalisation and security states for security |
+| `under_review` or verification result | security | Close or request changes (database only; no dashboard control) | ticket `closed`, or `rejected` plus conversation message | none; `close_ticket` and `request_changes` gate no control | ticket update trigger/RLS reserve finalisation and security states for security |
 | `open`, `in_progress`, `rejected` | owning developer | Withdraw remediation | ticket `withdrawn`, immutable reason/actor/time and event | capability and lifecycle | ticket trigger verifies type, source state, actor and reason |
 | `withdrawn` | owning developer | Resume remediation | ticket `in_progress`; progress and history retained | capability and lifecycle | ticket trigger allows only the resume transition |
 
@@ -461,21 +480,19 @@ persisted selection and progress while the frontend prevents misleading offers.
 
 ### Asking for a reassessment
 
-There is no separate fix submission. The step checklist already says whether the
-work is done, so a developer asks for a reassessment straight from an in-progress
-remediation, and the request is offered only when all of these hold:
+There is no separate fix submission. A developer holding `request_retest` asks
+for a reassessment from the conversation composer, and the request is offered
+once the risk has a result: the only block is "No result has been published for
+this risk yet, so there is nothing to reassess." (`useRiskComposer()` in
+`src/hooks/conversation/composer.ts`; `reassessmentBlockFor()` in
+`src/domain/remediation/workflow.ts` checks only the capability). No remediation
+ticket, selected approach or step progress is required, and any number of
+requests may be queued; only one may be running per risk.
 
-- a remediation ticket exists and is `open`, `in_progress` or `rejected`;
-- an approach is selected and the playbook still offers it;
-- its progress rows have been reconciled with the playbook's current steps;
-- it has at least one step, and every one of them is completed;
-- no reassessment is already queued or running;
-- the developer holds `request_retest`.
-
-Each of those has its own message when it does not hold, so the disabled control
-always says what is missing. `enforce_retest_request_permissions` re-checks the
-selected approach, its rows and their completion, so a client that skipped the
-page cannot request one early.
+When the request is linked to a ticket, `enforce_retest_request_permissions`
+requires it to be a remediation ticket opened against this risk. A linked
+remediation ticket is then reconciled to `retest_requested`, unless it is
+already `closed`, `accepted` or `withdrawn`.
 
 `fix_submitted` is retired. Migration `0032` moved every ticket in that status
 to `in_progress` and the database now rejects it; old timelines still render
@@ -485,9 +502,11 @@ The database still lets security move a remediation to `rejected` ("Changes
 requested" to the developer), but the dashboard currently has no control for
 it, nor for closing a ticket.
 
-A finding has at most one remediation ticket in flight. When one is already
-open, the finding offers **Continue remediation** instead of creating a second;
-when the last one was withdrawn, it offers **Resume remediation**.
+A finding has at most one remediation ticket in flight. On the control preview,
+`WorkOnRiskButton` offers **Continue remediation** instead of creating a second
+when one is already open, and **Resume remediation** when the last one was
+withdrawn. The risk page itself offers **Resume remediation** and **Withdraw
+remediation** in its remediation section.
 
 ### Withdrawing versus closing
 
@@ -532,7 +551,7 @@ The Resolve workspace renames every ticket status for a developer audience:
 
 | Action | Developer | Security |
 |---|---|---|
-| Create a remediation ticket | ✅ | ✅ |
+| Create a remediation ticket | ✅ | |
 | Read and post in a conversation | ✅ | ✅ |
 | Upload evidence | ✅ | ✅ |
 | Update control-step progress | ✅ | |
@@ -540,15 +559,19 @@ The Resolve workspace renames every ticket status for a developer audience:
 | Request a reassessment | ✅ | |
 | Withdraw or resume a remediation | ✅ | |
 | Run a reassessment or retest | | ✅ |
-| Request changes | | ✅ |
+| Request changes | | ✅ (database only; no dashboard control) |
 | Change a risk's classification | | ✅ |
-| Close a ticket | | ✅ |
-| Approve risk acceptance | | ✅ |
+| Close a ticket | | ✅ (database only; no dashboard control) |
+| Approve risk acceptance | | ✅ (work in progress; not wired into the UI) |
 
-Hiding a button is not authorization. Every row above is also enforced in the
-database: `findings_update`, `retest_runs_update` and `risk_acceptance_update`
-require the `security` role, and `enforce_ticket_update_permissions`
-(`0002_functions.sql`; fix `0035` restores its field guards) rejects a developer's attempt to set a ticket to
+Hiding a button is not authorization. The developer-only rows are UI capability
+rules: RLS in `0004_rls_policies.sql` also lets security create remediation
+tickets, write step progress and insert `retest_runs`, and
+`enforce_ticket_update_permissions` applies its developer guards to neither
+security nor admin. The security-only rows
+are also enforced in the database: `findings_update`, `retest_runs_update` and
+`risk_acceptance_update` require the `security` role, and `enforce_ticket_update_permissions`
+(`0002_functions.sql`; `0035` restored its field guards) rejects a developer's attempt to set a ticket to
 `closed`/`accepted`/`retest_in_progress`, to reopen one security has finalised,
 to withdraw one security is already verifying, or to change its ownership
 fields — so the generic status mutation cannot be used to skip the workflow.
@@ -570,24 +593,34 @@ Progress is reported with two formulas, both computed in `src/domain/remediation
 
 ```text
 Application finding progress   resolved findings / total actionable findings
-Control progress               completed required control steps / total required control steps
+Control progress               completed selected-approach steps / total selected-approach steps
 ```
 
 "Actionable" means `at_risk` or `reduced_risk`; `inconclusive` findings are
-excluded because they are security's call, not developer work. Only **active,
-required** controls count toward control progress — a control the playbook marks
-`deprioritized` or `deprecated` is never counted as required work and is not
-initialised onto a new ticket.
+excluded because they are security's call, not developer work. Control progress
+counts only the selected approach of each non-withdrawn remediation ticket,
+restricted to controls and steps the live playbook still has (every stored row
+counts while the backend is unreachable, rather than reporting zero);
+alternatives and abandoned approaches stay history. Starting remediation initialises only the
+selected approach and its steps (`src/hooks/remediation/ensure-remediation.ts`),
+and the approach is always an **active, required** control — one the playbook
+marks `deprioritized` or `deprecated` is never offered as one.
 
-Withdrawn tickets are excluded from every active count — required controls,
-controls in progress, fixes submitted and awaiting security — and are never
-counted as resolved. They stay visible in the application's ticket list and
-carry their own count, so the history remains readable.
+Withdrawn tickets are excluded from control progress and from the count awaiting
+reassessment (`awaitingReassessment`), and are never counted as resolved. They
+stay visible in the application's ticket list and carry their own count
+(`withdrawnTickets`), so the history remains readable.
 
 Application remediation progress is not test-execution progress. It says how far
 the developers have got, not how far security has got through running tests.
 
 ## Risk Acceptance Workflow
+
+**Work in progress, not wired into the UI.** The schema, RLS policies, data
+module, hooks and components exist, but
+`src/components/remediation/risk-acceptance.tsx` is not imported anywhere, so
+the dashboard offers no way to request or review a risk acceptance. The rest of
+this section describes the intended behavior.
 
 "Accept Risk" creates a **risk_acceptance** ticket + a `risk_acceptance`
 row — it never sets the finding to Reduced Risk directly. The Security
@@ -639,18 +672,26 @@ or having two tabs open cannot start two runs.
 ## App Provisioning Workflow
 
 ```text
-Security Team clicks "Add App" on the Assessments page
-   → registers the application + a placeholder assessment
-   → opens an app_provisioning ticket (no finding yet — none exists)
+Security Team clicks "New Assessment" on the Assessments page
+   → fills in /assessments/new and clicks "Confirm & Create Assessment"
+   → registers the app with the backend, then the application and a `queued`
+     assessment in the dashboard
+   → queues a run request (request_assessment_run), which the backend's
+     assessment worker claims
+   → only if the backend knows the app and does not report its provisioning
+     status as `ready`, opens an app_provisioning ticket (no finding yet —
+     none exists)
    → Security downloads the app onto a device (+ registers it under the
      test Apple ID, for iOS)
-   → Security closes the ticket
-   → app is ready to select in "Run Automated Test"
 ```
 
 `app_provisioning` is the one ticket type not created from a finding —
 `tickets.finding_id` is nullable specifically for it
-(`0007_app_provisioning.sql`). It's tracking only: closing the ticket
-doesn't unlock anything programmatically, since what's actually runnable
-is governed by the automation backend's own app roster
-(`GET /config/{platform}/apps`), not this dashboard's DB.
+(`supabase/migrations/0001_extensions_and_tables.sql`). The ticket is only
+opened by `addApp()` in `src/workflows/app-registration.ts`, and the dashboard
+has no control for closing it. Readiness comes from the backend's
+`GET /config/{platform}/apps/{app_id}/provisioning`; the provisioning ticket is
+only the fallback signal, used when the backend returns no provisioning state
+for the app (`src/components/assessment/assessment-progress.tsx`). What is
+actually runnable is governed by the automation backend, not this dashboard's
+database.

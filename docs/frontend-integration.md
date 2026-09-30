@@ -26,8 +26,8 @@ after implementing the [compatibility contract](#required-backend-compatibility-
 Matching endpoint *names* is not sufficient.
 
 **4. Against an existing Supabase project.** Apply this repo's migrations into
-it. The dashboard depends on specific tables, columns, an RPC and RLS policies;
-see [data-model.md](./data-model.md).
+it. The dashboard depends on specific tables, columns, workflow RPCs, triggers
+and RLS policies; see [data-model.md](./data-model.md).
 
 ## Requirements
 
@@ -57,12 +57,13 @@ npm run preview     # serve dist/ locally
 | `VITE_SUPABASE_URL` | yes | Supabase project URL |
 | `VITE_SUPABASE_ANON_KEY` | yes | Supabase **anon** key |
 | `VITE_APP_NAME` | no | display name in the UI shell |
+| `VITE_DEBUG` | no | `true` turns on debug logging in every session of that build; see [setup.md](./setup.md#debug-logging) |
 
 Every `VITE_` variable is compiled into the bundle and is **public**. The anon
 key is designed for that and is constrained by row-level security. A
 `service_role` key must never appear here, in a `VITE_` variable, in a
 committed file, or anywhere a browser can reach — it belongs solely to the
-automation host's sync worker.
+automation host's workers (dashboard sync and the assessment queue).
 
 Variables are read at build time. A change needs a dev-server restart or a
 rebuild; a Docker image must be rebuilt with new `--build-arg` values.
@@ -96,7 +97,7 @@ parentheses name the legacy migration that introduced an object:
 | Tables | `profiles`, `teams`, `applications`, `assessments`, `findings`, `finding_history`, `evidence`, `tickets`, `retest_runs`, `risk_acceptance`, `activity_log`, `ticket_controls`, `ticket_control_steps`, `risk_conversations` (one per `(application_id, risk_id)`), `risk_conversation_entries`, `risk_conversation_attachments`, `assessment_run_requests` (the durable execution queue). On projects built from the legacy chain, `assessment_messages`, `ticket_messages` and `ticket_attachments` remain as archived tables that keep their historical rows but no policy grants access to them; the baseline does not create them |
 | Team scoping | a `team_id` column on `profiles`, `developer_team_id` on `applications`, `assigned_team_id` on `tickets` — there is no join table |
 | Contacts | columns on `applications` (`owner_email`, `developer_contact_*`, `contact_emails[]`), added by `0004` and `0009` — not a separate table |
-| RPC | `dashboard_metrics()` — the overview page's fast path; the UI falls back to per-table queries if it is absent. `classify_risk()` (`0021`) is the legacy atomic classification operation; `classify_risk_entry()` (`0025`) additionally returns the conversation entry id so the same decision can own an attachment. |
+| RPC | `dashboard_metrics()` — the overview page's fast path; the UI falls back to per-table queries if it is absent. `classify_risk()` (`0021`) is the legacy atomic classification operation; `classify_risk_entry()` (`0025`) additionally returns the conversation entry id so the same decision can own an attachment. `request_reassessment_entry()` (`0030`) queues a reassessment and its conversation event; `start_reassessment()` and `withdraw_reassessment()` (`0024`) start and withdraw one |
 | Execution RPC | `request_assessment_run()` (`0023`) — **required**: creating or retrying an assessment run goes through it, and there is no client-side fallback, because it is what keeps one active request per assessment. `claim_assessment_run_request()` and `recover_expired_assessment_run_leases()` are for the worker's service role only. `reconcile_reassessment_ticket_state()` is internal to the reassessment RPCs and not callable by clients (`0034`) |
 | Migration helpers | `merge_duplicate_risk_conversations()` and `place_unlinked_ticket_conversations()` (`0021`) — exist only on legacy-chain projects, where the migration called them; the baseline does not create them and nothing in the dashboard calls them |
 | Storage | `ticket-attachments` and `evidence` buckets, both private (`0006_storage.sql`) |
@@ -110,14 +111,15 @@ relationships and the RLS rationale: [data-model.md](./data-model.md).
 
 ## Database and API compatibility
 
-This frontend requires migrations through `0032` and the backend evidence-ref
+This frontend requires the schema through the latest migration — `0035` on the
+legacy chain — plus any files in `supabase/fixes/`, and the backend evidence-ref
 API. It has no older-schema fallbacks: against an older database the affected
 requests fail with the database's own error rather than taking a legacy path.
 
 | Contract | Requires | Against an older database |
 | --- | --- | --- |
 | Classification | `classify_risk_entry` from `0025` atomically returns both finding and entry id | Without `0025`, classification fails |
-| Completed-step reassessment | `0026` present; the database verifies the selected approach has at least one step and all are completed | Without `0026`, the current UI cannot request reassessment from completed steps. The older database still accepts a historical `fix_submitted` ticket, but the current UI creates no new ticket in that state |
+| Reassessment without remediation | `0031` lets a developer request a reassessment from the risk conversation with no remediation ticket, approach or progress | Before `0031`, a request without an eligible remediation ticket is refused |
 | Attachment provider metadata | `0027` stores `storage_provider` and `size_bytes`; absent artifacts surface a download error | Without `0027`, attachment uploads fail; the uploaded bytes are discarded |
 | Workflow RPC grants | `0028` revokes anonymous workflow execution and reserves worker queue claims/recovery for `service_role` | A schema through `0027` has the functional capabilities but retains broader function grants. That state is not a supported security posture; there is no application fallback for missing `0028` |
 | Reassessment queue | `request_reassessment_entry` from `0030` queues a request and its event, deduplicated on the submission | Without `0030`, reassessment requests fail |
@@ -125,7 +127,7 @@ requests fail with the database's own error rather than taking a legacy path.
 | Ticket field guards | `0035` restores the developer-side guards on ticket ownership fields, `closed_at` and withdrawal details | Without `0035`, a developer can change those fields through the REST API. The dashboard never writes them, so nothing fails, but that state is not a supported security posture |
 | Evidence path-to-ref change | New backend returns `ref`/`size_bytes`; new frontend sends `?ref=` and uses `path` only for display/name metadata | New frontend with an old path-only backend cannot download automation evidence because no usable ref exists. Old frontend with a new backend sends `path` and receives `422` for missing `ref`. Arbitrary path downloads are intentionally not restored |
 
-Deployment order for full support is: apply migrations through `0028`, deploy
+Deployment order for full support is: apply the schema above, deploy
 the backend ref contract, then deploy the frontend. The backend/frontend cutover
 must be close together because either mixed version temporarily loses automation
 evidence downloads. Applied migrations stay applied. Rolling back only the
@@ -134,7 +136,7 @@ back only the backend removes refs expected by the frontend. Roll back the pair
 together only if the old path-based exposure is acceptable, otherwise roll
 forward. See [automation-api.md](./automation-api.md) for evidence behavior.
 
-Deploy this frontend only after every supported database has `0032`. The
+Deploy this frontend only after every supported database has that schema. The
 `fix_submitted` event label stays, because those conversation entries are
 retained. The authoritative state/action matrix is in
 [roles-and-workflows.md](./roles-and-workflows.md#authoritative-transition-matrix).
@@ -185,6 +187,7 @@ The dashboard's expectations are encoded in `src/automation-api/types.ts` and
 | `/platforms/{platform}/risks` | GET | — | array of risk definitions with `risk_id`, `name`, `description`, `tactic`, `tactic_id`, `automation_available`, `demonstration` | 200 |
 | `/config/{platform}/apps` | GET | — | array of `{id, name, bundle_id?, package_name?}` | 200 |
 | `/config/{platform}/apps` | POST | `{name, version?, bundle_id?, package_name?, artifact?, risks?}` | `{id}` | 201, 409 with `{detail:{app_id}}` on duplicate |
+| `/config/{platform}/apps/{app_id}` | DELETE | — | — | 204; used only to roll back a registration whose dashboard rows could not be saved |
 | `/config/{platform}/apps/{app_id}/provisioning` | GET | — | `{app_id, platform, bundle_id, status, stages[], error}` | 200, 404 |
 | `/config/{platform}/apps/{app_id}/icon` | GET | — | `image/png`; `ETag`/`Cache-Control` optional | 200, 404 for unknown app **and** for no icon |
 | `/runs` | GET | — | array of run records | 200 |
@@ -193,7 +196,7 @@ The dashboard's expectations are encoded in `src/automation-api/types.ts` and
 | `/runs/{run_id}/events` | GET | — | SSE, see below | 200, 404 |
 | `/runs/{run_id}/sync-status` | GET | — | sync status object | 200, 404 |
 | `/runs/{run_id}/sync` | POST | — | sync status object | 202, 409, 503 |
-| `/reports` | GET | — | array of run timestamps, newest first | 200 |
+| `/reports` | GET | `status=completed` query | array of run timestamps, newest first | 200 |
 | `/reports/{run_timestamp}/summary` | GET | — | array of result rows | 200, 404 |
 | `/reports/{run_timestamp}/evidence-file?ref=` | GET | — | the raw file, named and typed | 200; 422 missing query; 400 malformed ref; 404 missing/wrong-run artifact |
 | `/reports/{run_timestamp}/sarif` | GET | — | SARIF 2.1.0 document | 200, 404 |
@@ -244,13 +247,11 @@ Supabase-backed views on the transition into `completed`; a server that reports
 `completed` early will show stale data. `retryable` gates whether a retry button
 appears at all.
 
-**Evidence URL behaviour.** The report-file endpoint accepts a path confined to
-the named run. The evidence endpoint accepts only the API-issued opaque `ref` and
-must not restore arbitrary path lookup. It returns a download filename, media
+**Evidence URL behaviour.** The evidence endpoint accepts only the API-issued
+opaque `ref` and must not restore arbitrary path lookup. It returns a download filename, media
 type and content length; the browser must be allowed to read
 `Content-Disposition` through CORS. The dashboard builds URLs with
-`assessmentApi.evidenceFileUrl` and `reportFileUrl`; it does not proxy or rewrite
-them. A ref is an identifier, not an authorization credential.
+`assessmentApi.evidenceFileUrl`; it does not proxy or rewrite them. A ref is an identifier, not an authorization credential.
 
 **Error behaviour.** Errors should carry `{"detail": ...}` — a string, or an
 object whose `app_id` the provisioning flow reads on `409`. The client wraps
@@ -263,22 +264,23 @@ backend does not support the feature" and degrades instead of erroring.
 | Capability | Endpoints required | Consequence if absent |
 | --- | --- | --- |
 | **Basic run viewing** | `/runs`, `/runs/{run_id}`, `/reports`, `/reports/{run_timestamp}/summary` | run pages and history are empty |
-| **Starting runs** | `POST /runs`, `/platforms/{platform}/risks`, `/config/{platform}/apps` | no automation can be triggered |
-| **Application provisioning** | `POST /config/{platform}/apps`, `/config/{platform}/apps/{app_id}/provisioning`, `POST /artifacts/{platform}` | app onboarding is blocked; provisioning polls return null and the UI falls back to ticket state |
+| **Starting a full assessment** | the `request_assessment_run` RPC, plus the backend's `python -m mobile_playbook.assessment_worker` draining that queue | assessments stay queued and never run |
+| **Running a single risk** | `POST /runs`, `/platforms/{platform}/risks` | a risk cannot be run or rerun from its test page |
+| **Application provisioning** | `POST /config/{platform}/apps`, `DELETE /config/{platform}/apps/{app_id}`, `/config/{platform}/apps/{app_id}/provisioning` | app onboarding is blocked; provisioning polls return null and the UI falls back to ticket state |
 | **Report / evidence viewing** | `/reports/{run_timestamp}/evidence-file` | evidence viewers show broken links |
 | **Supabase dashboard synchronisation** | the worker plus `/runs/{run_id}/sync-status` | sync notices never appear; findings depend entirely on whatever writes Supabase |
 | **Optional: live progress** | `/runs/{run_id}/events` | polling still reports completion, without a timeline |
-| **Optional: SARIF export** | `/reports/{run_timestamp}/sarif` | the download button is hidden |
+| **Optional: SARIF export** | `/reports/{run_timestamp}/sarif` | the button still shows for completed runs; downloading reports "No SARIF export is available for this run." |
 | **Optional: retry** | `POST /runs/{run_id}/sync` | the retry button never appears |
-| **Optional: developer remediation controls** | `/platforms/{platform}/risks/{risk_id}/controls`, `/platforms/{platform}/controls/{control_id}`, `.../assets/{asset_path}`, `.../source`, `/platforms/{platform}/playbook/status` | the Resolve workspace still lists applications, findings and tickets, but every control card reports that remediation instructions are unavailable |
+| **Optional: developer remediation controls** | `/platforms/{platform}/risks/{risk_id}/controls`, `/platforms/{platform}/controls/{control_id}`, `.../assets/{asset_path}`, `.../source`, `.../source/download`, `/platforms/{platform}/playbook/status` | the Resolve workspace still lists applications, findings and tickets, but every control card reports that remediation instructions are unavailable |
 
 ## How the client is structured
 
 | Layer | Location | Role |
 | --- | --- | --- |
 | HTTP client | `src/automation-api/client.ts` | axios instance, 30s timeout, error interceptor producing `AutomationApiError` |
-| Typed services | `src/automation-api/endpoints.ts` | `testApi`, `configApi`, `provisioningApi`, `iconApi`, `assessmentApi`, `syncApi`, plus URL helpers |
-| Types | `src/automation-api/types.ts` | the response shapes above |
+| Typed services | `src/automation-api/endpoints.ts`, `src/automation-api/playbook-endpoints.ts` | `testApi`, `configApi`, `provisioningApi`, `iconApi`, `assessmentApi`, `syncApi`, `playbookApi`, plus URL helpers |
+| Types | `src/automation-api/types.ts`, `src/automation-api/playbook-types.ts` | the response shapes above, and the playbook control shapes |
 | Query hooks | `src/hooks/queries/` | Domain TanStack Query wrappers, polling intervals, cache invalidation |
 | Supabase services | `src/database/` | Domain dashboard reads and writes |
 | Pure logic | `src/workflows/automation-run.ts`, `src/domain/` | run matching, sync presentation, SARIF gating — unit-tested |
@@ -306,7 +308,8 @@ or a trusted LAN needs an authenticating proxy or VPN in front of it. See
 **Reusable with little change:**
 
 - the API client pattern — client, typed services, error normalisation
-- run polling and SSE handling, including reconnection and timeline replay
+- run polling and SSE handling, including timeline replay and the fallback to
+  polling when the stream errors
 - report and evidence URL helpers
 - the normalised run/result types
 - sync-status UI behaviour — polling that stops on terminal states, refreshing
@@ -327,6 +330,8 @@ or a trusted LAN needs an authenticating proxy or VPN in front of it. See
 ## What you still have to do yourself
 
 - create and migrate a Supabase project, and bootstrap the first admin in SQL
+- run the backend's assessment worker (`python -m mobile_playbook.assessment_worker`)
+  and dashboard-sync worker with the service-role key on the automation host
 - configure authentication and, for production, SMTP
 - attach and prepare a physical test device, install Appium and its drivers
 - write per-app YAML configuration in the backend
@@ -410,8 +415,8 @@ The full document format is in the backend's `docs/developer-playbook.md`.
   mis-wired hook or a broken loading branch would not be caught — see
   [testing.md](./testing.md#what-is-not-covered).
 - **One active remediation ticket per finding is a UI rule, not a constraint.**
-  The finding page offers "Continue remediation" instead of creating a second
-  ticket, but the database does not refuse a duplicate. A deployment that has
+  The control preview page offers "Continue remediation" instead of creating a
+  second ticket, but the database does not refuse a duplicate. A deployment that has
   confirmed it has no existing duplicates can enforce it with a partial unique
   index on `tickets (finding_id) where type = 'remediation' and status not in
   ('closed', 'accepted', 'withdrawn')`; that is not in a migration because it

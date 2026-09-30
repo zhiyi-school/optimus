@@ -34,7 +34,7 @@ actual authorization boundary.
   `tickets_update` deliberately lets a developer write to a ticket their team
   owns — which meant the generic status mutation could set `closed` and skip
   the reassessment workflow entirely. `enforce_ticket_update_permissions`
-  (`0002_functions.sql`, with the field guards restored by fix `0035`) closes
+  (`0002_functions.sql`, with the field guards restored by `0035`) closes
   that: a caller holding neither `security` nor `admin` may only move a ticket
   to `open`, `in_progress`, `retest_requested` or `withdrawn`, cannot touch
   `closed_at`, and cannot
@@ -55,7 +55,7 @@ actual authorization boundary.
   `has_role('admin')`; changing *your own* `roles` is blocked outright,
   full stop, so a single admin session can grant roles to other accounts
   but can never escalate or quietly de-escalate itself. See
-  [SUPABASE_SETUP.md](./setup.md#role-assignment) for how you
+  [setup.md](./setup.md#role-assignment) for how you
   bootstrap the first admin (direct SQL — there's no other way in, by
   design).
 - **`is_active` is looser**: any `admin` can toggle it for *any* account,
@@ -72,7 +72,7 @@ actual authorization boundary.
   applications carries through to every conversation with no separate rule to
   keep in sync.
 - **Dashboard metrics are still RLS-scoped.** `dashboard_metrics()` in
-  `0012` is granted only to authenticated users and queries the base tables
+  `0012` is not granted to `anon` and queries the base tables
   without `SECURITY DEFINER`, so each count is limited by the caller's
   existing RLS visibility.
 
@@ -120,10 +120,7 @@ events in one feed.
   `uploaded_by`, so any participant in a conversation can read the attachment
   row. The dashboard downloads Supabase-backed objects; server-backed attachment
   downloads are currently unsupported and report that limitation instead of
-  treating the key as a URL. A row with no
-  provider column at all — a database behind on this migration — is treated as
-  Supabase-backed, and an upload against such a database falls back to writing
-  only the original columns rather than failing.
+  treating the key as a URL.
 - **Who may write what is decided by `kind`.** `classification_changed`,
   `retest_started`, `retest_completed` and `retest_failed` require
   `has_role('security')`; `message`, `retest_requested`, `remediation_started`,
@@ -154,9 +151,10 @@ events in one feed.
   trigger refuses to repoint it even for security.
 - **A retest belongs to the conversation, and optionally to a ticket.**
   `retest_runs.conversation_id` was added and `ticket_id` made nullable, with
-  `check (conversation_id is not null or ticket_id is not null)`. Security can
-  run a retest with no remediation behind it; a ticket-originated request keeps
-  its ticket so the linked remediation still transitions.
+  `check (conversation_id is not null or ticket_id is not null)`. Since `0031`
+  anyone who may request one can do so with no remediation behind it; a
+  ticket-originated request keeps its ticket so the linked remediation still
+  transitions.
 - **Several requests may be outstanding; only one runs.** `0021`'s partial
   unique index over `('queued', 'running')` was replaced by `0030` with
   `retest_runs (conversation_id) where status = 'running'`, so requests queue
@@ -167,17 +165,18 @@ events in one feed.
   resolve to the request it already created. Scoping the index to the requester
   means one developer's identifier can never reach another's request. The column
   is null on rows created before `0030`.
-- **Opening a conversation is not a way around the remediation workflow.**
-  `enforce_retest_request_permissions` requires a caller without
-  `has_role('security')` to name a remediation ticket in `open`, `in_progress`,
-  `rejected`, or — since `0030` — a state an
-  outstanding reassessment has already left it in (`retest_requested`,
-  `retest_in_progress`, `under_review`). `0029` removed the step-completion
-  requirement. It refuses anyone a ticket raised against a different risk. A
-  developer with no eligible ticket can still post a message and ask a question;
-  they cannot create a retest run.
-- **Legacy message tables are archived, not dropped.** `assessment_messages`,
-  `ticket_messages` and `ticket_attachments` keep their rows, but every policy
+- **A reassessment request needs a risk, not a remediation.** Since `0031`,
+  `enforce_retest_request_permissions` and the `retest_runs_insert` policy let
+  a developer with access ask from the risk conversation alone. A request that
+  does name a ticket must name a remediation ticket opened against this risk;
+  the trigger refuses anyone a ticket raised against a different risk.
+  Remediation state, the selected approach and step progress are not
+  conditions. `previous_ticket_status` is recorded only when the ticket is in
+  `open`, `in_progress` or `rejected`, so withdrawing the last outstanding
+  request restores a meaningful state.
+- **Legacy message tables are archived, not dropped.** On projects built from
+  the legacy chain, `assessment_messages`, `ticket_messages` and
+  `ticket_attachments` keep their rows, but every policy
   on them is dropped, so nothing in the dashboard can read or add to them.
   Destructive removal waits for an agreed retention period and explicit
   approval.
@@ -201,8 +200,9 @@ events in one feed.
 
 `supabase/tests/legacy/0020_risk_conversations_rls.sql` covers the model and its
 policies; `supabase/tests/legacy/0021_application_risk_conversations_rls.sql` covers
-the identity, the merge and the historical placement. Both run against a live
-database, own fixtures and all, ending in `rollback`.
+the identity, the merge and the historical placement. Both run only in the
+disposable container started by `npm run test:database`, own fixtures and all,
+ending in `rollback`.
 
 ## Assessment execution
 
@@ -252,7 +252,8 @@ and the backend worker in `mobile_playbook/assessment_worker.py` drains it.
   That is treated as a retryable blocker.
 
 `supabase/tests/0023_assessment_run_requests_rls.sql` exercises all of this
-against a live database, own fixtures and all, ending in `rollback`.
+in the disposable container started by `npm run test:database`, own fixtures
+and all, ending in `rollback`.
 
 ## Developer remediation progress
 
@@ -276,14 +277,16 @@ through a finding's remediation. They hold **workflow state only**.
   reordering (both), which is what lets progress stay attached to the right
   instruction. See
   [the backend's playbook guide](../../playbook/mobile_playbook_automation/docs/developer-playbook.md).
-- **Reconciliation only adds.** Opening a ticket inserts a row for any control or
-  step the playbook lists that the ticket does not yet have. Nothing is updated
+- **Reconciliation only adds, and only for the selected approach.** Opening a
+  ticket inserts a row for the approach named by `tickets.selected_control_id`
+  and for that approach's current steps, when the ticket does not yet have
+  them; other controls get no rows until they are selected. Nothing is updated
   and nothing is deleted, so a step removed from the playbook keeps its history —
   it simply stops being rendered and stops counting toward completion.
   `unique (ticket_id, control_id)` and `unique (ticket_control_id, step_key)` back
   an `upsert … ignoreDuplicates`, so reconciling repeatedly creates each row at
   most once.
-- **Only active, required controls are reconciled.** A `deprioritized` or
+- **Only an active, required control can be the selected approach.** A `deprioritized` or
   `deprecated` control is never counted as required developer work.
 - **Progress cannot be deleted.** Both tables have `select`, `insert` and
   `update` policies and no `delete` policy, and RLS denies whatever a policy does
@@ -296,10 +299,10 @@ through a finding's remediation. They hold **workflow state only**.
   `completed_by is null or completed_by = auth.uid()`, so the audit trail cannot
   name someone else.
 
-`supabase/tests/legacy/0017_ticket_controls_rls.sql` exercises all of this against a
-live database. It builds its own fixtures, impersonates each role, and ends in
-`rollback`. Run it only against a disposable local/test database, never a live
-project.
+`supabase/tests/legacy/0017_ticket_controls_rls.sql` exercises all of this in
+the disposable container started by `npm run test:database`. It builds its own
+fixtures, impersonates each role, and ends in `rollback`. Never run it against a
+live project.
 
 ## Developer withdrawal
 
@@ -320,8 +323,9 @@ A developer who decides not to continue needs a way out that is not `closed`.
 - **A withdrawal must be complete and honest.** The trigger requires a non-empty
   `withdrawal_reason`, requires `withdrawn_at`, and requires `withdrawn_by` to be
   the caller — a developer cannot record someone else as the one who stopped.
-- **Withdrawal details are written once.** After the withdrawing update they
-  cannot be edited, so the record of why work stopped survives a later resume.
+- **Withdrawal details are written once.** After the withdrawing update a
+  caller holding neither `security` nor `admin` cannot edit them (restored by
+  `0035`), so the record of why work stopped survives a later resume.
 - **Resuming is the only way back, and only to `in_progress`.** A withdrawn
   ticket keeps its risk conversation, evidence, control progress, activity,
   creator, application and finding; resuming changes the status and nothing
@@ -346,10 +350,10 @@ in `0006_multi_role_admin.sql`) — before `0005`, only a user's own profile
 row could be updated (`profiles_update_self`), so there was no way to
 change *another* user's team or roles from the app at all.
 
-Note that `applications` writes (used both by the Admin page and by
-automation sync) stay open to `security` **or** `admin` — sync needs to
-run under a Security Team session, unrelated to who manages the Admin
-page.
+Note that dashboard writes to `applications` (the Admin page and the
+app-add flow) stay open to `security` **or** `admin` (`0004_rls_policies.sql`).
+Automation sync does not use them: the backend's sync worker holds the
+service-role key, which RLS does not restrict.
 
 ## New user -> profile
 
@@ -362,7 +366,8 @@ roles itself.
 ## Storage path conventions
 
 Both buckets are private; the frontend reads files via short-lived signed
-URLs (`src/database/conversation-attachments.ts`), never public URLs. The storage RLS policies
+URLs generated on demand (`src/database/conversation-attachments.ts`,
+`src/database/evidence.ts`), never public URLs. The storage RLS policies
 in `0006_storage.sql` parse access from the object path, so upload code and
 policy must agree on these conventions:
 
@@ -423,7 +428,7 @@ that never writes icon references works fine with the columns present and null.
 
 ## Idempotent sync
 
-See [AUTOMATION_API.md](./automation-api.md#idempotent-sync) for how
+See [automation-api.md](./automation-api.md#idempotent-sync) for how
 the backend's dashboard sync worker uses `applications.external_id` and
 `findings.external_id` to keep re-syncing the same automation run
 duplicate-free.
@@ -433,22 +438,24 @@ duplicate-free.
 The original spec for this dashboard explicitly forbade assessment
 creation from the frontend — assessments were meant to exist only as a
 byproduct of automation runs. That was deliberately overridden: Security
-Team can now add an app directly via "Add App" (`addApp` in `src/workflows/app-registration.ts`,
-`src/pages/assess/assessments.tsx`).
+Team can now add an app directly via "New Assessment" (`addApp` in
+`src/workflows/app-registration.ts`, called from
+`src/pages/assess/new-assessment.tsx`).
 
 This inserts an `applications` row (`0004_application_contacts.sql` adds
 `app_type`/`owner_name`/`owner_email`/`developer_contact_name`/
 `developer_contact_email` for this) and a placeholder `assessments` row
 with `status = 'queued'` (displayed as "Not Started") and `total_tests` set
-from the platform's risk catalogue. It also opens an `app_provisioning`
+from the platform's risk catalogue. When the backend does not report the app's
+provisioning as ready, it also opens an `app_provisioning`
 ticket for Security to track downloading the app onto a device (and
 registering it under the test Apple ID, for iOS) — see
-[ROLES_AND_WORKFLOWS.md](./roles-and-workflows.md#app-provisioning-workflow).
+[roles-and-workflows.md](./roles-and-workflows.md#app-provisioning-workflow).
 
 Crucially, the app is **also registered with the automation backend** in the
 same operation, and the backend app id it returns is stored as
 `external_id` right away — see
-[AUTOMATION_API.md](./automation-api.md#app-provisioning). That's what lets a
+[automation-api.md](./automation-api.md#app-provisioning). That's what lets a
 later automation run for the same app merge into this row.
 
 Historically it did not: `external_id` was left null, the sync worker matches
@@ -457,7 +464,8 @@ permanently-duplicate `applications` row. Two safety nets remain for rows
 created before this changed, or created while the backend was unreachable:
 the worker's `find_unlinked_applications` adopts an unlinked row on first sync
 (matching name + platform, and refusing to guess when several match), and
-`addApp` refuses to create a second app with
-a name + platform that already exists. Genuinely duplicated rows from before
+`addApp` reuses an existing row with the same name + platform (matched
+case-insensitively) that has no assessment yet, and refuses when that app
+already has one. Genuinely duplicated rows from before
 those existed still need
 [`supabase/scripts/cleanup_duplicate_applications.sql`](../supabase/scripts/cleanup_duplicate_applications.sql).

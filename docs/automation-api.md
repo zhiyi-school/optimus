@@ -3,8 +3,8 @@
 The dashboard talks to the automation backend's FastAPI endpoints
 (`mobile_playbook/api/app.py`, documented in that project's `docs/api.md`):
 `GET /platforms/{platform}/risks` (test catalogue), `GET /config/{platform}/apps`
-(configured app roster, used to populate the app multi-select when starting a
-run), `POST /runs` / `GET /runs/{id}` (start/poll a run), `GET /reports` /
+(configured app roster, consulted when registration reports a duplicate without
+naming it), `POST /runs` / `GET /runs/{id}` (start/poll a run), `GET /reports` /
 `GET /reports/{run_timestamp}/summary` (results), and
 `GET /reports/{run_timestamp}/evidence-file` (evidence files). Per-app risk history comes from
 `GET /apps/{app_id}/risks/{risk_id}/history`.
@@ -37,16 +37,16 @@ authenticated VPN or reverse-proxy entrypoint, not the bare FastAPI server.
 
 ## Starting a run
 
-Wherever the dashboard starts a run (Assessments page, Test Workspace, ticket
-retest), the platform is a single-select (`ios`/`android`) and the config
-path is never user-entered — it's always the backend's standard
-`configs/<platform>.yaml` (`src/automation-api/endpoints.ts#defaultConfigPath`).
-Apps and risks are multi-selects: apps come from `GET /config/{platform}/apps`
-(the `id` field — matched by the backend against an app's `id`, `name`,
-`package_name`, or `bundle_id`), risks come from `GET /platforms/{platform}/risks`
-(the `risk_id` field, matched verbatim). Both are sent as comma-separated
-strings on `POST /runs`, and leaving a multi-select empty means "all" (the
-backend runs every configured app / every risk for that platform).
+The browser starts a run from one place only: the single-risk button on the
+test page (see [Starting tests](#starting-tests)). The platform is the
+application's own (`ios`/`android`) and the config path is never user-entered —
+it's always the backend's standard `configs/<platform>.yaml`
+(`src/automation-api/endpoints.ts#defaultConfigPath`). `POST /runs` carries the
+application's `external_id` as `apps` (matched by the backend against an app's
+`id`, `name`, `package_name`, or `bundle_id`) and that one `risk_id` as `risks`
+(matched verbatim). Both are comma-separated strings, and leaving one out means
+"all": the assessment worker sends only `apps`, so a whole-assessment run covers
+every risk for that app.
 
 The browser omits `out_dir`. The backend uses its single configured report root
 for creation, lookup, history, evidence, registry state and synchronization.
@@ -117,9 +117,9 @@ omitted `risks` map to *nothing* enabled — which would register an app no run
 could test.
 
 `GET /config/{platform}/apps/{app_id}/provisioning` is then polled (every 30s,
-only while an app is `pending`) for the authoritative readiness answer. It
-reports three setup stages that complete independently of one another —
-`app_registered`, `service_online`, `configuration_applied` — and
+only while the assessment's run is unsettled) for the authoritative readiness
+answer. It reports three setup stages that complete independently of one
+another — `app_registered`, `service_online`, `configuration_applied` — and
 `EnvironmentSetupStages` appends two more that run in order after them,
 derived from the assessment's own progress rather than the backend:
 automated testing, then analysis & reporting.
@@ -136,10 +136,11 @@ bundle ids. The specifics go to the backend's own logger. `bundle_id` comes
 back as its own field for the dashboard to store in
 `applications.identifier`; it is not display text.
 
-The dashboard mirrors that verdict into `applications.provisioning_status`
-(`0011_application_provisioning.sql`) so other sessions see it without polling
-too. The unauthenticated automation API never writes to Supabase; durable
-report sync is handled by a separate worker process that holds the
+Registration records the verdict it received in
+`applications.provisioning_status` (`0011_application_provisioning.sql`); the
+readiness poll does not update the column afterwards, and the sync worker sets
+it to `ready` once it imports a run for the app. The unauthenticated automation
+API never writes to Supabase; durable report sync is handled by a separate worker process that holds the
 service-role key outside the browser and outside the API server. A `null`
 provisioning_status means the backend isn't tracking this app, and the UI
 falls back to the `app_provisioning` ticket as its readiness signal.
@@ -184,11 +185,16 @@ It renders the backend image when there is one and the existing
 `appTypeIcon` placeholder otherwise — for a missing reference, for a `404`, and
 for any image that fails to load, since it falls back on the `<img>` `onError`
 too. A backend that is down, an icon that was cleaned out of the store, and an
-app that never had one all look the same to the reader: the placeholder. It is used everywhere an application identity appears — the assessments list,
-the assessment sidebar, the findings and tickets tables, ticket detail, and the
-admin applications table — and any new surface should use it rather than
-reaching for `appTypeIcon` directly. A test enumerates those files and fails if
-one of them hand-rolls the placeholder instead.
+app that never had one all look the same to the reader: the placeholder. It is
+used everywhere an application identity appears — the assessments list, the
+new-assessment page, the admin applications table, the risk sidebar, and the
+Resolve applications list and application page — and any new surface should use
+it rather than reaching for `appTypeIcon` directly.
+`src/components/shared/application-icon.surfaces.test.ts` checks the first four
+of those (`src/pages/assess/assessments.tsx`,
+`src/pages/assess/new-assessment.tsx`, `src/pages/admin.tsx` and
+`src/components/layout/risk-sidebar.tsx`) and fails if one of them hand-rolls the
+placeholder instead; the two Resolve pages are not in its list.
 
 Nothing about an assessment depends on an icon. The icon request is a plain
 `<img>` outside React Query, so it cannot fail a query, block a render, or put a
@@ -246,7 +252,7 @@ changes.
 
 ## Idempotent sync
 
-The automation host's `mobile_playbook/dashboard_sync.py` worker is the only
+The automation host's `mobile_playbook/dashboard_sync/` worker is the only
 writer of automation results into Supabase. Nothing in the browser writes them:
 the dashboard starts runs, watches progress, and reads what the worker has
 already published. This matters for more than tidiness — the worker holds the
@@ -274,24 +280,47 @@ has a row updates it rather than adopting anything.
 
 Two things start automated testing:
 
-1. **Automatically, once setup completes.** `AssessmentDetail` watches the
-   provisioning result and calls `syncService.runAllTests`, which runs every
-   risk for the app. It fires only when the backend reports `ready` **and no
-   stage is `unknown`** — an unverified stage (no device connected, say)
-   doesn't block the overall status but must not trigger an unattended run
-   against real hardware.
-2. **Manually, per risk.** "Run Again" on a test page re-runs that one test and
-   updates its result, for when a tester wants to recheck a specific risk.
+1. **The whole assessment, through a durable queue.** Adding an app on
+   `/assessments/new` calls the Supabase RPC `request_assessment_run`
+   (`assessmentRunRequestData.request` in `src/database/assessments.ts`), and
+   "Retry now" on an unfinished assessment's row of the Assessments page calls
+   it again. The RPC is Security Team only and idempotent: it returns the
+   request already in flight rather than opening a second one, and on a
+   `queued` or `waiting` request it only brings the next attempt forward. The
+   browser never calls `POST /runs` for this, so leaving the page cannot lose
+   the run.
+2. **One risk, from its test page.** "Run Automated Test" (or "Run Again" once
+   the risk has a finding) on `src/pages/assess/test-detail.tsx` first claims
+   any pending reassessment for that finding, then calls `runAndWait`
+   (`src/workflows/automation-run.ts`), which sends `POST /runs` for that one
+   app and risk and polls `GET /runs/{run_id}` until it ends.
 
-`runAllTests` claims the assessment first — a conditional update from `queued`
-to `running`, which Postgres makes atomic — so several people with the page
-open cannot each start their own run. A failure to start releases the claim:
-back to `queued` when the backend was merely busy with another run for that
-platform (`409`, one run per platform at a time), so a later attempt retries,
-and `failed` otherwise. Giving up on *watching* a run is not the same as the run
-failing: `cancelledWaiting` and `timedOutWaiting` mean only that this browser
-stopped following along, so neither writes a terminal status. The run keeps going
-on the automation host, and the dashboard sync worker records its result when it
+The queue is drained on the automation host by
+`python -m mobile_playbook.assessment_worker`. Each pass recovers requests whose
+lease has expired, then claims the next due one with
+`claim_assessment_run_request` — executable by the service role only — under a
+lease (900s by default), asks the provisioning endpoint whether the app is
+runnable and, if it is, starts the run with `POST /runs`. A blocker that can
+clear on its own — no device, the automation host unreachable, or `409` because
+another run already holds that platform's device (one run per platform at a
+time) — puts the request back to `waiting` with a `blocker_code` and a
+`next_attempt_at`. The delay starts at 30s and doubles to a 900s ceiling, and
+the request fails after 20 attempts; a non-retryable blocker such as incomplete
+configuration fails it straight away. Once the run has started the request is
+closed, and the dashboard sync worker, not the queue, later moves the assessment
+to `completed` or `failed`. The backend's operations guide covers running and
+monitoring the worker.
+
+The Assessments page only follows along. `useAssessmentRunRequest`
+(`src/hooks/queries/assessments.ts`) re-reads the request every 10s while it or
+the assessment is transitional, and `assessmentRunState`
+(`src/domain/assessment/run-state.ts`) turns it into the label, detail, retry
+hint and next-attempt time the row shows.
+
+Giving up on *watching* a run is not the same as the run failing:
+`cancelledWaiting` and `timedOutWaiting` mean only that this browser stopped
+following along, so neither writes a terminal status. The run keeps going on the
+automation host, and the dashboard sync worker records its result when it
 finishes. A real `POST /runs/{id}/cancel` endpoint is out of scope for this phase.
 
 Nothing in the browser writes results. The dashboard sync worker on the
@@ -317,12 +346,12 @@ neither means `queued`. Reconnecting to the run's `EventSource` replays the whol
 `reports/{run_id}/events.jsonl` from the start, so a page that arrives mid-run
 classifies itself correctly rather than assuming it is next.
 
-`TestDetail` and the "Run Retest" dialog show live progress only for `running`,
-say plainly that the test is waiting its turn for `queued`, and stop showing
-either once this risk is `done` even though the run continues with other risks.
-Both merge that with a local `watching` flag covering the gap between clicking
-the button and the run appearing in the list. "Stop waiting" records the run id
-it dismissed so the poll does not immediately re-adopt it.
+`TestDetail` shows live progress only for `running`, says plainly that the test
+is waiting its turn for `queued`, and stops showing either once this risk is
+`done` even though the run continues with other risks. It merges that with a
+local `watching` flag covering the gap between clicking the button and the run
+appearing in the list. "Stop waiting" records the run id it dismissed so the
+poll does not immediately re-adopt it.
 
 Both routes for the test page share one `<TestDetail />` element, so switching
 between two tests changes `:testId` without unmounting anything. `TestDetail`
@@ -368,8 +397,10 @@ returns `null` through `syncApi.getRunSyncStatus` rather than an error, and the
 UI simply shows nothing.
 
 When the status reaches `completed`, the hook invalidates the Supabase-backed
-queries the worker rewrites: findings and their history, retests, assessments,
-tickets, activity and the dashboard metrics. That is the only refresh mechanism —
+queries the worker rewrites: findings, retests, assessments and their run
+requests, tickets, the dashboard metrics, risk conversations and per-risk test
+history (`dashboardSyncInvalidationPrefixes` in
+`src/hooks/queries/invalidation-rules.ts`). That is the only refresh mechanism —
 the browser still never writes a report to Supabase, and nothing here reads the
 service-role key, which exists only in the worker's own process environment.
 

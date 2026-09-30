@@ -68,12 +68,12 @@ real browser.
 | Query-key shapes, entity/prefix distinction, domain invalidation groups | `src/hooks/queries/keys.test.ts` |
 | Query polling, mutation invalidation, and conversation subscription cleanup | `src/hooks/queries/queries.test.tsx` |
 | Reassessment request, claim, start and run linking | `src/database/conversations.test.ts` |
-| Conversation persistence, attachment fallback, and entry idempotency | `src/database/conversations.test.ts` |
+| Conversation persistence, attachment metadata recovery, and entry idempotency | `src/database/conversations.test.ts` |
 | Message/action submission, attachment-only retry and conversation scoping | `src/hooks/conversation/composer.test.tsx` |
 | Metrics RPC fallback | `src/database/metrics.test.ts` |
 | Test page keying (state must not leak between tests) | `src/pages/assess/test-detail.test.tsx` |
 | Capability model, `/resolve` access states, post-login routing | `src/auth/permissions.test.ts` |
-| Remediation progress formulas, control seeding, workflow gates | `src/domain/remediation/resolve-rules.test.ts` |
+| Remediation progress formulas, live-control pairing, developer labels | `src/domain/remediation/resolve-rules.test.ts` |
 | Reassessment withdrawal eligibility | `src/domain/remediation/reassessments.test.ts` |
 | Control summary presentation and changed-step detection | `src/domain/remediation/control-content.test.ts` |
 | Assessment run state, blocker labels and stage sequencing | `src/domain/assessment/run-state.test.ts` |
@@ -144,6 +144,9 @@ so they run only along the legacy chain at the version their fixtures need:
 | `0027_attachment_download_rls.sql` | a conversation attachment readable by its uploader and by every other participant but by nobody outside the application, the same for the stored object itself, a file on a workflow event behaving like one on a message, an upload defaulting to the Supabase provider, and a storage key that can be neither absolute nor walked out of its folder |
 | `legacy/0029_reassessment_without_completion_rls.sql` | a reassessment requested with no recorded progress and with only some steps done, progress left untouched by the request, and the surviving conditions — a remediation ticket, an allowed state, a selected approach, application access — still refusing |
 | `legacy/0030_reassessment_queue_rls.sql` | two intentional submissions creating two requests where a retried submission creates none, oldest-first starts, one running reassessment per risk across two reviewers, a queued request never downgrading a running remediation, completing one leaving the others queued, and ownership, access and finalised-ticket rules still refusing |
+| `0031_reassessment_without_remediation_rls.sql` | a developer with no remediation ticket requesting a reassessment that records no ticket and no state to restore, queuing a second one behind it and withdrawing it, and a developer outside the application, a request with neither ticket nor conversation, and a link to a non-remediation ticket all still refused |
+| `0032_retire_fix_submitted_rls.sql` | `fix_submitted` refused as a ticket status and as a state to restore, for developers and security alike, a withdrawn request with no recorded state resuming as `in_progress`, withdrawal and ordinary messages still working, historical `fix_submitted` entries staying legal, and no ticket workflow function naming the status |
+| `0033_dashboard_metrics_without_fix_submitted_rls.sql` | `dashboard_metrics()` listing every current ticket status and no `fix_submitted` count, the rest of its response unchanged, and its signed-in-only grants surviving |
 | `0034_reconcile_reassessment_internal_only_rls.sql` | signed-in clients refused permission to call `reconcile_reassessment_ticket_state()` directly, the worker role keeping its grant, and the reassessment RPCs that reconcile internally staying callable |
 | `0035_restore_ticket_ownership_guards_rls.sql` | a developer refused when changing a ticket's type, finding, application, creator or assignment, setting `closed_at`, or editing withdrawal details after withdrawing; withdrawing, resuming, choosing an approach and the reassessment RPCs still working; and security still able to reassign and close |
 
@@ -151,17 +154,8 @@ None is part of `npm test` — they need a disposable database. The supported
 runner creates its own isolated PostgreSQL container. Each suite creates its own placeholder fixtures,
 impersonates each role by setting `request.jwt.claims`, asserts, and ends with
 `rollback`, but rollback is a safety net rather than permission to target live data. A
-failed assertion raises; a clean run prints `0017 RLS checks passed`,
-`0018 withdrawal checks passed`, `0020 risk conversation checks passed`,
-`0021 application risk conversation checks passed`, `0022 selection checks
-passed`, `0023 assessment run request checks passed`,
-`0024 reassessment withdrawal checks passed`,
-`0026 reassessment readiness checks passed` or
-`0027 attachment download checks passed` or
-`0029 reassessment eligibility checks passed` or
-`0030 reassessment queue checks passed` or
-`0034 reconcile privilege checks passed` or
-`0035 ticket guard checks passed`.
+failed assertion raises; a clean run prints one `NNNN … checks passed` notice
+per suite, such as `0017 RLS checks passed`.
 
 **A migration that replaces a shared trigger has to carry forward what earlier
 ones added.** `0022` rewrote `enforce_ticket_update_permissions` with
@@ -225,7 +219,7 @@ container and root per test, `act(() => root.unmount())` in `afterEach`. Wrap
 anything containing a `Link` in `<MemoryRouter>`. Assertions go through
 `container.querySelector` and `container.textContent`.
 
-`control-navigation.test.tsx`, `control-content.test.tsx` and `Layout.test.tsx`
+`control-navigation.test.tsx`, `control-content.test.tsx` and `app-shell.test.tsx`
 cover what the pure-function tests cannot reach: that a click anywhere on a
 control card actually navigates — title, summary, badge, progress bar, card
 padding and the "View steps" label all reach the same route — that the route
@@ -245,7 +239,8 @@ text reaches it.
 **The live-update poll is not exercised end to end.** `usePlaybookRevisionWatch`
 polls, compares and invalidates, but no test drives a real revision change
 through a mounted page — the reconciliation and rendering rules underneath it are
-covered by `resolve-workflow.test.ts` and the component tests instead.
+covered by `resolve-rules.test.ts`, `controls.test.ts` and the component
+tests instead.
 
 **Pages are not mounted with real data clients.** Tests mount several page and
 component units with mocked hooks, but no test renders a routed page with a real
@@ -268,9 +263,8 @@ repository, needing no device, network or Supabase project. See its
 
 ## Continuous integration
 
-Both repository remotes are GitHub-hosted and neither repository previously had
-a CI configuration, so `.github/workflows/verify.yml` uses GitHub Actions. The
-frontend workflow has separate jobs for documentation/dependency consistency,
+Both repository remotes are GitHub-hosted, so `.github/workflows/verify.yml`
+uses GitHub Actions. The frontend workflow has separate jobs for documentation/dependency consistency,
 the full test/lint/build sequence, focused contracts, and the guarded disposable
 database suite. Every job has read-only repository permission; none receives
 secrets, deploys, applies a live migration, or contacts an automation host.
@@ -278,5 +272,4 @@ secrets, deploys, applies a live migration, or contacts an automation host.
 The frontend and backend workflows validate their committed sides of the
 contract independently. GitHub Actions cannot assume credentials for the other
 private repository, so release verification still requires the explicit local
-two-checkout command described above. Remote CI execution and a clean hosted
-runner remain unverified until the workflow is pushed.
+two-checkout command described above.

@@ -1,8 +1,9 @@
 # Mobile Application Security Assessment Dashboard
 
 A role-aware dashboard for triaging mobile application security findings and
-running the remediation → retest → risk-acceptance workflow between Developer
-Teams, the Security Team, and the CIO.
+running the remediation → reassessment workflow between Developer Teams, the
+Security Team, and the CIO. Risk acceptance is designed and in the schema, but
+not yet wired into the UI.
 
 This is a standalone frontend. It drives the automation backend
 (`mobile_playbook_automation`) for test execution, and uses
@@ -27,8 +28,8 @@ npm ci
 npm run dev
 ```
 
-You will also need a Supabase project with the migrations applied, and the
-automation backend running separately. Full walkthrough:
+You will also need a Supabase project with the migrations and fixes applied,
+and the automation backend and its workers running separately. Full walkthrough:
 [docs/setup.md](./docs/setup.md).
 
 ```bash
@@ -61,6 +62,7 @@ client. See [docs/architecture.md](./docs/architecture.md).
 | [docs/data-model.md](./docs/data-model.md) | Tables, relationships, RLS design, storage conventions |
 | [docs/roles-and-workflows.md](./docs/roles-and-workflows.md) | Role capabilities, authentication, ticket and risk-acceptance workflows |
 | [docs/frontend-integration.md](./docs/frontend-integration.md) | Reusing this dashboard, and the backend compatibility contract |
+| [docs/database-maintenance.md](./docs/database-maintenance.md) | Baseline, fixes and legacy migrations, the disposable database test runner |
 | [docs/testing.md](./docs/testing.md) | Test suite, typecheck, lint, build |
 | [docs/deployment.md](./docs/deployment.md) | Environment variables, production build, Docker, reverse proxy |
 
