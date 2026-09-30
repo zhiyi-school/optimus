@@ -9,7 +9,7 @@ import { metricsData } from "@/data/services/metrics";
 import { riskConversationData } from "@/data/services/conversations";
 import { retestData } from "@/data/services/retests";
 import { ticketData, type TicketFilters } from "@/data/services/tickets";
-import type { ControlReconciliation, FindingStatus, TicketStatus } from "@/data/types";
+import type { ControlReconciliation, FindingStatus } from "@/data/types";
 import { useInvalidateQueries } from "./invalidation";
 import { conversationInvalidationKeys, ticketLifecycleInvalidationKeys } from "./invalidation-rules";
 import { assessmentKeys, evidenceKeys, ticketKeys } from "@/hooks/query-keys";
@@ -163,21 +163,6 @@ export function useResumeTicket(ticketId: string, findingId: string | null | und
 }
 
 /** Changes a ticket's status and refreshes the ticket, lists and metrics. */
-export function useUpdateTicketStatus(ticketId: string) {
-  const invalidate = useInvalidateQueries();
-  return useMutation({
-    mutationFn: (status: TicketStatus) => ticketData.updateStatus(ticketId, status),
-    onMutate: (status) => debug("updates ticket status", { ticketId, status }),
-    onError: (error, status) => debug("update ticket status failed", { ticketId, status, error }),
-    onSuccess: () =>
-      invalidate([
-        ticketKeys.detail(ticketId),
-        ticketKeys.withRelations(),
-        ticketKeys.listPrefix(),
-        ticketKeys.metrics(),
-      ]),
-  });
-}
 
 /** Reclassifies a finding from the conversation and refreshes finding, ticket and conversation keys. */
 export function useClassifyRisk(findingId: string | undefined, conversationId: string | undefined) {

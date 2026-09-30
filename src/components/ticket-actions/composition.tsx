@@ -1,20 +1,10 @@
 /**
- * Composes the ticket and conversation actions available to the current user.
+ * Lists the outstanding reassessment requests in a risk conversation for testers.
  */
 
-import { Button } from "@/components/ui/button";
 import type { RiskConversationContext } from "@/hooks/conversation-composer";
-import { useUpdateTicketStatus } from "@/hooks/queries/tickets";
-import { canResumeTicket, canWithdrawTicket } from "@/lib/resolve";
 import { outstandingReassessments } from "@/lib/reassessments";
-import { createDebug } from "@/lib/debug";
 import { formatDate } from "@/lib/utils";
-import type { Ticket } from "@/data/types";
-import type { Capability } from "@/auth/permissions";
-import { RequestChangesDialog, ResumeRemediationButton, WithdrawRemediationDialog } from "./remediation";
-import { ReviewRiskAcceptanceDialog } from "./acceptance";
-
-const debug = createDebug("component:ticket-actions:composition");
 
 /** Lists outstanding reassessment requests for testers, with guidance to run the risk. */
 export function RiskConversationActions({
@@ -53,57 +43,3 @@ export function RiskConversationActions({
 }
 
 /** Withdraw, resume, review, request-changes and close actions gated by capability and ticket state. */
-export function TicketActions({
-  ticket,
-  can,
-  riskAcceptanceId,
-}: {
-  ticket: Ticket;
-  can: (capability: Capability) => boolean;
-  riskAcceptanceId?: string;
-}) {
-  const updateStatus = useUpdateTicketStatus(ticket.id);
-  const isDeveloperFlow = ticket.type === "remediation";
-
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      {can("withdraw_ticket") && canWithdrawTicket(ticket) && (
-        <WithdrawRemediationDialog ticket={ticket} />
-      )}
-
-      {can("withdraw_ticket") && canResumeTicket(ticket) && (
-        <ResumeRemediationButton ticket={ticket} />
-      )}
-
-      {ticket.type === "risk_acceptance" &&
-        ticket.status === "under_review" &&
-        can("review_risk_acceptance") &&
-        riskAcceptanceId && (
-          <ReviewRiskAcceptanceDialog ticketId={ticket.id} riskAcceptanceId={riskAcceptanceId} />
-        )}
-
-      {isDeveloperFlow &&
-        can("request_changes") &&
-        ["retest_requested", "under_review"].includes(ticket.status) && (
-          <RequestChangesDialog
-            ticketId={ticket.id}
-            conversationId={ticket.risk_conversation_id}
-          />
-        )}
-
-      {can("close_ticket") && ticket.status !== "closed" && (
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={updateStatus.isPending}
-          onClick={() => {
-            debug("closes ticket", { ticketId: ticket.id, status: ticket.status });
-            void updateStatus.mutateAsync("closed");
-          }}
-        >
-          Close Ticket
-        </Button>
-      )}
-    </div>
-  );
-}

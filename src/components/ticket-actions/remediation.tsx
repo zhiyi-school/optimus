@@ -1,5 +1,5 @@
 /**
- * Remediation ticket actions: start, resume, withdraw, withdrawal notice and request changes.
+ * Remediation ticket actions: start, resume, withdraw and the withdrawal notice.
  */
 
 import { useState, type FormEvent } from "react";
@@ -11,11 +11,9 @@ import {
   useFindingTickets,
   useResumeTicket,
   useStartRemediation,
-  useUpdateTicketStatus,
   useWithdrawTicket,
 } from "@/hooks/queries/tickets";
 import { useRiskControls } from "@/hooks/queries/playbook";
-import { useSendRiskMessage } from "@/hooks/queries/conversations";
 import { activeRemediationTicket, effectiveSelectedControlId, resumableRemediationTicket, selectableControls, selectedControl, selectedControlReconciliationPlan } from "@/lib/resolve";
 import { createDebug } from "@/lib/debug";
 import { resolveRiskPath } from "@/lib/risk-routes";
@@ -336,78 +334,3 @@ export function WithdrawalNotice({
 
 
 /** Dialog for security to send a ticket back with a comment. */
-export function RequestChangesDialog({
-  ticketId,
-  conversationId,
-}: {
-  ticketId: string;
-  conversationId: string | null;
-}) {
-  const [open, setOpen] = useState(false);
-  const [comment, setComment] = useState("");
-  const updateStatus = useUpdateTicketStatus(ticketId);
-  const sendMessage = useSendRiskMessage(conversationId ?? undefined);
-
-  /** Posts the comment to the conversation if any, then marks the ticket rejected. */
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
-    debug("requests changes", { ticketId, conversationId, commentLength: comment.trim().length });
-    if (conversationId) await sendMessage.mutateAsync({ message: comment });
-    await updateStatus.mutateAsync("rejected");
-    debug("requested changes", { ticketId });
-    setOpen(false);
-    setComment("");
-  }
-
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        debug("toggles request changes dialog", { open: next, ticketId });
-        setOpen(next);
-      }}
-    >
-      <DialogTrigger asChild>
-        <Button size="sm" variant="outline">
-          Request Changes
-        </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Request changes from the developer</DialogTitle>
-          <DialogDescription>
-            This sends the ticket back for more work and posts your comment in the conversation.
-            It does not change the risk classification.
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={onSubmit} className="space-y-3">
-          <Textarea
-            rows={3}
-            required
-            placeholder="What still needs to change?"
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-          />
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                debug("cancels change request", { ticketId });
-                setOpen(false);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              disabled={updateStatus.isPending || sendMessage.isPending || !comment.trim()}
-            >
-              Request changes
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}

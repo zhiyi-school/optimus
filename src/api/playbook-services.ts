@@ -93,11 +93,4 @@ export const playbookApi = {
     }
   },
 
-  /** Asks the backend to re-read the platform's playbook and returns the new status. */
-  async reload(platform: AutomationPlatform): Promise<PlaybookStatus> {
-    debug("reloading playbook", { platform });
-    const { data } = await automationClient.post(`/platforms/${encode(platform)}/playbook/reload`);
-    debug("reloaded playbook", { platform, revision: data?.revision, readable: data?.readable });
-    return data;
-  },
 };

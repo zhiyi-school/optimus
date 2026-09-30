@@ -197,7 +197,6 @@ vi.mock("@/test-support/query-hooks", () => {
     useTicketControlSteps: () => ({ ...idle, data: stepRows }),
     useStartRemediation: () => mutation,
     useResumeTicket: () => mutation,
-    useUpdateTicketStatus: () => mutation,
     useWithdrawTicket: () => mutation,
     useReviewRiskAcceptance: () => mutation,
     useActiveRun: () => ({ run: undefined, platformRun: undefined }),

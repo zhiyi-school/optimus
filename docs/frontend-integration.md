@@ -181,9 +181,7 @@ The dashboard's expectations are encoded in `src/api/automation-types.ts` and
 
 | Endpoint | Method | Request | Response | Codes |
 | --- | --- | --- | --- | --- |
-| `/health` | GET | — | `{"status":"ok"}` | 200 |
 | `/platforms/{platform}/risks` | GET | — | array of risk definitions with `risk_id`, `name`, `description`, `tactic`, `tactic_id`, `automation_available`, `demonstration` | 200 |
-| `/platforms/{platform}/features` | GET | — | array of `{feature_id, name, description}` | 200 |
 | `/config/{platform}/apps` | GET | — | array of `{id, name, bundle_id?, package_name?}` | 200 |
 | `/config/{platform}/apps` | POST | `{name, version?, bundle_id?, package_name?, artifact?, risks?}` | `{id}` | 201, 409 with `{detail:{app_id}}` on duplicate |
 | `/config/{platform}/apps/{app_id}/provisioning` | GET | — | `{app_id, platform, bundle_id, status, stages[], error}` | 200, 404 |
@@ -192,17 +190,15 @@ The dashboard's expectations are encoded in `src/api/automation-types.ts` and
 | `/runs` | POST | `{platform, config_path, apps?, risks?, out_dir?}` | `{run_id, platform, status}` | **202**, 409 busy, 422 unknown app/risk |
 | `/runs/{run_id}` | GET | — | full run record | 200, 404 |
 | `/runs/{run_id}/events` | GET | — | SSE, see below | 200, 404 |
-| `/runs/{run_id}/summary` | GET | — | array of result rows | 200, **409 while running**, **500 with the error if failed** |
 | `/runs/{run_id}/sync-status` | GET | — | sync status object | 200, 404 |
 | `/runs/{run_id}/sync` | POST | — | sync status object | 202, 409, 503 |
 | `/reports` | GET | — | array of run timestamps, newest first | 200 |
 | `/reports/{run_timestamp}/summary` | GET | — | array of result rows | 200, 404 |
-| `/reports/{run_timestamp}/files/{file_path}` | GET | — | the raw file | 200, 404 |
 | `/reports/{run_timestamp}/evidence-file?ref=` | GET | — | the raw file, named and typed | 200; 422 missing query; 400 malformed ref; 404 missing/wrong-run artifact |
 | `/reports/{run_timestamp}/sarif` | GET | — | SARIF 2.1.0 document | 200, 404 |
 | `/apps/{app_id}/risks/{risk_id}/history` | GET | `limit` query, 1–100 | array of result rows, newest first | 200 |
 
-**Result row shape**, returned by both summary endpoints and history:
+**Result row shape**, returned by the report summary and history endpoints:
 
 ```json
 {
@@ -265,10 +261,10 @@ backend does not support the feature" and degrades instead of erroring.
 
 | Capability | Endpoints required | Consequence if absent |
 | --- | --- | --- |
-| **Basic run viewing** | `/health`, `/runs`, `/runs/{run_id}`, `/reports`, `/reports/{run_timestamp}/summary` | run pages and history are empty |
+| **Basic run viewing** | `/runs`, `/runs/{run_id}`, `/reports`, `/reports/{run_timestamp}/summary` | run pages and history are empty |
 | **Starting runs** | `POST /runs`, `/platforms/{platform}/risks`, `/config/{platform}/apps` | no automation can be triggered |
 | **Application provisioning** | `POST /config/{platform}/apps`, `/config/{platform}/apps/{app_id}/provisioning`, `POST /artifacts/{platform}` | app onboarding is blocked; provisioning polls return null and the UI falls back to ticket state |
-| **Report / evidence viewing** | `/reports/{run_timestamp}/files/{file_path}`, `/reports/{run_timestamp}/evidence-file` | evidence viewers show broken links |
+| **Report / evidence viewing** | `/reports/{run_timestamp}/evidence-file` | evidence viewers show broken links |
 | **Supabase dashboard synchronisation** | the worker plus `/runs/{run_id}/sync-status` | sync notices never appear; findings depend entirely on whatever writes Supabase |
 | **Optional: live progress** | `/runs/{run_id}/events` | polling still reports completion, without a timeline |
 | **Optional: SARIF export** | `/reports/{run_timestamp}/sarif` | the download button is hidden |
@@ -280,7 +276,7 @@ backend does not support the feature" and degrades instead of erroring.
 | Layer | Location | Role |
 | --- | --- | --- |
 | HTTP client | `src/api/automation-client.ts` | axios instance, 30s timeout, error interceptor producing `AutomationApiError` |
-| Typed services | `src/api/automation-services.ts` | `testApi`, `configApi`, `provisioningApi`, `assessmentApi`, `syncApi`, `healthApi`, plus URL helpers |
+| Typed services | `src/api/automation-services.ts` | `testApi`, `configApi`, `provisioningApi`, `iconApi`, `assessmentApi`, `syncApi`, plus URL helpers |
 | Types | `src/api/automation-types.ts` | the response shapes above |
 | Query hooks | `src/hooks/queries/` | Domain TanStack Query wrappers, polling intervals, cache invalidation |
 | Supabase services | `src/data/services/` | Domain dashboard reads and writes |

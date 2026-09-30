@@ -98,22 +98,3 @@ export function EvidenceRail({
 }
 
 /** Titled section with an optional aside beside the heading. */
-export function WorkspaceSection({
-  title,
-  aside,
-  children,
-}: {
-  title: string;
-  aside?: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <section>
-      <div className="mb-2 flex flex-wrap items-end justify-between gap-3">
-        <h2 className="text-sm font-semibold text-foreground">{title}</h2>
-        {aside && <div className="min-w-[10rem] flex-1">{aside}</div>}
-      </div>
-      {children}
-    </section>
-  );
-}

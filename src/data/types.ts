@@ -288,13 +288,3 @@ export interface ControlReconciliation {
   control_id: string;
   step_keys: string[];
 }
-
-export interface ActivityLogEntry {
-  id: string;
-  actor_id: string | null;
-  entity_type: string;
-  entity_id: string;
-  action: string;
-  metadata: Record<string, unknown> | null;
-  created_at: string;
-}

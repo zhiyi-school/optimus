@@ -111,11 +111,4 @@ describe("playbook status", () => {
 
     await expect(playbookApi.getStatus("ios")).resolves.toBeNull();
   });
-
-  it("reloads the catalogue on request", async () => {
-    post.mockResolvedValue({ data: { readable: true, control_count: 3 } });
-
-    await expect(playbookApi.reload("ios")).resolves.toMatchObject({ control_count: 3 });
-    expect(post).toHaveBeenCalledWith("/platforms/ios/playbook/reload");
-  });
 });

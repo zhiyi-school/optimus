@@ -481,9 +481,9 @@ page cannot request one early.
 to `in_progress` and the database now rejects it; old timelines still render
 the `fix_submitted` event.
 
-Security can send work back at any point with **Request Changes**, which moves
-the ticket to `rejected` and posts the reason into the conversation. The
-developer sees that as "Changes requested" and can submit again.
+The database still lets security move a remediation to `rejected` ("Changes
+requested" to the developer), but the dashboard currently has no control for
+it, nor for closing a ticket.
 
 A finding has at most one remediation ticket in flight. When one is already
 open, the finding offers **Continue remediation** instead of creating a second;

@@ -6,7 +6,6 @@ import type { RiskVerdict } from "@/api/automation-types";
 import type {
   FindingStatus,
   RiskConversationEntryKind,
-  TicketStatus,
 } from "@/data/types";
 
 export type Tone = "danger" | "success" | "warning" | "neutral" | "info";
@@ -72,21 +71,6 @@ export const testRunStatusConfig: Record<
   running: { label: "Running", tone: "info" },
   completed: { label: "Completed", tone: "success" },
   failed: { label: "Failed", tone: "danger" },
-};
-
-export const ticketStatusConfig: Record<
-  TicketStatus,
-  { label: string; tone: Tone }
-> = {
-  open: { label: "Open", tone: "neutral" },
-  in_progress: { label: "In Progress", tone: "info" },
-  retest_requested: { label: "Retest Requested", tone: "warning" },
-  retest_in_progress: { label: "Retest In Progress", tone: "warning" },
-  under_review: { label: "Under Review", tone: "warning" },
-  accepted: { label: "Accepted", tone: "success" },
-  rejected: { label: "Rejected", tone: "danger" },
-  withdrawn: { label: "Withdrawn", tone: "neutral" },
-  closed: { label: "Closed", tone: "neutral" },
 };
 
 export type ConversationEventKind = Exclude<RiskConversationEntryKind, "message">;

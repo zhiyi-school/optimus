@@ -6,8 +6,7 @@ The dashboard talks to the automation backend's FastAPI endpoints
 (configured app roster, used to populate the app multi-select when starting a
 run), `POST /runs` / `GET /runs/{id}` (start/poll a run), `GET /reports` /
 `GET /reports/{run_timestamp}/summary` (results), and
-`GET /reports/{run_timestamp}/files/{path}` / `GET /reports/{run_timestamp}/evidence-file`
-(evidence files). Per-app risk history comes from
+`GET /reports/{run_timestamp}/evidence-file` (evidence files). Per-app risk history comes from
 `GET /apps/{app_id}/risks/{risk_id}/history`.
 
 Both `/reports/{run_timestamp}/summary` and the per-risk history return each
@@ -404,8 +403,6 @@ The click calls `assessmentApi.downloadReportSarif`, which requests
 rather than JSON means the browser never parses SARIF — it only hands the file
 to the user. A run the backend has no export for comes back as `null` rather
 than throwing, and the button shows "No SARIF export is available for this run."
-`assessmentApi.reportSarifUrl(runTimestamp)` builds the same URL for anywhere a
-plain link is wanted.
 
 SARIF is an export only. Findings, tickets, history and activity continue to
 come from Supabase exactly as before, populated by the automation host's worker;

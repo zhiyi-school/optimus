@@ -1,5 +1,5 @@
 /**
- * Automation backend endpoints for risks, app config and provisioning, runs, reports, sync and health.
+ * Automation backend endpoints for risks, app config and provisioning, runs, reports and sync.
  */
 
 import { automationAssetUrl, automationClient } from "@/api/automation-client";
@@ -8,13 +8,10 @@ import type {
   AppProvisioning,
   AutomationPlatform,
   AutomationResultRow,
-  FeatureDefinition,
   RegisterAppRequest,
   RiskDefinition,
-  RiskReportDetail,
   RunRecord,
   RunSyncStatus,
-  SarifDocument,
   StartRunRequest,
 } from "@/api/automation-types";
 import { createDebug, errorSummary } from "@/lib/debug";
@@ -35,13 +32,6 @@ export const testApi = {
     return data;
   },
 
-  /** Lists the features the backend defines for a platform. */
-  async listFeatures(platform: AutomationPlatform): Promise<FeatureDefinition[]> {
-    debug("listing features", { platform });
-    const { data } = await automationClient.get(`/platforms/${platform}/features`);
-    debug("listed features", { platform, count: data?.length });
-    return data;
-  },
 };
 
 export const configApi = {
@@ -107,25 +97,6 @@ export const provisioningApi = {
     return data;
   },
 
-  /** Fetches an app's config entry, or null when the endpoint is unavailable. */
-  async getApp(
-    platform: AutomationPlatform,
-    appId: string,
-  ): Promise<AppConfigEntry | null> {
-    debug("fetching app config", { platform, appId });
-    try {
-      const { data } = await automationClient.get(`/config/${platform}/apps/${appId}`);
-      debug("fetched app config", { platform, appId, found: data != null });
-      return data;
-    } catch (err) {
-      debug("fetching app config failed", { platform, appId, ...errorSummary(err) });
-      if (isBackendUnavailable(err)) {
-        debug("app config unavailable; returning null", { platform, appId });
-        return null;
-      }
-      throw err;
-    }
-  },
 
   /** Removes an app from the platform's config. */
   async deleteApp(platform: AutomationPlatform, appId: string): Promise<void> {
@@ -191,13 +162,6 @@ export const assessmentApi = {
     return data;
   },
 
-  /** Fetches the result rows of a run. */
-  async getRunSummary(runId: string): Promise<AutomationResultRow[]> {
-    debug("fetching run summary", { runId });
-    const { data } = await automationClient.get(`/runs/${encodeURIComponent(runId)}/summary`);
-    debug("fetched run summary", { runId, rows: data?.length });
-    return data;
-  },
 
   /** Lists report timestamps, optionally filtered by status. */
   async listReports(status?: string): Promise<string[]> {
@@ -219,18 +183,6 @@ export const assessmentApi = {
     return data;
   },
 
-  /** Fetches the report.json for one result within a report. */
-  async getResultDetail(
-    runTimestamp: string,
-    reportPath: string,
-  ): Promise<RiskReportDetail> {
-    debug("fetching result detail", { runTimestamp, reportPath });
-    const { data } = await automationClient.get(
-      `/reports/${encodeURIComponent(runTimestamp)}/files/${reportPath}/report.json`,
-    );
-    debug("fetched result detail", { runTimestamp, reportPath, found: data != null });
-    return data;
-  },
 
   /** Fetches recent results for one app and risk, newest first up to `limit`. */
   async getTestHistory(
@@ -247,11 +199,6 @@ export const assessmentApi = {
     return data;
   },
 
-  /** URL of a file inside a report directory. */
-  reportFileUrl(runTimestamp: string, filePath: string): string {
-    const base = automationClient.defaults.baseURL ?? "";
-    return `${base}/reports/${encodeURIComponent(runTimestamp)}/files/${filePath}`;
-  },
 
   /** URL that downloads an evidence file by its opaque ref. */
   evidenceFileUrl(runTimestamp: string, ref: string): string {
@@ -266,30 +213,7 @@ export const assessmentApi = {
     return `${base}/runs/${encodeURIComponent(runId)}/events`;
   },
 
-  /** URL of a report's SARIF export. */
-  reportSarifUrl(runTimestamp: string): string {
-    const base = automationClient.defaults.baseURL ?? "";
-    return `${base}/reports/${encodeURIComponent(runTimestamp)}/sarif`;
-  },
 
-  /** Fetches a report's SARIF export, or null when the run has none (incomplete or predating the export). */
-  async getReportSarif(runTimestamp: string): Promise<SarifDocument | null> {
-    debug("fetching report SARIF", { runTimestamp });
-    try {
-      const { data } = await automationClient.get(
-        `/reports/${encodeURIComponent(runTimestamp)}/sarif`,
-      );
-      debug("fetched report SARIF", { runTimestamp, runs: data?.runs?.length });
-      return data;
-    } catch (err) {
-      debug("fetching report SARIF failed", { runTimestamp, ...errorSummary(err) });
-      if (isBackendUnavailable(err)) {
-        debug("SARIF unavailable; returning null", { runTimestamp });
-        return null;
-      }
-      throw err;
-    }
-  },
 
   /** Downloads a report's SARIF as a Blob, so the browser never parses it; null when unavailable. */
   async downloadReportSarif(runTimestamp: string): Promise<Blob | null> {
@@ -336,20 +260,5 @@ export const syncApi = {
     const { data } = await automationClient.post(`/runs/${encodeURIComponent(runId)}/sync`);
     debug("requested run resync", { runId, status: data?.status });
     return data;
-  },
-};
-
-export const healthApi = {
-  /** True when the backend's health endpoint reports ok; false on any failure. */
-  async check(): Promise<boolean> {
-    debug("checking backend health");
-    try {
-      const { data } = await automationClient.get("/health");
-      debug("backend health", { status: data?.status });
-      return data?.status === "ok";
-    } catch (err) {
-      debug("backend health check failed", errorSummary(err));
-      return false;
-    }
   },
 };

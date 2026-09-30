@@ -196,7 +196,6 @@ vi.mock("@/test-support/query-hooks", () => {
     useResyncRun: () => mutation,
     useClassifyRisk: () => mutation,
     useRequestReassessment: () => mutation,
-    useUpdateTicketStatus: () => mutation,
     useRiskControls: () => ({
       ...idle,
       data: [

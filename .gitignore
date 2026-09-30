@@ -28,3 +28,4 @@ coverage
 .idea
 
 .supabase
+__pycache__/

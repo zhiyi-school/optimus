@@ -75,18 +75,6 @@ describe("resyncRun", () => {
 const { assessmentApi } = await import("./automation-services");
 
 describe("SARIF export", () => {
-  it("builds a URL against the automation host, not Supabase", () => {
-    expect(assessmentApi.reportSarifUrl("2026-01-01_00-00-00")).toBe(
-      "http://127.0.0.1:8080/reports/2026-01-01_00-00-00/sarif",
-    );
-  });
-
-  it("escapes a run timestamp so it cannot reshape the request path", () => {
-    expect(assessmentApi.reportSarifUrl("../../etc/passwd")).toBe(
-      "http://127.0.0.1:8080/reports/..%2F..%2Fetc%2Fpasswd/sarif",
-    );
-  });
-
   it("fetches the export as bytes rather than parsing it in the browser", async () => {
     const blob = new Blob(["{}"], { type: "application/sarif+json" });
     get.mockResolvedValue({ data: blob });
@@ -99,7 +87,6 @@ describe("SARIF export", () => {
     get.mockRejectedValue(Object.assign(new Error("not found"), { status: 404 }));
 
     await expect(assessmentApi.downloadReportSarif("r1")).resolves.toBeNull();
-    await expect(assessmentApi.getReportSarif("r1")).resolves.toBeNull();
   });
 
   it("still surfaces a real backend fault while downloading", async () => {
