@@ -235,7 +235,7 @@ vi.mock("@/hooks/queries/control-progress", async () => await import("@/test-sup
 vi.mock("@/hooks/queries/playbook", async () => await import("@/test-support/query-hooks"));
 vi.mock("@/hooks/queries/risk-acceptance", async () => await import("@/test-support/query-hooks"));
 
-const TestDetail = (await import("@/pages/test-detail")).default;
+const TestDetail = (await import("@/pages/assess/test-detail")).default;
 
 let container: HTMLDivElement;
 let root: Root;

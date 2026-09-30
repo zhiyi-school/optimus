@@ -433,7 +433,7 @@ The original spec for this dashboard explicitly forbade assessment
 creation from the frontend — assessments were meant to exist only as a
 byproduct of automation runs. That was deliberately overridden: Security
 Team can now add an app directly via "Add App" (`addApp` in `src/workflows/app-registration.ts`,
-`src/pages/assessments.tsx`).
+`src/pages/assess/assessments.tsx`).
 
 This inserts an `applications` row (`0004_application_contacts.sql` adds
 `app_type`/`owner_name`/`owner_email`/`developer_contact_name`/

@@ -211,7 +211,7 @@ describe("the shared risk sidebar", () => {
 
 describe("both roles use the one sidebar", () => {
   it("is the only master column either workspace builds", () => {
-    for (const path of ["src/pages/test-detail.tsx", "src/pages/resolve-risk.tsx"]) {
+    for (const path of ["src/pages/assess/test-detail.tsx", "src/pages/resolve/risk.tsx"]) {
       const source = readFileSync(path, "utf8");
       expect(source, path).toMatch(/AssessmentSidebar|RiskSidebar/);
       expect(source, path).toContain("RiskWorkspace");
@@ -227,7 +227,7 @@ describe("both roles use the one sidebar", () => {
   it("gives both roles the same workspace geometry", () => {
     const workspace = readFileSync("src/components/layout/risk-workspace.tsx", "utf8");
     expect(workspace).toContain("lg:grid-cols-[17rem_minmax(0,1fr)]");
-    for (const path of ["src/pages/test-detail.tsx", "src/pages/resolve-risk.tsx"]) {
+    for (const path of ["src/pages/assess/test-detail.tsx", "src/pages/resolve/risk.tsx"]) {
       expect(readFileSync(path, "utf8"), path).not.toContain("lg:grid-cols-3");
     }
   });

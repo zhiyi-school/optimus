@@ -60,7 +60,7 @@ vi.mock("@/test-support/query-hooks", () => {
   };
 });
 
-const AssessmentDetail = (await import("@/pages/assessment-detail")).default;
+const AssessmentDetail = (await import("@/pages/assess/assessment-detail")).default;
 
 let container: HTMLDivElement;
 let root: Root;

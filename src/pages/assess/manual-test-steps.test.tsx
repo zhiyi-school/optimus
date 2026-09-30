@@ -58,7 +58,7 @@ vi.mock("@/test-support/query-hooks", () => ({
   }),
 }));
 
-const ManualTestSteps = (await import("@/pages/manual-test-steps")).default;
+const ManualTestSteps = (await import("@/pages/assess/manual-test-steps")).default;
 
 let container: HTMLDivElement;
 let root: Root;

@@ -165,6 +165,9 @@ src/
 │   ├── playbook/          # Playbook content, inline markdown, code block, guided steps
 │   └── remediation/       # Remediation section and actions, controls, risk acceptance
 ├── pages/                 # One file per route (see Routes below)
+│   ├── assess/            # /assessments/… and /runs/… (security)
+│   ├── resolve/           # /resolve/… (developers)
+│   └── …                  # admin, dashboard, learn, login, settings
 ├── hooks/
 │   ├── queries/           # TanStack Query hooks grouped by assessment, automation,
 │   │                      # control progress, conversation, evidence, playbook,

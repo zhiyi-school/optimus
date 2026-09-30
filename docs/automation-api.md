@@ -341,7 +341,7 @@ this risk has already finished but its run is still working through the rest.
 Only Security Team (`run_test` capability) can trigger any of these — RLS
 enforces this independently on the Supabase writes.
 
-Separately, `/runs/:runTimestamp` (`src/pages/run-detail.tsx`) is a
+Separately, `/runs/:runTimestamp` (`src/pages/assess/run-detail.tsx`) is a
 read-only view of one run's live status and full result summary — one row
 per (app, risk) tested, each with its real `verdict` — built straight from
 the backend (`useRunStatus` + `useRunResults`) rather than from whatever
@@ -481,7 +481,7 @@ remediation guidance.
 ## Manual testing steps
 
 `/assessments/:assessmentId/tests/:testId/manual`
-(`src/pages/manual-test-steps.tsx`) renders the demonstration from that same
+(`src/pages/assess/manual-test-steps.tsx`) renders the demonstration from that same
 catalogue. There is no separate request: `demonstration` arrives with the
 risks the page is already holding.
 
@@ -520,7 +520,7 @@ The backend allows browser origins via `CORSMiddleware`, defaulting to
 from any other origin, set that variable on the backend — otherwise every
 request is blocked by the browser before it reaches the API, and the page
 looks empty rather than broken. The dashboard shows an explicit error banner
-when these calls fail (see `src/pages/assessments.tsx`), but the fix is
+when these calls fail (see `src/pages/assess/assessments.tsx`), but the fix is
 backend-side configuration. Use exact origins only; the backend rejects `*`
 at startup because its endpoints can write config, start tests, upload
 builds, and serve evidence.

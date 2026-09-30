@@ -155,7 +155,7 @@ vi.mock("@/test-support/query-hooks", () => {
   };
 });
 
-const ControlDetail = (await import("@/pages/control-detail")).default;
+const ControlDetail = (await import("@/pages/resolve/control-detail")).default;
 
 let container: HTMLDivElement;
 let root: Root;

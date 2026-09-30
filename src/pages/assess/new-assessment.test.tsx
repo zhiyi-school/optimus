@@ -87,7 +87,7 @@ vi.mock("@/test-support/query-hooks", () => ({
   useAssessments: () => ({ data: rows, isLoading: false, isError: false }),
 }));
 
-const NewAssessment = (await import("@/pages/new-assessment")).default;
+const NewAssessment = (await import("@/pages/assess/new-assessment")).default;
 
 let container: HTMLDivElement;
 let root: Root;

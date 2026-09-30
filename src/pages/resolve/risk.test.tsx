@@ -205,7 +205,7 @@ vi.mock("@/test-support/query-hooks", () => {
   };
 });
 
-const ResolveRisk = (await import("@/pages/resolve-risk")).default;
+const ResolveRisk = (await import("@/pages/resolve/risk")).default;
 
 let container: HTMLDivElement;
 let root: Root;
