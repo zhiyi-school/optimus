@@ -17,7 +17,7 @@ Stack: React 18, TypeScript, Vite, React Router, TanStack Query 5, Tailwind 3, R
 | --- | --- | --- |
 | `src/pages/` (`assess/`, `resolve/`) | Route views composing components and hooks | Call Supabase or the automation API directly |
 | `src/components/` (`ui/`, `layout/`, `shared/`, `assessment/`, `conversation/`, `evidence/`, `playbook/`, `remediation/`) | Rendering | Hold domain types that non-UI code consumes |
-| `src/hooks/` (`queries/`, `conversation/`, `remediation/`) | Query hooks and stateful coordination | Hold pure rules that belong in `src/domain/` |
+| `src/hooks/` (`queries/`, `assessment/`, `conversation/`, `remediation/`) | Query hooks and stateful coordination | Hold pure rules that belong in `src/domain/` |
 | `src/domain/` | Pure business rules and view models | Import React or make network calls |
 | `src/lib/` | Generic helpers: debug, download, people, utils | Know about the dashboard's domain |
 | `src/workflows/` | Operations spanning the automation API and Supabase, such as app registration and its rollback | Write automation results into Supabase |

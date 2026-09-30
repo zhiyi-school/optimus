@@ -174,6 +174,7 @@ src/
 │   │                      # reference, risk acceptance, and ticket
 │   │   ├── keys.ts        # Exact entity and prefix key factories
 │   │   └── invalidation-rules.ts # Shared invalidation groups
+│   ├── assessment/        # create-assessment: register the app, queue its run, refresh lists
 │   ├── conversation/      # composer, record-then-attach submission, attachment download
 │   ├── remediation/       # ensure-remediation, readiness, reconciliation
 │   └── risk-workspace-data.ts

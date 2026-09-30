@@ -192,7 +192,7 @@ Resolve applications list and application page — and any new surface should us
 it rather than reaching for `appTypeIcon` directly.
 `src/components/shared/application-icon.surfaces.test.ts` checks the first four
 of those (`src/pages/assess/assessments.tsx`,
-`src/pages/assess/new-assessment.tsx`, `src/pages/admin.tsx` and
+`src/pages/assess/new-assessment/assessments-mini-list.tsx`, `src/pages/admin.tsx` and
 `src/components/layout/risk-sidebar.tsx`) and fails if one of them hand-rolls the
 placeholder instead; the two Resolve pages are not in its list.
 

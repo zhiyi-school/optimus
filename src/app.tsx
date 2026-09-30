@@ -14,7 +14,7 @@ import Resolve from "@/pages/resolve/applications";
 
 const Login = lazy(() => import("@/pages/login"));
 const Dashboard = lazy(() => import("@/pages/dashboard"));
-const NewAssessment = lazy(() => import("@/pages/assess/new-assessment"));
+const NewAssessment = lazy(() => import("@/pages/assess/new-assessment/new-assessment"));
 const AssessmentDetail = lazy(() => import("@/pages/assess/assessment-detail"));
 const TestDetail = lazy(() => import("@/pages/assess/test-detail"));
 const ManualTestSteps = lazy(() => import("@/pages/assess/manual-test-steps"));
