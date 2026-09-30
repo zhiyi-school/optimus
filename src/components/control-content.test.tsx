@@ -193,7 +193,7 @@ describe("preview mode", () => {
   });
 
   it("reaches for no mutation, so reading a control writes no progress rows", () => {
-    const page = readFileSync("src/pages/ControlPreview.tsx", "utf8");
+    const page = readFileSync("src/pages/control-preview.tsx", "utf8");
     for (const mutation of [
       "useInitializeTicketControls",
       "useSetControlStepStatus",
@@ -397,7 +397,7 @@ describe("screenshots inside a control step", () => {
   });
 
   it("uses the same treatment a manual test step does", () => {
-    const manual = readFileSync("src/pages/ManualTestSteps.tsx", "utf8");
+    const manual = readFileSync("src/pages/manual-test-steps.tsx", "utf8");
     expect(manual).toContain("PlaybookFigure");
     expect(manual).not.toContain("<img");
   });

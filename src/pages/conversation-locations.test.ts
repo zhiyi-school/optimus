@@ -20,17 +20,17 @@ const PAGES = sourceFiles("src/pages").concat(sourceFiles("src/components"));
 describe("the conversation has exactly one home", () => {
   it("is rendered only by each role's own feature-risk workspace", () => {
     const renderers = PAGES.filter((path) => /<RiskConversationPanel/.test(source(path))).sort();
-    expect(renderers).toEqual(["src/pages/ResolveRisk.tsx", "src/pages/TestDetail.tsx"]);
+    expect(renderers).toEqual(["src/pages/resolve-risk.tsx", "src/pages/test-detail.tsx"]);
   });
 
   it("is rendered once on each of them", () => {
-    for (const path of ["src/pages/TestDetail.tsx", "src/pages/ResolveRisk.tsx"]) {
+    for (const path of ["src/pages/test-detail.tsx", "src/pages/resolve-risk.tsx"]) {
       expect(source(path).match(/<RiskConversationPanel/g), path).toHaveLength(1);
     }
   });
 
   it("is not on the assessment overview", () => {
-    const assessment = source("src/pages/AssessmentDetail.tsx");
+    const assessment = source("src/pages/assessment-detail.tsx");
     expect(assessment).not.toContain("conversation-panel");
     expect(assessment).not.toContain("ConversationPanel");
     expect(assessment).not.toContain("<textarea");
@@ -42,7 +42,7 @@ describe("the conversation has exactly one home", () => {
   });
 
   it("is not pointed at from the remediation section, which is already on the same page", () => {
-    for (const path of ["src/components/remediation-section.tsx", "src/pages/ResolveRisk.tsx"]) {
+    for (const path of ["src/components/remediation-section.tsx", "src/pages/resolve-risk.tsx"]) {
       expect(source(path), path).not.toContain("RiskConversationLink");
       expect(source(path), path).not.toContain("Talking to security");
       expect(source(path), path).not.toContain("Open risk conversation");
@@ -87,7 +87,7 @@ describe("the conversation has exactly one home", () => {
 
 describe("the conversation is keyed by application, not by assessment", () => {
   it("asks for it with the application the assessment belongs to", () => {
-    const page = source("src/pages/TestDetail.tsx");
+    const page = source("src/pages/test-detail.tsx");
     expect(page).toContain("applicationId: assessment?.application_id,");
     expect(source("src/hooks/risk-workspace-data.ts")).toContain(
       "useRiskConversation(applicationId, riskId, findingId,",
@@ -114,7 +114,7 @@ describe("the conversation is keyed by application, not by assessment", () => {
 
 describe("the automated test history has no card of its own", () => {
   it("is combined into the conversation rather than listed beside it", () => {
-    const page = source("src/pages/TestDetail.tsx");
+    const page = source("src/pages/test-detail.tsx");
     expect(page).not.toContain("Automated Test History");
     expect(source("src/hooks/risk-workspace-data.ts")).toContain(
       "conversationTimeline(entries.data, history.data)",
@@ -132,7 +132,7 @@ describe("the automated test history has no card of its own", () => {
   });
 
   it("keeps the live run progress separate from the history", () => {
-    const page = source("src/pages/TestDetail.tsx");
+    const page = source("src/pages/test-detail.tsx");
     expect(page).toContain("Automated test is running");
     expect(page).toContain("<RunEventTimeline");
   });

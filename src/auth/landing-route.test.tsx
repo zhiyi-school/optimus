@@ -44,7 +44,7 @@ vi.mock("@/auth/auth-context", () => ({
   }),
 }));
 
-const Login = (await import("@/pages/Login")).default;
+const Login = (await import("@/pages/login")).default;
 
 let container: HTMLDivElement;
 let root: Root;

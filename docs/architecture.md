@@ -171,7 +171,7 @@ src/
 │   ├── risk-workspace-data.ts
 │   └── use-reassessment-run.ts
 ├── lib/                   # Pure domain helpers and neutral presentation models
-├── App.tsx
+├── app.tsx
 └── main.tsx
 
 supabase/

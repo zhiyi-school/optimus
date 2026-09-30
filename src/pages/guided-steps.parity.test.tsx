@@ -200,9 +200,9 @@ vi.mock("@/test-support/query-hooks", () => {
   };
 });
 
-const ManualTestSteps = (await import("@/pages/ManualTestSteps")).default;
-const ControlPreview = (await import("@/pages/ControlPreview")).default;
-const ControlDetail = (await import("@/pages/ControlDetail")).default;
+const ManualTestSteps = (await import("@/pages/manual-test-steps")).default;
+const ControlPreview = (await import("@/pages/control-preview")).default;
+const ControlDetail = (await import("@/pages/control-detail")).default;
 
 let container: HTMLDivElement;
 let root: Root;

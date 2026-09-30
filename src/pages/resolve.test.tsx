@@ -148,8 +148,8 @@ vi.mock("@/test-support/query-hooks", () => {
   };
 });
 
-const Resolve = (await import("@/pages/Resolve")).default;
-const ResolveApplication = (await import("@/pages/ResolveApplication")).default;
+const Resolve = (await import("@/pages/resolve")).default;
+const ResolveApplication = (await import("@/pages/resolve-application")).default;
 
 let container: HTMLDivElement;
 let root: Root;

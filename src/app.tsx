@@ -9,23 +9,23 @@ import { defaultRouteFor, type Capability } from "@/auth/permissions";
 import { Layout } from "@/components/layout";
 import { ErrorState, LoadingState } from "@/components/common";
 import { ResolveGuard } from "@/components/resolve-guard";
-import Assessments from "@/pages/Assessments";
-import Resolve from "@/pages/Resolve";
+import Assessments from "@/pages/assessments";
+import Resolve from "@/pages/resolve";
 
-const Login = lazy(() => import("@/pages/Login"));
-const Dashboard = lazy(() => import("@/pages/Dashboard"));
-const NewAssessment = lazy(() => import("@/pages/NewAssessment"));
-const AssessmentDetail = lazy(() => import("@/pages/AssessmentDetail"));
-const TestDetail = lazy(() => import("@/pages/TestDetail"));
-const ManualTestSteps = lazy(() => import("@/pages/ManualTestSteps"));
-const RunDetail = lazy(() => import("@/pages/RunDetail"));
-const ResolveApplication = lazy(() => import("@/pages/ResolveApplication"));
-const ResolveRisk = lazy(() => import("@/pages/ResolveRisk"));
-const ControlDetail = lazy(() => import("@/pages/ControlDetail"));
-const ControlPreview = lazy(() => import("@/pages/ControlPreview"));
-const Settings = lazy(() => import("@/pages/Settings"));
-const Admin = lazy(() => import("@/pages/Admin"));
-const Learn = lazy(() => import("@/pages/Learn"));
+const Login = lazy(() => import("@/pages/login"));
+const Dashboard = lazy(() => import("@/pages/dashboard"));
+const NewAssessment = lazy(() => import("@/pages/new-assessment"));
+const AssessmentDetail = lazy(() => import("@/pages/assessment-detail"));
+const TestDetail = lazy(() => import("@/pages/test-detail"));
+const ManualTestSteps = lazy(() => import("@/pages/manual-test-steps"));
+const RunDetail = lazy(() => import("@/pages/run-detail"));
+const ResolveApplication = lazy(() => import("@/pages/resolve-application"));
+const ResolveRisk = lazy(() => import("@/pages/resolve-risk"));
+const ControlDetail = lazy(() => import("@/pages/control-detail"));
+const ControlPreview = lazy(() => import("@/pages/control-preview"));
+const Settings = lazy(() => import("@/pages/settings"));
+const Admin = lazy(() => import("@/pages/admin"));
+const Learn = lazy(() => import("@/pages/learn"));
 
 /** Renders children once signed in with a profile; otherwise loading, the login redirect or a retryable error. */
 function RequireAuth({ children }: { children: ReactNode }) {

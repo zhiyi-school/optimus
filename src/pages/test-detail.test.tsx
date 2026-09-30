@@ -7,7 +7,7 @@ vi.mock("react-router-dom", () => ({
   useNavigate: () => () => {},
 }));
 
-const TestDetail = (await import("./TestDetail")).default;
+const TestDetail = (await import("./test-detail")).default;
 
 describe("TestDetail", () => {
   it("keys the page by testId so run state cannot survive a test switch", () => {
