@@ -23,26 +23,16 @@ import { useRiskComposer } from "@/hooks/conversation-composer";
 import {
   useAssessment,
 } from "@/hooks/queries/assessments";
-import {
-  useFindingEvidenceItems,
-  useFindings,
-} from "@/hooks/queries/evidence";
+import { useFindings } from "@/hooks/queries/evidence";
 import {
   useRiskCatalogue,
   useActiveRun,
   useResyncRun,
   useRunEvents,
   useRunSyncStatus,
-  useTestRunHistory,
-  useIpaAnalysis,
 } from "@/hooks/queries/automation";
-import {
-  useRiskConversation,
-  useRiskConversationAttachments,
-  useRiskConversationEntries,
-} from "@/hooks/queries/conversations";
 import { useFindingRetests, useFindingTickets } from "@/hooks/queries/tickets";
-import { useProfiles } from "@/hooks/queries/reference";
+import { useRiskWorkspaceData } from "@/hooks/risk-workspace-data";
 import { DashboardSyncNotice } from "@/components/dashboard-sync-notice";
 import { assessmentApi, defaultConfigPath } from "@/api/automation-services";
 import {
@@ -55,15 +45,13 @@ import { useAuth } from "@/auth/auth-context";
 import { hasRole } from "@/auth/permissions";
 import { createDebug } from "@/lib/debug";
 import { riskIcon } from "@/lib/entity-icons";
-import { conversationTimeline } from "@/lib/conversation-timeline";
-import { combinedEvidence, latestResult, latestResultDetail } from "@/lib/automation-evidence";
+import { latestResultDetail } from "@/lib/automation-evidence";
 import { PlaintextLiteralsCard } from "@/components/plaintext-literals";
-import { analysisArtifact, plaintextLiterals } from "@/lib/plaintext-literals";
 import { LatestResultPanel } from "@/components/latest-result";
 import { nextReassessment } from "@/lib/reassessments";
 import { activeRemediationTicket, resumableRemediationTicket } from "@/lib/resolve";
 import { cn, errorMessage, formatDate } from "@/lib/utils";
-import type { Application, Finding } from "@/data/types";
+import { findingsByTestId } from "@/lib/assessments";
 import { assessmentKeys, automationKeys, evidenceKeys, ticketKeys } from "@/hooks/query-keys";
 import { retestData } from "@/data/services/retests";
 
@@ -93,40 +81,35 @@ function TestPage() {
   const risk = useMemo(() => risks?.find((r) => r.risk_id === testId), [risks, testId]);
 
   const { data: findings } = useFindings({ applicationId: assessment?.application_id });
-  const findingByTestId = useMemo(() => {
-    const map = new Map<string, Finding & { application: Application | null }>();
-    for (const f of findings ?? []) {
-      if (f.test_id) map.set(f.test_id, f);
-    }
-    return map;
-  }, [findings]);
+  const findingByTestId = useMemo(() => findingsByTestId(findings), [findings]);
   const currentFinding = testId ? findingByTestId.get(testId) : undefined;
 
-  const { data: profiles } = useProfiles();
-  const profileMap = useMemo(() => new Map((profiles ?? []).map((p) => [p.id, p])), [profiles]);
-
+  const appExternalId = assessment?.application?.external_id ?? undefined;
   const canComment = can("comment_risk_conversation");
-  const conversation = useRiskConversation(
-    assessment?.application_id,
-    testId,
-    currentFinding?.id,
-    { create: canComment, originAssessmentId: assessmentId },
-  );
-  const entries = useRiskConversationEntries(conversation.data?.id);
-  const attachments = useRiskConversationAttachments(
-    useMemo(() => (entries.data ?? []).map((entry) => entry.id), [entries.data]),
-  );
-  const attachmentRows = attachments.data;
-  const attachmentsByEntry = useMemo(() => {
-    const map = new Map<string, typeof attachmentRows>();
-    for (const attachment of attachmentRows) {
-      map.set(attachment.entry_id, [...(map.get(attachment.entry_id) ?? []), attachment]);
-    }
-    return map;
-  }, [attachmentRows]);
+  const {
+    conversation,
+    entries,
+    attachments,
+    attachmentsByEntry,
+    profileMap,
+    history: historyQuery,
+    timeline,
+    newest,
+    railEvidence,
+    analysisRef,
+    analysis,
+    literals,
+  } = useRiskWorkspaceData({
+    applicationId: assessment?.application_id,
+    applicationExternalId: appExternalId,
+    riskId: testId,
+    findingId: currentFinding?.id,
+    originAssessmentId: assessmentId,
+    canComment,
+  });
+  const { data: history, isLoading, isError, refetch } = historyQuery;
   const { data: findingTickets } = useFindingTickets(currentFinding?.id);
   const { data: retests } = useFindingRetests(currentFinding?.id);
-  const evidence = useFindingEvidenceItems(currentFinding?.id);
   const remediationTicket =
     activeRemediationTicket(currentFinding?.id ?? "", findingTickets) ??
     resumableRemediationTicket(currentFinding?.id ?? "", findingTickets);
@@ -136,24 +119,6 @@ function TestPage() {
     ticket: remediationTicket,
     can,
   });
-
-  const appExternalId = assessment?.application?.external_id ?? undefined;
-  const { data: history, isLoading, isError, refetch } = useTestRunHistory(appExternalId, testId);
-  const timeline = useMemo(() => conversationTimeline(entries.data, history), [entries.data, history]);
-  const newest = useMemo(
-    () => latestResult(history, appExternalId, testId),
-    [history, appExternalId, testId],
-  );
-  const railEvidence = useMemo(
-    () => combinedEvidence(newest, evidence.data, assessmentApi.evidenceFileUrl),
-    [newest, evidence.data],
-  );
-  const analysisRef = analysisArtifact(newest);
-  const analysis = useIpaAnalysis(newest?.run_timestamp, analysisRef?.ref);
-  const literals = useMemo(
-    () => (analysis.data ? plaintextLiterals(analysis.data, newest?.run_timestamp ?? "") : undefined),
-    [analysis.data, newest?.run_timestamp],
-  );
 
   const [watching, setWatching] = useState(false);
   const [startedRunId, setStartedRunId] = useState<string | undefined>();

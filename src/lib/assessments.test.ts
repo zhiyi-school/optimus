@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { latestAssessmentPerApp, preferredAssessmentRisk, type AssessmentRow } from "./assessments";
+import {
+  findingsByTestId,
+  latestAssessmentPerApp,
+  preferredAssessmentRisk,
+  type AssessmentRow,
+} from "./assessments";
 import type { Finding, FindingStatus } from "@/data/types";
 
 const CATALOGUE = [
@@ -88,6 +93,21 @@ describe("the feature-risk a completed assessment opens on", () => {
     const findings = [finding("example-feature-01-risk-01", "reduced_risk")];
     findings.push({ ...finding("x", "at_risk"), test_id: null } as Finding);
     expect(preferredAssessmentRisk(CATALOGUE, findings)).toBe("example-feature-01-risk-02");
+  });
+});
+
+describe("findings indexed by risk", () => {
+  it("keys each finding by the risk it records", () => {
+    const first = finding("example-feature-01-risk-01", "at_risk");
+    const second = finding("example-feature-01-risk-02", "reduced_risk");
+    const map = findingsByTestId([first, second]);
+    expect(map.get("example-feature-01-risk-01")).toBe(first);
+    expect(map.get("example-feature-01-risk-02")).toBe(second);
+  });
+
+  it("skips findings that record no risk and tolerates missing data", () => {
+    expect(findingsByTestId([{ ...finding("x", "at_risk"), test_id: null }]).size).toBe(0);
+    expect(findingsByTestId(undefined).size).toBe(0);
   });
 });
 

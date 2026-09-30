@@ -14,32 +14,15 @@ import { RiskConversationActions } from "@/components/ticket-actions/composition
 import { useRiskComposer } from "@/hooks/conversation-composer";
 import { EvidenceList } from "@/components/evidence";
 import { RiskConversationPanel } from "@/components/conversation-panel";
-import ResolveTicket from "@/pages/ResolveTicket";
-import {
-  useFindingEvidenceItems,
-  useFindings,
-} from "@/hooks/queries/evidence";
-import {
-  useIpaAnalysis,
-  useRiskCatalogue,
-  useTestRunHistory,
-} from "@/hooks/queries/automation";
-import {
-  useRiskConversation,
-  useRiskConversationAttachments,
-  useRiskConversationEntries,
-} from "@/hooks/queries/conversations";
-import {
-  useFindingRetests,
-  useTickets,
-} from "@/hooks/queries/tickets";
-import { useApplications, useProfiles } from "@/hooks/queries/reference";
+import { RemediationSection } from "@/components/remediation-section";
+import { useFindings } from "@/hooks/queries/evidence";
+import { useRiskCatalogue } from "@/hooks/queries/automation";
+import { useFindingRetests, useTickets } from "@/hooks/queries/tickets";
+import { useApplications } from "@/hooks/queries/reference";
+import { useRiskWorkspaceData } from "@/hooks/risk-workspace-data";
 import { assessmentApi } from "@/api/automation-services";
-import { conversationTimeline } from "@/lib/conversation-timeline";
-import { combinedEvidence, latestResult } from "@/lib/automation-evidence";
 import { createDebug } from "@/lib/debug";
 import { PlaintextLiteralsCard } from "@/components/plaintext-literals";
-import { analysisArtifact, plaintextLiterals } from "@/lib/plaintext-literals";
 import {
   activeRemediationTicket,
   developerRiskOrder,
@@ -81,45 +64,27 @@ function RiskPage() {
   const queueTicket = finding ? activeRemediationTicket(finding.id, tickets.data) : undefined;
 
   const canComment = can("comment_risk_conversation");
-  const conversation = useRiskConversation(applicationId, riskId, finding?.id, {
-    create: canComment,
+  const {
+    conversation,
+    entries,
+    attachments,
+    attachmentsByEntry,
+    profileMap,
+    history,
+    timeline,
+    newest,
+    railEvidence,
+    analysisRef,
+    analysis,
+    literals,
+  } = useRiskWorkspaceData({
+    applicationId,
+    applicationExternalId: application?.external_id ?? undefined,
+    riskId,
+    findingId: finding?.id,
     originAssessmentId: finding?.assessment_id,
+    canComment,
   });
-  const entries = useRiskConversationEntries(conversation.data?.id);
-  const attachments = useRiskConversationAttachments(
-    useMemo(() => (entries.data ?? []).map((entry) => entry.id), [entries.data]),
-  );
-  const attachmentRows = attachments.data;
-  const attachmentsByEntry = useMemo(() => {
-    const map = new Map<string, typeof attachmentRows>();
-    for (const attachment of attachmentRows) {
-      map.set(attachment.entry_id, [...(map.get(attachment.entry_id) ?? []), attachment]);
-    }
-    return map;
-  }, [attachmentRows]);
-  const { data: profiles } = useProfiles();
-  const profileMap = useMemo(() => new Map((profiles ?? []).map((p) => [p.id, p])), [profiles]);
-
-  const history = useTestRunHistory(application?.external_id ?? undefined, riskId);
-  const timeline = useMemo(
-    () => conversationTimeline(entries.data, history.data),
-    [entries.data, history.data],
-  );
-  const securityEvidence = useFindingEvidenceItems(finding?.id);
-  const newest = useMemo(
-    () => latestResult(history.data, application?.external_id, riskId),
-    [history.data, application?.external_id, riskId],
-  );
-  const railEvidence = useMemo(
-    () => combinedEvidence(newest, securityEvidence.data, assessmentApi.evidenceFileUrl),
-    [newest, securityEvidence.data],
-  );
-  const analysisRef = analysisArtifact(newest);
-  const analysis = useIpaAnalysis(newest?.run_timestamp, analysisRef?.ref);
-  const literals = useMemo(
-    () => (analysis.data ? plaintextLiterals(analysis.data, newest?.run_timestamp ?? "") : undefined),
-    [analysis.data, newest?.run_timestamp],
-  );
   const retests = useFindingRetests(finding?.id);
   const composer = useRiskComposer({
     conversation: conversation.data,
@@ -248,7 +213,7 @@ function RiskPage() {
               />
             )}
 
-            <ResolveTicket ticketId={ticket?.id} finding={finding} />
+            <RemediationSection ticketId={ticket?.id} finding={finding} />
           </RiskDetailGrid>
 
           {can("view_risk_conversation") && (

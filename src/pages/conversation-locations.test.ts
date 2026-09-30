@@ -37,12 +37,12 @@ describe("the conversation has exactly one home", () => {
   });
 
   it("is not composed on the remediation section", () => {
-    const page = source("src/pages/ResolveTicket.tsx");
+    const page = source("src/components/remediation-section.tsx");
     expect(page).not.toContain("<RiskConversationPanel");
   });
 
   it("is not pointed at from the remediation section, which is already on the same page", () => {
-    for (const path of ["src/pages/ResolveTicket.tsx", "src/pages/ResolveRisk.tsx"]) {
+    for (const path of ["src/components/remediation-section.tsx", "src/pages/ResolveRisk.tsx"]) {
       expect(source(path), path).not.toContain("RiskConversationLink");
       expect(source(path), path).not.toContain("Talking to security");
       expect(source(path), path).not.toContain("Open risk conversation");
@@ -70,7 +70,7 @@ describe("the conversation has exactly one home", () => {
 
   it("owns the reassessment controls, which no longer sit on a ticket page", () => {
     expect(source("src/hooks/conversation-submission.ts")).toContain("useRequestReassessment");
-    const page = source("src/pages/ResolveTicket.tsx");
+    const page = source("src/components/remediation-section.tsx");
     expect(page).not.toContain("RequestReassessment");
     expect(page).not.toContain("RunRetest");
   });
@@ -88,7 +88,10 @@ describe("the conversation has exactly one home", () => {
 describe("the conversation is keyed by application, not by assessment", () => {
   it("asks for it with the application the assessment belongs to", () => {
     const page = source("src/pages/TestDetail.tsx");
-    expect(page).toContain("useRiskConversation(\n    assessment?.application_id,");
+    expect(page).toContain("applicationId: assessment?.application_id,");
+    expect(source("src/hooks/risk-workspace-data.ts")).toContain(
+      "useRiskConversation(applicationId, riskId, findingId,",
+    );
   });
 
   it("looks it up and creates it on the application key alone", () => {
@@ -113,7 +116,9 @@ describe("the automated test history has no card of its own", () => {
   it("is combined into the conversation rather than listed beside it", () => {
     const page = source("src/pages/TestDetail.tsx");
     expect(page).not.toContain("Automated Test History");
-    expect(page).toContain("conversationTimeline(entries.data, history)");
+    expect(source("src/hooks/risk-workspace-data.ts")).toContain(
+      "conversationTimeline(entries.data, history.data)",
+    );
   });
 
   it("is still sourced from the automation backend, never copied into entries", () => {

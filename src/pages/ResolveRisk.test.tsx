@@ -135,8 +135,8 @@ vi.mock("@/auth/auth-context", () => ({
   }),
 }));
 
-vi.mock("@/pages/ResolveTicket", () => ({
-  default: ({ ticketId }: { ticketId?: string }) => <p>{`remediation:${ticketId ?? "none"}`}</p>,
+vi.mock("@/components/remediation-section", () => ({
+  RemediationSection: ({ ticketId }: { ticketId?: string }) => <p>{`remediation:${ticketId ?? "none"}`}</p>,
 }));
 
 vi.mock("@/hooks/queries/assessments", async () => await import("@/test-support/query-hooks"));

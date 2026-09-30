@@ -2,20 +2,17 @@
  * Remediation control page where developers work through and record control steps.
  */
 
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useMemo, useRef } from "react";
 import { useParams } from "react-router-dom";
-import { FileText } from "lucide-react";
 import { useAuth } from "@/auth/auth-context";
 import { LoadingState, ErrorState } from "@/components/common";
 import { PlaybookUpdatedNotice } from "@/components/resolve-display";
-import { EstimatedTime, GuidedSteps, type GuidedStep } from "@/components/guided-steps";
 import {
   ControlGuidance,
-  ControlStepBody,
-  ControlStepsEmpty,
   ControlSupportingInfo,
   type ControlStepProgress,
 } from "@/components/control-content";
+import { ControlStepsView, ControlUnavailable } from "@/components/control-steps-view";
 import {
   useSetControlStepStatus,
   useTicketControlSteps,
@@ -24,10 +21,9 @@ import {
 import { useControlDetail, useControlSource, usePlaybookRevisionWatch } from "@/hooks/queries/playbook";
 import { useTicket } from "@/hooks/queries/tickets";
 import { createDebug } from "@/lib/debug";
-import { changedSinceCompleted, contentHashes, controlSummary } from "@/lib/control-content";
+import { changedSinceCompleted, contentHashes } from "@/lib/control-content";
 import { liveControls } from "@/lib/resolve";
 import { resolveRiskPath } from "@/lib/risk-routes";
-import { stepCountLabel } from "@/lib/utils";
 
 const debug = createDebug("page:ControlDetail");
 
@@ -91,60 +87,38 @@ export default function ControlDetail() {
     [live, can, setStatus],
   );
 
-  const definitionSteps = control.data?.steps ?? [];
-  const [chosenStepKey, setChosenStepKey] = useState<string | null>(null);
-  const activeStepKey =
-    chosenStepKey && definitionSteps.some((step) => step.step_key === chosenStepKey)
-      ? chosenStepKey
-      : (definitionSteps[0]?.step_key ?? null);
-
-  /** Wraps loading and error content in an empty guided-steps frame. */
-  const shell = (children: ReactNode) => (
-    <GuidedSteps
-      icon={FileText}
-      title="Remediation Steps"
-      steps={[]}
-      activeId={null}
-      onSelect={() => {}}
-      closeTo={backTo}
-      closeLabel="Back to the risk"
-      navLabel="Remediation steps"
-    >
-      {children}
-    </GuidedSteps>
-  );
-
-  if (ticket.isLoading || control.isLoading) return shell(<LoadingState label="Loading control…" />);
+  if (ticket.isLoading || control.isLoading) {
+    return (
+      <ControlStepsView backTo={backTo}>
+        <LoadingState label="Loading control…" />
+      </ControlStepsView>
+    );
+  }
   if (ticket.isError || !ticket.data) {
-    return shell(
-      <ErrorState
-        message="Unable to load this remediation."
-        onRetry={() => {
-          debug("retries remediation load", { ticketId });
-          void ticket.refetch();
-        }}
-      />,
+    return (
+      <ControlStepsView backTo={backTo}>
+        <ErrorState
+          message="Unable to load this remediation."
+          onRetry={() => {
+            debug("retries remediation load", { ticketId });
+            void ticket.refetch();
+          }}
+        />
+      </ControlStepsView>
     );
   }
   if (control.isError || !control.data) {
-    return shell(
-      <ErrorState
-        message="The automation backend could not provide the remediation instructions for this control. Check that its playbook directory is configured and reachable."
-        onRetry={() => {
-          debug("retries control load", { platform, controlId });
-          void control.refetch();
-        }}
-      />,
+    return (
+      <ControlStepsView backTo={backTo}>
+        <ControlUnavailable
+          onRetry={() => {
+            debug("retries control load", { platform, controlId });
+            void control.refetch();
+          }}
+        />
+      </ControlStepsView>
     );
   }
-
-  const navSteps: GuidedStep[] = definitionSteps.map((step, index) => ({
-    id: step.step_key,
-    label: step.step_title || `Step ${step.number ?? index + 1}`,
-    complete: stepProgress.byStepKey.get(step.step_key)?.status === "completed",
-  }));
-  const activeIndex = definitionSteps.findIndex((step) => step.step_key === activeStepKey);
-  const activeStep = activeIndex >= 0 ? definitionSteps[activeIndex] : undefined;
 
   const supporting = (
     <ControlSupportingInfo
@@ -156,19 +130,19 @@ export default function ControlDetail() {
   );
 
   return (
-    <GuidedSteps
-      icon={FileText}
-      title={`Remediation Steps — ${control.data.title}`}
-      description={controlSummary(control.data)}
-      notice={playbook.updated ? (
+    <ControlStepsView
+      backTo={backTo}
+      control={control.data}
+      notice={
+        playbook.updated ? (
           <PlaybookUpdatedNotice
             onDismiss={() => {
               debug("dismisses playbook update notice", { platform });
               playbook.dismiss();
             }}
           />
-        ) : undefined}
-      tipLabel="Tip"
+        ) : undefined
+      }
       tip={
         <ControlGuidance
           notes={[
@@ -180,29 +154,8 @@ export default function ControlDetail() {
           ]}
         />
       }
-      steps={navSteps}
-      activeId={activeStepKey}
-      onSelect={(stepKey) => {
-        debug("selects step", { controlId, stepKey });
-        setChosenStepKey(stepKey);
-      }}
-      aside={<EstimatedTime value={stepCountLabel(definitionSteps.length)} />}
       supporting={supporting}
-      closeTo={backTo}
-      closeLabel="Back to the risk"
-      navLabel="Remediation steps"
-      finishLabel="Done"
-    >
-      {activeStep ? (
-        <ControlStepBody
-          key={activeStep.step_key}
-          step={activeStep}
-          index={activeIndex}
-          progress={stepProgress}
-        />
-      ) : (
-        <ControlStepsEmpty />
-      )}
-    </GuidedSteps>
+      progress={stepProgress}
+    />
   );
 }

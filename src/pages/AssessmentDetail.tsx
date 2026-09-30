@@ -4,7 +4,7 @@
 
 import { useMemo } from "react";
 import { Navigate, useParams } from "react-router-dom";
-import { preferredAssessmentRisk } from "@/lib/assessments";
+import { findingsByTestId, preferredAssessmentRisk } from "@/lib/assessments";
 import { LoadingState, ErrorState, EmptyState } from "@/components/common";
 import { Card, CardContent } from "@/components/ui/card";
 import { AssessmentSidebar } from "@/components/assessment-sidebar";
@@ -13,7 +13,6 @@ import { useFindings } from "@/hooks/queries/evidence";
 import { useRiskCatalogue } from "@/hooks/queries/automation";
 import { createDebug } from "@/lib/debug";
 import { formatDate } from "@/lib/utils";
-import type { Application, Finding } from "@/data/types";
 
 const debug = createDebug("page:AssessmentDetail");
 
@@ -27,13 +26,7 @@ export default function AssessmentDetail() {
   const risks = riskCatalogue.data;
   const { data: findings } = useFindings({ applicationId: assessment?.application_id });
 
-  const findingByTestId = useMemo(() => {
-    const map = new Map<string, Finding & { application: Application | null }>();
-    for (const f of findings ?? []) {
-      if (f.test_id) map.set(f.test_id, f);
-    }
-    return map;
-  }, [findings]);
+  const findingByTestId = useMemo(() => findingsByTestId(findings), [findings]);
 
   if (isLoading) return <LoadingState label="Loading assessment…" />;
   if (isError || !assessment)

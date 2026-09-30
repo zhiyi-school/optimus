@@ -224,7 +224,7 @@ vi.mock("@/test-support/query-hooks", () => {
   };
 });
 
-const ResolveTicket = (await import("@/pages/ResolveTicket")).default;
+const { RemediationSection } = await import("@/components/remediation-section");
 
 let container: HTMLDivElement;
 let root: Root;
@@ -255,7 +255,7 @@ function render() {
   act(() =>
     root.render(
       <MemoryRouter initialEntries={[`/resolve/applications/example-app-id/risks/example-risk`]}>
-        <ResolveTicket ticketId={TICKET} />
+        <RemediationSection ticketId={TICKET} />
       </MemoryRouter>,
     ),
   );
@@ -274,7 +274,7 @@ function renderWithoutTicket() {
   act(() =>
     root.render(
       <MemoryRouter initialEntries={[`/resolve/applications/example-app-id/risks/example-risk`]}>
-        <ResolveTicket finding={FINDING} />
+        <RemediationSection finding={FINDING} />
       </MemoryRouter>,
     ),
   );

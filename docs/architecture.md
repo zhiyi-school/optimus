@@ -168,6 +168,7 @@ src/
 │   ├── ensure-remediation.ts
 │   ├── remediation-readiness.ts
 │   ├── remediation-reconciliation.ts
+│   ├── risk-workspace-data.ts
 │   └── use-reassessment-run.ts
 ├── lib/                   # Pure domain helpers and neutral presentation models
 ├── App.tsx
@@ -220,6 +221,11 @@ that feed it, `remediation-reconciliation.ts` persists the selection and
 progress it plans, and `conversation-submission.ts` owns the record-then-attach
 state machine.
 
+Both roles' feature-risk workspaces, `TestDetail` and `ResolveRisk`, load the
+application-keyed conversation, run history, evidence rail and plaintext
+analysis through `risk-workspace-data.ts`. Each page keeps its own run,
+ticket and reassessment behavior.
+
 ## Maintenance and extension points
 
 | Change | Owner and required verification |
@@ -264,7 +270,8 @@ setup state, never a grant: an unassigned developer sees an explanation rather
 than a fallback list of every application. RLS refuses the same thing
 independently, so the guard is UX, not authorization.
 
-A remediation has no page of its own. `ResolveTicket` is a section of the
+A remediation has no page of its own. `RemediationSection`
+(`src/components/remediation-section.tsx`) is a section of the
 feature-risk workspace, beneath the risk header and beside its conversation, so
 a developer never leaves the thread to work through the controls.
 Links into it are built by `resolveRiskPath` (`src/lib/risk-routes.ts`), which
@@ -274,8 +281,9 @@ steps returns to the same place.
 
 The two current control routes under `/resolve` render one component pair —
 `ControlDetail` for a ticket and `ControlPreview` for a finding — over a shared
-`control-content` module, so Markdown blocks, screenshots, references and the
-archive are rendered in one place. Both use `ResolveGuard`; whether steps can be
+`control-steps-view` frame and `control-content` module, so the step
+navigation, Markdown blocks, screenshots, references and the archive are
+rendered in one place. Both use `ResolveGuard`; whether steps can be
 ticked is decided separately by `update_control_progress`. A preview reads no
 progress rows and creates none.
 

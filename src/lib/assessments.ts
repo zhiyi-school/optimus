@@ -37,6 +37,17 @@ export function preferredAssessmentRisk(
   return ordered[0].risk_id;
 }
 
+/** Indexes findings by the risk they record, skipping findings with no risk. */
+export function findingsByTestId<T extends Pick<Finding, "test_id">>(
+  findings: T[] | undefined,
+): Map<string, T> {
+  const map = new Map<string, T>();
+  for (const finding of findings ?? []) {
+    if (finding.test_id) map.set(finding.test_id, finding);
+  }
+  return map;
+}
+
 /** Keeps each application's most recently updated assessment, sorted by application name. */
 export function latestAssessmentPerApp(assessments: AssessmentRow[] | undefined): AssessmentRow[] {
   const latestByApp = new Map<string, AssessmentRow>();
