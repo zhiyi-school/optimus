@@ -7,7 +7,7 @@ import { queryOptions, useQueries, useQuery, useQueryClient } from "@tanstack/re
 import { playbookApi } from "@/automation-api/playbook-endpoints";
 import type { AutomationPlatform } from "@/automation-api/types";
 import type { ControlDetail } from "@/automation-api/playbook-types";
-import { selectableControls } from "@/lib/resolve";
+import { selectableControls } from "@/domain/remediation/resolve-rules";
 import { playbookKeys } from "@/hooks/query-keys";
 import { createDebug } from "@/lib/debug";
 

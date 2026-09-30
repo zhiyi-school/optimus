@@ -176,7 +176,15 @@ src/
 │   ├── remediation-reconciliation.ts
 │   ├── risk-workspace-data.ts
 │   └── use-reassessment-run.ts
-├── lib/                   # Pure domain helpers and neutral presentation models
+├── domain/                # Pure rules and view models: no React, no network
+│   ├── status-labels.ts   # Status labels and tones
+│   ├── assessment/        # Assessment selection, run state, icons
+│   ├── run/               # Dashboard sync, run event stream, SARIF
+│   ├── remediation/       # Approach workflow, Resolve rules, reassessments, control content
+│   ├── evidence/          # Automation evidence, evidence types, plaintext literals
+│   ├── conversation/      # Attachment keys, conversation timeline
+│   └── playbook/          # Renderable blocks, code highlighting
+├── lib/                   # Generic helpers: debug, download, people, utils
 ├── app.tsx
 └── main.tsx
 
@@ -212,7 +220,7 @@ Attachment byte and metadata stages belong to
 their partial-success context. The services call the current RPCs and columns
 directly; there are no older-schema fallbacks.
 Assessment services contain assessment and assessment-run-request operations
-only. Shared evidence item shapes live in `lib/evidence-types.ts`, so API and
+only. Shared evidence item shapes live in `domain/evidence/evidence-types.ts`, so API and
 domain mapping code does not depend on a React component.
 
 The playbook parser remains backend-owned. The frontend keeps only the generated
@@ -221,7 +229,7 @@ The playbook parser remains backend-owned. The frontend keeps only the generated
 without copying parser rules or the external playbook into application code.
 
 Remediation availability is calculated once in
-`lib/remediation-workflow.ts`. The pure calculator returns reason codes and a
+`domain/remediation/workflow.ts`. The pure calculator returns reason codes and a
 separate module owns their text. `remediation-readiness.ts` owns the queries
 that feed it, `remediation-reconciliation.ts` persists the selection and
 progress it plans, and `conversation-submission.ts` owns the record-then-attach
@@ -239,7 +247,7 @@ ticket and reassessment behavior.
 | Automation API field, enum or request | `src/automation-api/types.ts` and `endpoints.ts`; extend `endpoints.test.ts` and coordinate the backend contract tests |
 | Supabase read/write | One domain module under `src/database/`; correct older schemas with a new fix, not client fallbacks, and add service tests |
 | Query behavior | The matching `src/hooks/queries/` module; query keys belong to `query-keys.ts`, narrow invalidation groups to `queries/invalidation-rules.ts` |
-| Workflow/submission behavior | Pure rules under `src/lib/`, coordination under focused hooks, database enforcement in a new fix and SQL test |
+| Workflow/submission behavior | Pure rules under `src/domain/`, coordination under focused hooks, database enforcement in a new fix and SQL test |
 | Database fix | Next numbered `supabase/fixes/` file plus fresh, legacy-chain, `0024` upgrade, equivalence, final-schema and RLS coverage through `npm run test:database` |
 | Playbook rendering | Backend parser fixture plus `src/test-fixtures/playbook-control-v1.json` and `playbook-contract.test.tsx`; do not copy parser rules into the frontend |
 | Regression fixture | Prefer a small local factory with fresh objects; add to `src/test-fixtures/` or `src/test-support/` only for a shared stable domain contract |

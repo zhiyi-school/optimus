@@ -4,7 +4,7 @@
 
 import { useState } from "react";
 import { conversationAttachmentData } from "@/database/conversation-attachments";
-import { attachmentSource } from "@/lib/attachments";
+import { attachmentSource } from "@/domain/conversation/attachments";
 import { createDebug } from "@/lib/debug";
 import { downloadFile } from "@/lib/download";
 import { UserFacingError, errorMessage } from "@/lib/utils";

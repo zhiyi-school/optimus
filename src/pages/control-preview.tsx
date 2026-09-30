@@ -11,7 +11,7 @@ import { WorkOnRiskButton } from "@/components/ticket-actions/remediation";
 import { useControlDetail, useControlSource } from "@/hooks/queries/playbook";
 import { useFinding } from "@/hooks/queries/evidence";
 import { createDebug } from "@/lib/debug";
-import { isRemediationControl, playbookControlStatusLabels } from "@/lib/resolve";
+import { isRemediationControl, playbookControlStatusLabels } from "@/domain/remediation/resolve-rules";
 import { resolveRiskPath } from "@/routing/risk-routes";
 
 const debug = createDebug("page:ControlPreview");

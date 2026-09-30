@@ -6,7 +6,7 @@ import { KeyRound } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { ErrorState, LoadingState } from "@/components/common";
-import type { PlaintextAnalysis, PlaintextLiteral } from "@/lib/plaintext-literals";
+import type { PlaintextAnalysis, PlaintextLiteral } from "@/domain/evidence/plaintext-literals";
 
 /** Location of a literal: its bundle file and key path, or the reporting analyzer. */
 function SourceCell({ item }: { item: PlaintextLiteral }) {

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { isValidElement, type ReactElement } from "react";
 import type { PlaybookBlock } from "@/automation-api/playbook-types";
-import { plainText, renderInline } from "./inline-markdown";
-import { RENDERABLE_BLOCKS, isRenderable, renderableBlocks } from "./playbook";
+import { plainText, renderInline } from "@/components/playbook/inline-markdown";
+import { RENDERABLE_BLOCKS, isRenderable, renderableBlocks } from "@/domain/playbook/blocks";
 
 function anchors(node: unknown, found: ReactElement[] = []): ReactElement[] {
   if (Array.isArray(node)) {

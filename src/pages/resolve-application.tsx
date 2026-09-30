@@ -10,7 +10,7 @@ import { useApplications } from "@/hooks/queries/reference";
 import { useFindings } from "@/hooks/queries/evidence";
 import { useTickets } from "@/hooks/queries/tickets";
 import { createDebug } from "@/lib/debug";
-import { preferredDeveloperRisk } from "@/lib/resolve";
+import { preferredDeveloperRisk } from "@/domain/remediation/resolve-rules";
 
 const debug = createDebug("page:ResolveApplication");
 

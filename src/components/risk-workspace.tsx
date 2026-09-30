@@ -5,7 +5,7 @@
 import { type ReactNode } from "react";
 import { Paperclip, type LucideIcon } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { plainText } from "@/lib/inline-markdown";
+import { plainText } from "@/components/playbook/inline-markdown";
 import { cn } from "@/lib/utils";
 
 /** Two-column layout with the sidebar beside the main content. */

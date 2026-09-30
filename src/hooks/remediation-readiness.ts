@@ -6,7 +6,7 @@ import { useMemo } from "react";
 import { useTicketControlSteps, useTicketControls } from "@/hooks/queries/control-progress";
 import { useRiskControls } from "@/hooks/queries/playbook";
 import { createDebug } from "@/lib/debug";
-import { remediationWorkflow } from "@/lib/remediation-workflow";
+import { remediationWorkflow } from "@/domain/remediation/workflow";
 import type { Finding, RetestRun, Ticket } from "@/database/types";
 
 const debug = createDebug("hooks:remediation-readiness");

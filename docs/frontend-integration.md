@@ -280,7 +280,7 @@ backend does not support the feature" and degrades instead of erroring.
 | Types | `src/automation-api/types.ts` | the response shapes above |
 | Query hooks | `src/hooks/queries/` | Domain TanStack Query wrappers, polling intervals, cache invalidation |
 | Supabase services | `src/database/` | Domain dashboard reads and writes |
-| Pure logic | `src/workflows/automation-run.ts`, `src/lib/` | run matching, sync presentation, SARIF gating — unit-tested |
+| Pure logic | `src/workflows/automation-run.ts`, `src/domain/` | run matching, sync presentation, SARIF gating — unit-tested |
 
 Polling intervals and timeouts: [configuration.md](./configuration.md).
 

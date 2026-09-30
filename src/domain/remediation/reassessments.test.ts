@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RetestRun, TicketStatus } from "@/database/types";
-import { canWithdrawReassessment } from "./reassessments";
+import { canWithdrawReassessment } from "@/domain/remediation/reassessments";
 import { ticket } from "@/test-support/resolve-fixtures";
 
 const DEVELOPER = "00000000-0000-0000-0000-000000000001";

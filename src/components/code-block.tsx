@@ -4,7 +4,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Copy, TriangleAlert } from "lucide-react";
-import { tokenize, type CodeTokenKind } from "@/lib/code-highlight";
+import { tokenize, type CodeTokenKind } from "@/domain/playbook/code-highlight";
 import { createDebug } from "@/lib/debug";
 
 const debug = createDebug("component:code-block");

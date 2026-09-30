@@ -4,7 +4,7 @@
 
 import type { ControlDetail, ControlStep } from "@/automation-api/playbook-types";
 import { createDebug } from "@/lib/debug";
-import type { LiveStep } from "@/lib/resolve";
+import type { LiveStep } from "@/domain/remediation/resolve-rules";
 
 const debug = createDebug("lib:control-content");
 

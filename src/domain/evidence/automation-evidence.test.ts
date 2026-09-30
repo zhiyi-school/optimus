@@ -6,7 +6,7 @@ import {
   combinedEvidence,
   latestResult,
   latestResultDetail,
-} from "@/lib/automation-evidence";
+} from "@/domain/evidence/automation-evidence";
 import type { AutomationResultRow, EvidenceRef } from "@/automation-api/types";
 import type { EvidenceItem } from "@/components/evidence";
 

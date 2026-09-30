@@ -9,8 +9,8 @@ import { CodeBlock } from "@/components/code-block";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import type { PlaybookBlock, PlaybookTableBlock } from "@/automation-api/playbook-types";
 import { createDebug } from "@/lib/debug";
-import { renderInline } from "@/lib/inline-markdown";
-import { renderableBlocks } from "@/lib/playbook";
+import { renderInline } from "@/components/playbook/inline-markdown";
+import { renderableBlocks } from "@/domain/playbook/blocks";
 
 const debug = createDebug("component:playbook-content");
 

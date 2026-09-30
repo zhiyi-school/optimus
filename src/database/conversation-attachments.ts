@@ -3,7 +3,7 @@
  */
 
 import { supabase, ATTACHMENTS_BUCKET } from "@/database/client";
-import { attachmentStorageKey } from "@/lib/attachments";
+import { attachmentStorageKey } from "@/domain/conversation/attachments";
 import type { RiskConversationAttachment } from "@/database/types";
 import { createDebug } from "@/lib/debug";
 import { requireUserId } from "./session";

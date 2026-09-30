@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EvidenceList } from "@/components/evidence";
-import type { EvidenceItem } from "@/lib/evidence-types";
+import type { EvidenceItem } from "@/domain/evidence/evidence-types";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

@@ -13,7 +13,7 @@ import {
   severityToneOf,
   testRunStatusConfig,
   assessmentStatusConfig,
-} from "@/lib/status";
+} from "@/domain/status-labels";
 import type { FindingStatus, Platform } from "@/database/types";
 
 const debug = createDebug("component:data-display");

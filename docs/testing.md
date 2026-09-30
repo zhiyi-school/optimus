@@ -62,9 +62,9 @@ real browser.
 | --- | --- |
 | Run start/poll behaviour, in-flight run matching, per-risk phase | `src/workflows/automation-run.test.ts` |
 | Automation API client — SARIF and sync methods, error degradation, URL escaping | `src/automation-api/endpoints.test.ts` |
-| Dashboard sync presentation, polling start/stop, retry gating | `src/lib/dashboard-sync.test.ts` |
-| SARIF export gating and download filename | `src/lib/sarif.test.ts` |
-| Run event stream labels | `src/lib/run-stream.test.ts` |
+| Dashboard sync presentation, polling start/stop, retry gating | `src/domain/run/dashboard-sync.test.ts` |
+| SARIF export gating and download filename | `src/domain/run/sarif.test.ts` |
+| Run event stream labels | `src/domain/run/event-stream.test.ts` |
 | Query-key shapes, entity/prefix distinction, domain invalidation groups | `src/hooks/query-keys.test.ts` |
 | Query polling, mutation invalidation, and conversation subscription cleanup | `src/hooks/queries/queries.test.tsx` |
 | Reassessment claim/start/publish ordering | `src/hooks/use-reassessment-run.test.tsx` |
@@ -73,13 +73,13 @@ real browser.
 | Metrics RPC fallback | `src/database/metrics.test.ts` |
 | Test page keying (state must not leak between tests) | `src/pages/test-detail.test.tsx` |
 | Capability model, `/resolve` access states, post-login routing | `src/auth/permissions.test.ts` |
-| Remediation progress formulas, control seeding, workflow gates | `src/lib/resolve.test.ts` |
-| Reassessment withdrawal eligibility | `src/lib/reassessments.test.ts` |
-| Control summary presentation and changed-step detection | `src/lib/control-content.test.ts` |
-| Assessment run state, blocker labels and stage sequencing | `src/lib/assessment-run-state.test.ts` |
-| Shared approach selection, reconciliation and reassessment reason codes | `src/lib/remediation-workflow.test.ts` |
-| The whole developer lifecycle, sign-in to closure | `src/lib/resolve-workflow.test.ts` |
-| Playbook block allowlist and inline-link safety | `src/lib/playbook.test.tsx` |
+| Remediation progress formulas, control seeding, workflow gates | `src/domain/remediation/resolve-rules.test.ts` |
+| Reassessment withdrawal eligibility | `src/domain/remediation/reassessments.test.ts` |
+| Control summary presentation and changed-step detection | `src/domain/remediation/control-content.test.ts` |
+| Assessment run state, blocker labels and stage sequencing | `src/domain/assessment/run-state.test.ts` |
+| Shared approach selection, reconciliation and reassessment reason codes | `src/domain/remediation/workflow.test.ts` |
+| The whole developer lifecycle, sign-in to closure | `src/domain/remediation/resolve-journey.test.ts` |
+| Playbook block allowlist and inline-link safety | `src/domain/playbook/blocks.test.tsx` |
 | Playbook API client — escaping, error degradation | `src/automation-api/playbook-endpoints.test.ts` |
 | Generated backend playbook transport, rendering identities, reconciliation | `src/components/playbook-contract.test.tsx` |
 
@@ -93,7 +93,7 @@ then both repositories' focused playbook tests must pass.
 
 **Keep logic testable by keeping it pure.** The reason polling, run matching,
 sync presentation and SARIF gating are all unit-tested is that each lives in a
-plain function in `src/lib/` or `src/workflows/` rather than inside a component.
+plain function in `src/domain/` or `src/workflows/` rather than inside a component.
 New behaviour of that kind should follow the same shape.
 
 **Prove a new test can fail.** After writing a test for a fix, revert the fix
@@ -191,7 +191,7 @@ until that was done.
 
 ## The end-to-end test is a logic test
 
-`src/lib/resolve-workflow.test.ts` walks a finding through the entire developer
+`src/domain/remediation/resolve-journey.test.ts` walks a finding through the entire developer
 lifecycle — sign-in routing, control initialisation, step completion, direct
 reassessment request, security verification, closure — asserting the gates
 and the labels at each stage, and that the developer never holds the capability

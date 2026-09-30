@@ -4,7 +4,7 @@
 
 import { useMemo } from "react";
 import { Navigate, useParams } from "react-router-dom";
-import { findingsByTestId, preferredAssessmentRisk } from "@/lib/assessments";
+import { findingsByTestId, preferredAssessmentRisk } from "@/domain/assessment/assessments";
 import { LoadingState, ErrorState, EmptyState } from "@/components/common";
 import { Card, CardContent } from "@/components/ui/card";
 import { AssessmentSidebar } from "@/components/assessment-sidebar";

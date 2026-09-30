@@ -3,8 +3,8 @@
  */
 
 import { useEffect, useState } from "react";
-import { appTypeIcon } from "@/lib/entity-icons";
-import { applicationIconUrl, type ApplicationIconSource } from "@/lib/application-icon";
+import { appTypeIcon } from "@/domain/assessment/entity-icons";
+import { applicationIconUrl, type ApplicationIconSource } from "@/domain/assessment/application-icon";
 import { createDebug } from "@/lib/debug";
 import { cn } from "@/lib/utils";
 import type { Application } from "@/database/types";

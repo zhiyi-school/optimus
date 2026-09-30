@@ -4,8 +4,8 @@
 
 import { Card, CardContent } from "@/components/ui/card";
 import { StatusBadge } from "@/components/data-display";
-import { mapVerdictToFindingStatus } from "@/lib/status";
-import type { LatestResultDetail } from "@/lib/automation-evidence";
+import { mapVerdictToFindingStatus } from "@/domain/status-labels";
+import type { LatestResultDetail } from "@/domain/evidence/automation-evidence";
 import type { RiskVerdict } from "@/automation-api/types";
 
 const STATUS_LABELS: Record<string, string> = {

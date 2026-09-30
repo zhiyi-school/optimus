@@ -8,13 +8,13 @@ import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge, PlatformBadge } from "@/components/data-display";
-import { riskIcon } from "@/lib/entity-icons";
+import { riskIcon } from "@/domain/assessment/entity-icons";
 import { ApplicationIcon } from "@/components/application-icon";
 import { createDebug } from "@/lib/debug";
 import { cn } from "@/lib/utils";
 import type { Application } from "@/database/types";
-import type { Tone } from "@/lib/status";
-import { toneClasses } from "@/lib/status";
+import type { Tone } from "@/domain/status-labels";
+import { toneClasses } from "@/domain/status-labels";
 
 const debug = createDebug("component:risk-sidebar");
 

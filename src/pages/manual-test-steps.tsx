@@ -18,7 +18,7 @@ import { CodeBlock } from "@/components/code-block";
 import { PlaybookFigure, PlaybookGallery } from "@/components/playbook-content";
 import { EstimatedTime, GuidedSteps, type GuidedStep } from "@/components/guided-steps";
 import { createDebug } from "@/lib/debug";
-import { renderInline } from "@/lib/inline-markdown";
+import { renderInline } from "@/components/playbook/inline-markdown";
 import { stepCountLabel } from "@/lib/utils";
 import { useAssessment } from "@/hooks/queries/assessments";
 import { useRiskCatalogue } from "@/hooks/queries/automation";

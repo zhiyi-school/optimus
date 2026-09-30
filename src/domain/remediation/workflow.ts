@@ -17,7 +17,7 @@ import {
   selectedControlReconciliationPlan,
   selectionWasReplaced,
   type LiveControl,
-} from "@/lib/resolve";
+} from "@/domain/remediation/resolve-rules";
 import { createDebug } from "@/lib/debug";
 
 const debug = createDebug("lib:remediation-workflow");

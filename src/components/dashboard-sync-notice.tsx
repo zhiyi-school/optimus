@@ -5,7 +5,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { RunSyncStatus } from "@/automation-api/types";
-import { canRetrySync, dashboardSyncPresentation, syncCountsSummary } from "@/lib/dashboard-sync";
+import { canRetrySync, dashboardSyncPresentation, syncCountsSummary } from "@/domain/run/dashboard-sync";
 import { createDebug } from "@/lib/debug";
 import { cn } from "@/lib/utils";
 

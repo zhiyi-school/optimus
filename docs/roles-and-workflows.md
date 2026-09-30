@@ -434,8 +434,8 @@ or an explicit Security Team override.
 ### Authoritative transition matrix
 
 The frontend computes the same availability for the remediation section and
-the conversation composer in `src/lib/remediation-workflow.ts`. It uses stable
-reason codes; `src/lib/remediation-workflow-messages.ts` is the only mapping
+the conversation composer in `src/domain/remediation/workflow.ts`. It uses stable
+reason codes; `src/domain/remediation/workflow-messages.ts` is the only mapping
 from those codes to user-facing explanations. Supabase remains authoritative
 for permissions and persisted transitions.
 
@@ -566,7 +566,7 @@ is a separate call that refuses an empty reason, and `updateStatus()` rejects
 /resolve/tickets/:ticketId/controls/:controlId          one control's ordered steps, writable
 ```
 
-Progress is reported with two formulas, both computed in `src/lib/resolve.ts`:
+Progress is reported with two formulas, both computed in `src/domain/remediation/resolve-rules.ts`:
 
 ```text
 Application finding progress   resolved findings / total actionable findings

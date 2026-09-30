@@ -44,14 +44,14 @@ import {
 import { useAuth } from "@/auth/auth-context";
 import { hasRole } from "@/auth/permissions";
 import { createDebug } from "@/lib/debug";
-import { riskIcon } from "@/lib/entity-icons";
-import { latestResultDetail } from "@/lib/automation-evidence";
+import { riskIcon } from "@/domain/assessment/entity-icons";
+import { latestResultDetail } from "@/domain/evidence/automation-evidence";
 import { PlaintextLiteralsCard } from "@/components/plaintext-literals";
 import { LatestResultPanel } from "@/components/latest-result";
-import { nextReassessment } from "@/lib/reassessments";
-import { activeRemediationTicket, resumableRemediationTicket } from "@/lib/resolve";
+import { nextReassessment } from "@/domain/remediation/reassessments";
+import { activeRemediationTicket, resumableRemediationTicket } from "@/domain/remediation/resolve-rules";
 import { cn, errorMessage, formatDate } from "@/lib/utils";
-import { findingsByTestId } from "@/lib/assessments";
+import { findingsByTestId } from "@/domain/assessment/assessments";
 import { assessmentKeys, automationKeys, evidenceKeys, ticketKeys } from "@/hooks/query-keys";
 import { retestData } from "@/database/retests";
 

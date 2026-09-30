@@ -29,8 +29,8 @@ import {
   developerTicketLabel,
   resumableRemediationTicket,
   testingProgress,
-} from "@/lib/resolve";
-import { riskIcon } from "@/lib/entity-icons";
+} from "@/domain/remediation/resolve-rules";
+import { riskIcon } from "@/domain/assessment/entity-icons";
 
 const debug = createDebug("page:ResolveRisk");
 

@@ -12,7 +12,7 @@ import {
   type ControlStepProgress,
 } from "@/components/control-content";
 import { createDebug } from "@/lib/debug";
-import { controlSummary } from "@/lib/control-content";
+import { controlSummary } from "@/domain/remediation/control-content";
 import { stepCountLabel } from "@/lib/utils";
 import type { ControlDetail } from "@/automation-api/playbook-types";
 

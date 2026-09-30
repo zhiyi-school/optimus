@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { highlightedLanguage, tokenize } from "@/lib/code-highlight";
+import { highlightedLanguage, tokenize } from "@/domain/playbook/code-highlight";
 
 function rebuilt(code: string, language: string | null | undefined) {
   return tokenize(code, language)

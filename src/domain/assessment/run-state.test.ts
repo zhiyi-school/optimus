@@ -6,7 +6,7 @@ import {
   sequenceAssessmentStages,
   type AssessmentRunState,
   type RawStageInput,
-} from "@/lib/assessment-run-state";
+} from "@/domain/assessment/run-state";
 import type { AssessmentRunRequest, AssessmentRunRequestStatus } from "@/database/types";
 
 function request(

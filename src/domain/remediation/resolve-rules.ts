@@ -17,7 +17,7 @@ import type {
   TicketControlStep,
   TicketStatus,
 } from "@/database/types";
-import type { Tone } from "@/lib/status";
+import type { Tone } from "@/domain/status-labels";
 import { createDebug } from "@/lib/debug";
 
 const debug = createDebug("lib:resolve");

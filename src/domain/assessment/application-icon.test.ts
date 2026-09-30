@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applicationIconUrl } from "@/lib/application-icon";
+import { applicationIconUrl } from "@/domain/assessment/application-icon";
 
 const sha = "a".repeat(64);
 const base = {

@@ -12,9 +12,9 @@ import {
 } from "@/hooks/queries/conversations";
 import { useFindingEvidenceItems } from "@/hooks/queries/evidence";
 import { useProfiles } from "@/hooks/queries/reference";
-import { combinedEvidence, latestResult } from "@/lib/automation-evidence";
-import { conversationTimeline } from "@/lib/conversation-timeline";
-import { analysisArtifact, plaintextLiterals } from "@/lib/plaintext-literals";
+import { combinedEvidence, latestResult } from "@/domain/evidence/automation-evidence";
+import { conversationTimeline } from "@/domain/conversation/timeline";
+import { analysisArtifact, plaintextLiterals } from "@/domain/evidence/plaintext-literals";
 
 export interface RiskWorkspaceDataInput {
   applicationId: string | undefined;

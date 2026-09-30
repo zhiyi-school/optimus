@@ -7,7 +7,7 @@ import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { assessmentApi } from "@/automation-api/endpoints";
 import { createDebug } from "@/lib/debug";
-import { sarifFileName } from "@/lib/sarif";
+import { sarifFileName } from "@/domain/run/sarif";
 import { errorMessage } from "@/lib/utils";
 
 const debug = createDebug("component:download-sarif-button");

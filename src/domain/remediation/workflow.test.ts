@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { remediationWorkflow } from "./remediation-workflow";
+import { remediationWorkflow } from "@/domain/remediation/workflow";
 import type { ControlDetail } from "@/automation-api/playbook-types";
 import type { Ticket, TicketControl, TicketControlStep } from "@/database/types";
 

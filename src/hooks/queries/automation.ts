@@ -7,10 +7,10 @@ import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { assessmentApi, provisioningApi, syncApi, testApi } from "@/automation-api/endpoints";
 import type { AutomationPlatform, DashboardSyncStatus, RunProgressEvent } from "@/automation-api/types";
 import { findActiveRun, findPlatformRun, type ActiveRunFilter } from "@/workflows/automation-run";
-import { syncPollInterval } from "@/lib/dashboard-sync";
+import { syncPollInterval } from "@/domain/run/dashboard-sync";
 import { dashboardSyncInvalidationPrefixes } from "./invalidation-rules";
 import { automationKeys } from "@/hooks/query-keys";
-import type { RunEventStreamState } from "@/lib/run-stream";
+import type { RunEventStreamState } from "@/domain/run/event-stream";
 import { createDebug } from "@/lib/debug";
 
 const debug = createDebug("hooks:queries:automation");

@@ -23,7 +23,7 @@ import {
   selectedControlReconciliationPlan,
   developerTicketLabel,
   summarizeApplication,
-} from "./resolve";
+} from "@/domain/remediation/resolve-rules";
 
 const APP = "example-app-id";
 const TEAM = "example-team-id";

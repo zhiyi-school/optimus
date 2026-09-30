@@ -122,7 +122,7 @@ describe("the automated test history has no card of its own", () => {
   });
 
   it("is still sourced from the automation backend, never copied into entries", () => {
-    const model = source("src/lib/conversation-timeline.ts");
+    const model = source("src/domain/conversation/timeline.ts");
     expect(model).toContain("AutomationResultRow");
     for (const path of sourceFiles()) {
       expect(source(path), `${path} writes run history into the conversation`).not.toMatch(

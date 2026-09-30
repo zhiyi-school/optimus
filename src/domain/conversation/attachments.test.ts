@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { attachmentMeta, attachmentSource, attachmentStorageKey } from "@/lib/attachments";
+import { attachmentMeta, attachmentSource, attachmentStorageKey } from "@/domain/conversation/attachments";
 import type { RiskConversationAttachment } from "@/database/types";
 
 function attachment(

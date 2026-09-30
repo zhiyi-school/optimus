@@ -40,7 +40,7 @@ actual authorization boundary.
   change `type`, `finding_id`, `application_id`, `created_by` or either
   assignment column. It is a guardrail on the security-owned transitions, not
   a full state machine — which step is *sensible* next is still the
-  application's business (`src/lib/resolve.ts`, `src/components/ticket-actions/`).
+  application's business (`src/domain/remediation/resolve-rules.ts`, `src/components/ticket-actions/`).
   Like `prevent_role_escalation`, it only applies when
   `auth.role() = 'authenticated'`, so the automation sync worker — which holds
   the service-role key and moves a ticket to `under_review` when a retest lands
@@ -138,7 +138,7 @@ events in one feed.
 - **Automated test history is combined in the frontend, never copied in.** The
   runs shown alongside the discussion come from the automation backend's
   `/apps/{app}/risks/{risk}/history` endpoint and are merged with the stored
-  entries by `src/lib/conversation-timeline.ts` at render time. The automation
+  entries by `src/domain/conversation/timeline.ts` at render time. The automation
   host stays their only source of truth, so nothing has to be kept in step.
 - **Classification is one server-side operation.** `classify_risk_entry()` writes the
   finding's status, its `finding_history` row, the `classification_changed`

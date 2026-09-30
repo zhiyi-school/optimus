@@ -4,7 +4,7 @@ import {
   latestAssessmentPerApp,
   preferredAssessmentRisk,
   type AssessmentRow,
-} from "./assessments";
+} from "@/domain/assessment/assessments";
 import type { Finding, FindingStatus } from "@/database/types";
 
 const CATALOGUE = [

@@ -35,8 +35,8 @@ import {
   canResumeTicket,
   canWithdrawTicket,
   controlProgress,
-} from "@/lib/resolve";
-import { remediationBlockMessage } from "@/lib/remediation-workflow-messages";
+} from "@/domain/remediation/resolve-rules";
+import { remediationBlockMessage } from "@/domain/remediation/workflow-messages";
 import { useRemediationReconciliation } from "@/hooks/remediation-reconciliation";
 import { useEnsureRemediation } from "@/hooks/ensure-remediation";
 import { useRemediationReadiness } from "@/hooks/remediation-readiness";

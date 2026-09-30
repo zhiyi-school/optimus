@@ -21,7 +21,7 @@ import {
   remediationStatusLabels,
   summarizeApplication,
   type ApplicationRemediation,
-} from "@/lib/resolve";
+} from "@/domain/remediation/resolve-rules";
 import { compareByName, formatDate } from "@/lib/utils";
 import type { Application } from "@/database/types";
 

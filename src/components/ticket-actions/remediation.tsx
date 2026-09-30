@@ -14,7 +14,7 @@ import {
   useWithdrawTicket,
 } from "@/hooks/queries/tickets";
 import { useRiskControls } from "@/hooks/queries/playbook";
-import { activeRemediationTicket, effectiveSelectedControlId, resumableRemediationTicket, selectableControls, selectedControl, selectedControlReconciliationPlan } from "@/lib/resolve";
+import { activeRemediationTicket, effectiveSelectedControlId, resumableRemediationTicket, selectableControls, selectedControl, selectedControlReconciliationPlan } from "@/domain/remediation/resolve-rules";
 import { createDebug } from "@/lib/debug";
 import { resolveRiskPath } from "@/routing/risk-routes";
 import { errorMessage, formatDate } from "@/lib/utils";

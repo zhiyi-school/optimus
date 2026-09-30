@@ -3,7 +3,7 @@
  */
 
 import type { RiskConversationContext } from "@/hooks/conversation-composer";
-import { outstandingReassessments } from "@/lib/reassessments";
+import { outstandingReassessments } from "@/domain/remediation/reassessments";
 import { formatDate } from "@/lib/utils";
 
 /** Lists outstanding reassessment requests for testers, with guidance to run the risk. */

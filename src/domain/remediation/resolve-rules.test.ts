@@ -30,7 +30,7 @@ import {
   developerRiskOrder,
   preferredDeveloperRisk,
   summarizeApplication,
-} from "./resolve";
+} from "@/domain/remediation/resolve-rules";
 import {
   APP,
   REVOKE,

@@ -4,7 +4,7 @@
 
 import { type HTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
-import { toneClasses, type Tone } from "@/lib/status";
+import { toneClasses, type Tone } from "@/domain/status-labels";
 
 export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
   tone?: Tone;

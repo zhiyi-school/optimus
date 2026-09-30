@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { conversationTimeline } from "@/lib/conversation-timeline";
+import { conversationTimeline } from "@/domain/conversation/timeline";
 import type { AutomationResultRow } from "@/automation-api/types";
 import type { RiskConversationEntry } from "@/database/types";
 

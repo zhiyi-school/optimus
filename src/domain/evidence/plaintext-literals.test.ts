@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { plaintextLiterals } from "@/lib/plaintext-literals";
+import { plaintextLiterals } from "@/domain/evidence/plaintext-literals";
 
 const RUN = "2026-01-02_00-00-00";
 

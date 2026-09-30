@@ -3,7 +3,7 @@
  */
 
 import type { AutomationResultRow } from "@/automation-api/types";
-import { artifactNamed } from "@/lib/automation-evidence";
+import { artifactNamed } from "@/domain/evidence/automation-evidence";
 import { createDebug } from "@/lib/debug";
 
 const debug = createDebug("lib:plaintext-literals");

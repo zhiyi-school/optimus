@@ -158,7 +158,7 @@ The backend owns the IPA/APK and the icon extracted from it. Supabase holds only
 `icon_extraction_status`; the dashboard never reads a build, parses an image, or
 stores image data.
 
-`src/lib/application-icon.ts` turns a row into a URL, and
+`src/domain/assessment/application-icon.ts` turns a row into a URL, and
 `src/components/application-icon.tsx` renders it:
 
 ```ts
@@ -361,7 +361,7 @@ run, so it is now shown rather than hidden.
 
 `useRunSyncStatus(runId)` polls `GET /runs/{run_id}/sync-status` every 4s while
 the sync is `queued` or `running`, and stops on `completed`, `failed` or
-`not_required`. `syncPollInterval` in `src/lib/dashboard-sync.ts` is that rule as
+`not_required`. `syncPollInterval` in `src/domain/run/dashboard-sync.ts` is that rule as
 a plain function, so the start/stop behaviour is tested directly. A backend with
 no record for the run — an older API, or a report predating the feature —
 returns `null` through `syncApi.getRunSyncStatus` rather than an error, and the
@@ -393,7 +393,7 @@ host, and reopening the page picks both back up.
 
 `RunDetail` offers a "Download SARIF" action for completed runs, so a run's
 results can be handed to any tool that speaks the SARIF 2.1.0 interchange
-format. `canExportSarif` in `src/lib/sarif.ts` gates it on the run's status:
+format. `canExportSarif` in `src/domain/run/sarif.ts` gates it on the run's status:
 only a `completed` run has the manifest the backend requires, so the button is
 absent for a run that is still going or that failed, rather than offering a
 download that would 404.
@@ -450,7 +450,7 @@ response shapes are in `src/automation-api/playbook-types.ts`.
 
 **The dashboard never parses playbook Markdown.** A control's steps arrive as
 typed blocks — `paragraph`, `caption`, `heading`, `code`, `list`, `table`,
-`image` — and `src/lib/playbook.ts` filters them against an allowlist before
+`image` — and `src/domain/playbook/blocks.ts` filters them against an allowlist before
 `src/components/playbook-content.tsx` renders them. Any block kind the backend
 grows later is dropped rather than passed through, nothing is ever injected as
 raw HTML, and `renderInline()` only produces links for `http`/`https` URLs, so a
@@ -486,7 +486,7 @@ catalogue. There is no separate request: `demonstration` arrives with the
 risks the page is already holding.
 
 Step text, table cells and image captions carry the playbook's own inline
-markdown, rendered by `renderInline` in `src/lib/inline-markdown.tsx`. It
+markdown, rendered by `renderInline` in `src/components/playbook/inline-markdown.tsx`. It
 handles exactly three things — `` `code spans` ``, `**bold**`, and both
 `[labelled](https://…)` and bare `https://…` links — deliberately not a
 general markdown parser. Underscore emphasis and lone asterisks are left

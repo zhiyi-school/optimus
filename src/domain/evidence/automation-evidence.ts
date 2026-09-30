@@ -3,7 +3,7 @@
  */
 
 import type { AutomationResultRow, EvidenceRef } from "@/automation-api/types";
-import type { EvidenceItem } from "@/lib/evidence-types";
+import type { EvidenceItem } from "@/domain/evidence/evidence-types";
 import { createDebug } from "@/lib/debug";
 import { formatDate, formatDuration } from "@/lib/utils";
 

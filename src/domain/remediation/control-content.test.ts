@@ -5,8 +5,8 @@ import {
   contentHashes,
   controlSummary,
   introRepeatsSummary,
-} from "./control-content";
-import { liveControls } from "./resolve";
+} from "@/domain/remediation/control-content";
+import { liveControls } from "@/domain/remediation/resolve-rules";
 import { REVOKE, ROTATE, control, definition, step } from "@/test-support/resolve-fixtures";
 
 describe("changedSinceCompleted", () => {

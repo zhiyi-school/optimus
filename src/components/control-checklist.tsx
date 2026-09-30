@@ -9,7 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ProgressBar, ToneBadge } from "@/components/resolve-display";
 import type { ControlProgressStatus } from "@/database/types";
 import { createDebug } from "@/lib/debug";
-import { controlStatusLabels, type LiveControl } from "@/lib/resolve";
+import { controlStatusLabels, type LiveControl } from "@/domain/remediation/resolve-rules";
 
 const debug = createDebug("component:control-checklist");
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { streamStateLabel } from "@/lib/run-stream";
+import { streamStateLabel } from "@/domain/run/event-stream";
 
 describe("streamStateLabel", () => {
   it("says live updates are unavailable rather than promising polling", () => {

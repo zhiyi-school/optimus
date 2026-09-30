@@ -8,7 +8,7 @@ import {
   isSyncPending,
   syncCountsSummary,
   syncPollInterval,
-} from "./dashboard-sync";
+} from "@/domain/run/dashboard-sync";
 
 function status(overrides: Partial<RunSyncStatus> = {}): RunSyncStatus {
   return {

@@ -10,7 +10,7 @@ import { RunEventTimeline } from "@/components/run-events";
 import { DashboardSyncNotice } from "@/components/dashboard-sync-notice";
 import { DownloadSarifButton } from "@/components/download-sarif-button";
 import { createDebug } from "@/lib/debug";
-import { canExportSarif } from "@/lib/sarif";
+import { canExportSarif } from "@/domain/run/sarif";
 import {
   useRunEvents,
   useRunStatus,
@@ -18,7 +18,7 @@ import {
   useRunSyncStatus,
   useResyncRun,
 } from "@/hooks/queries/automation";
-import { mapVerdictToFindingStatus } from "@/lib/status";
+import { mapVerdictToFindingStatus } from "@/domain/status-labels";
 import { errorMessage, formatDate, formatDuration } from "@/lib/utils";
 
 const debug = createDebug("page:RunDetail");

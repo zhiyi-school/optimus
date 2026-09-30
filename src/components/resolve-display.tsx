@@ -5,8 +5,8 @@
 import { RefreshCw, X } from "lucide-react";
 import { createDebug } from "@/lib/debug";
 import { cn } from "@/lib/utils";
-import { toneClasses, type Tone } from "@/lib/status";
-import type { Progress } from "@/lib/resolve";
+import { toneClasses, type Tone } from "@/domain/status-labels";
+import type { Progress } from "@/domain/remediation/resolve-rules";
 
 const debug = createDebug("component:resolve-display");
 

@@ -21,8 +21,8 @@ import {
 import { useControlDetail, useControlSource, usePlaybookRevisionWatch } from "@/hooks/queries/playbook";
 import { useTicket } from "@/hooks/queries/tickets";
 import { createDebug } from "@/lib/debug";
-import { changedSinceCompleted, contentHashes } from "@/lib/control-content";
-import { liveControls } from "@/lib/resolve";
+import { changedSinceCompleted, contentHashes } from "@/domain/remediation/control-content";
+import { liveControls } from "@/domain/remediation/resolve-rules";
 import { resolveRiskPath } from "@/routing/risk-routes";
 
 const debug = createDebug("page:ControlDetail");

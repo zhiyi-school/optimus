@@ -5,7 +5,7 @@
 import { useEffect, useRef } from "react";
 import type { ControlReconciliation, TicketControl, TicketControlStep } from "@/database/types";
 import { createDebug } from "@/lib/debug";
-import { isReconciled } from "@/lib/resolve";
+import { isReconciled } from "@/domain/remediation/resolve-rules";
 
 const debug = createDebug("hooks:remediation-reconciliation");
 

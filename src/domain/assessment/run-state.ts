@@ -4,7 +4,7 @@
 
 import type { Assessment, AssessmentRunRequest } from "@/database/types";
 import { createDebug } from "@/lib/debug";
-import type { Tone } from "@/lib/status";
+import type { Tone } from "@/domain/status-labels";
 
 const debug = createDebug("lib:assessment-run-state");
 

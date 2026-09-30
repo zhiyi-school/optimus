@@ -6,7 +6,7 @@ import fixtureJson from "@/test-fixtures/playbook-control-v1.json";
 import { ControlStepBody } from "@/components/control-content";
 import { PlaybookContent } from "@/components/playbook-content";
 import type { ControlDetail } from "@/automation-api/playbook-types";
-import { selectedControlReconciliationPlan } from "@/lib/resolve";
+import { selectedControlReconciliationPlan } from "@/domain/remediation/resolve-rules";
 
 const fixture = fixtureJson as ControlDetail;
 let container: HTMLDivElement | undefined;

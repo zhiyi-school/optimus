@@ -10,7 +10,7 @@ import {
   selectableControls,
   selectedControl,
   selectedControlReconciliationPlan,
-} from "@/lib/resolve";
+} from "@/domain/remediation/resolve-rules";
 import { createDebug } from "@/lib/debug";
 import type { Finding } from "@/database/types";
 

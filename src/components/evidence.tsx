@@ -15,9 +15,9 @@ import { EmptyState } from "@/components/common";
 import { createDebug } from "@/lib/debug";
 import { downloadFile } from "@/lib/download";
 import { errorMessage, formatBytes } from "@/lib/utils";
-import type { EvidenceItem } from "@/lib/evidence-types";
+import type { EvidenceItem } from "@/domain/evidence/evidence-types";
 
-export type { EvidenceItem } from "@/lib/evidence-types";
+export type { EvidenceItem } from "@/domain/evidence/evidence-types";
 
 const debug = createDebug("component:evidence");
 

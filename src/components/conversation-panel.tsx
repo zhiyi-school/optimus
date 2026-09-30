@@ -25,13 +25,13 @@ import { EvidenceViewer, type EvidenceItem } from "@/components/evidence";
 import { AttachmentList } from "@/components/attachments";
 import { initialsOf, roleBubbleTone, roleLabel } from "@/lib/people";
 import { primaryRole } from "@/auth/permissions";
-import type { ConversationTimelineItem } from "@/lib/conversation-timeline";
+import type { ConversationTimelineItem } from "@/domain/conversation/timeline";
 import {
   conversationEventConfig,
   conversationEventSummary,
   mapVerdictToFindingStatus,
   type ConversationEventKind,
-} from "@/lib/status";
+} from "@/domain/status-labels";
 import { cn, errorMessage, formatDate, formatDuration } from "@/lib/utils";
 import { createDebug } from "@/lib/debug";
 import { CLASSIFICATION_OPTIONS } from "@/hooks/conversation-composer";

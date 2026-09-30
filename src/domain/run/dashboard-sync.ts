@@ -3,7 +3,7 @@
  */
 
 import type { DashboardSyncStatus, RunSyncStatus } from "@/automation-api/types";
-import type { Tone } from "@/lib/status";
+import type { Tone } from "@/domain/status-labels";
 
 export const SYNC_STATUS_POLL_INTERVAL_MS = 4000;
 /** Bounds the wait for a record that never appears, so a backend without the endpoint stops. */
