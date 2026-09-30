@@ -246,9 +246,29 @@ begin
     if new.withdrawn_by is distinct from auth.uid() then
       raise exception 'a withdrawal records the developer who made it';
     end if;
+    if new.withdrawn_at is null then
+      raise exception 'a withdrawal records when it was made';
+    end if;
     if new.closed_at is distinct from old.closed_at then
       raise exception 'withdrawing a remediation does not close the finding';
     end if;
+  elsif new.withdrawn_at is distinct from old.withdrawn_at
+    or new.withdrawn_by is distinct from old.withdrawn_by
+    or new.withdrawal_reason is distinct from old.withdrawal_reason then
+    raise exception 'withdrawal details are recorded once, when the ticket is withdrawn';
+  end if;
+
+  if new.closed_at is distinct from old.closed_at then
+    raise exception 'only the security team can close or reopen a ticket';
+  end if;
+
+  if new.type is distinct from old.type
+    or new.finding_id is distinct from old.finding_id
+    or new.application_id is distinct from old.application_id
+    or new.created_by is distinct from old.created_by
+    or new.assigned_team_id is distinct from old.assigned_team_id
+    or new.assigned_user_id is distinct from old.assigned_user_id then
+    raise exception 'only the security team can change a ticket''s ownership fields';
   end if;
 
   return new;
