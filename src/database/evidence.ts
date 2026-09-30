@@ -2,8 +2,8 @@
  * Supabase operations for reading evidence rows and signing their storage files.
  */
 
-import { supabase, EVIDENCE_BUCKET } from "@/data/supabase";
-import type { Evidence } from "@/data/types";
+import { supabase, EVIDENCE_BUCKET } from "@/database/client";
+import type { Evidence } from "@/database/types";
 import { createDebug } from "@/lib/debug";
 
 const debug = createDebug("data:evidence");

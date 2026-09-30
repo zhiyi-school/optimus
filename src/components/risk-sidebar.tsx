@@ -12,7 +12,7 @@ import { riskIcon } from "@/lib/entity-icons";
 import { ApplicationIcon } from "@/components/application-icon";
 import { createDebug } from "@/lib/debug";
 import { cn } from "@/lib/utils";
-import type { Application } from "@/data/types";
+import type { Application } from "@/database/types";
 import type { Tone } from "@/lib/status";
 import { toneClasses } from "@/lib/status";
 

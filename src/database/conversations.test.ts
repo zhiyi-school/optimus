@@ -101,7 +101,7 @@ function table(name: string) {
   return chain;
 }
 
-vi.mock("@/data/supabase", () => ({
+vi.mock("@/database/client", () => ({
   ATTACHMENTS_BUCKET: "ticket-attachments",
   EVIDENCE_BUCKET: "evidence",
   supabase: {

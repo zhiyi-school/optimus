@@ -4,10 +4,10 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import { ImageOff } from "lucide-react";
-import { automationAssetUrl } from "@/api/automation-client";
+import { automationAssetUrl } from "@/automation-api/client";
 import { CodeBlock } from "@/components/code-block";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import type { PlaybookBlock, PlaybookTableBlock } from "@/api/playbook-types";
+import type { PlaybookBlock, PlaybookTableBlock } from "@/automation-api/playbook-types";
 import { createDebug } from "@/lib/debug";
 import { renderInline } from "@/lib/inline-markdown";
 import { renderableBlocks } from "@/lib/playbook";

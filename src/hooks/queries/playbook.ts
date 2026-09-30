@@ -4,9 +4,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { queryOptions, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { playbookApi } from "@/api/playbook-services";
-import type { AutomationPlatform } from "@/api/automation-types";
-import type { ControlDetail } from "@/api/playbook-types";
+import { playbookApi } from "@/automation-api/playbook-endpoints";
+import type { AutomationPlatform } from "@/automation-api/types";
+import type { ControlDetail } from "@/automation-api/playbook-types";
 import { selectableControls } from "@/lib/resolve";
 import { playbookKeys } from "@/hooks/query-keys";
 import { createDebug } from "@/lib/debug";

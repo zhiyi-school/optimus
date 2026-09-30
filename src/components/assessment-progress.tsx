@@ -16,8 +16,8 @@ import { cn, errorMessage, formatDate } from "@/lib/utils";
 import { useAssessmentRunRequest, useRequestAssessmentRun } from "@/hooks/queries/assessments";
 import { useAppProvisioning } from "@/hooks/queries/automation";
 import { useTickets } from "@/hooks/queries/tickets";
-import type { ProvisioningStage } from "@/api/automation-types";
-import type { Application, Assessment } from "@/data/types";
+import type { ProvisioningStage } from "@/automation-api/types";
+import type { Application, Assessment } from "@/database/types";
 
 const debug = createDebug("component:assessment-progress");
 

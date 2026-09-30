@@ -3,7 +3,7 @@
  */
 
 import { useMemo } from "react";
-import { assessmentApi } from "@/api/automation-services";
+import { assessmentApi } from "@/automation-api/endpoints";
 import { useIpaAnalysis, useTestRunHistory } from "@/hooks/queries/automation";
 import {
   useRiskConversation,

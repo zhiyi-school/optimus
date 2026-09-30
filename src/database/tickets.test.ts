@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Ticket, TicketStatus } from "@/data/types";
+import type { Ticket, TicketStatus } from "@/database/types";
 
 const DEVELOPER = "00000000-0000-0000-0000-000000000001";
 const SECURITY = "00000000-0000-0000-0000-000000000002";
@@ -154,7 +154,7 @@ function table(name: string) {
   return chain;
 }
 
-vi.mock("@/data/supabase", () => ({
+vi.mock("@/database/client", () => ({
   ATTACHMENTS_BUCKET: "attachments",
   supabase: {
     from: (name: string) => table(name),

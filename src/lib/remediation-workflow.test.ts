@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { remediationWorkflow } from "./remediation-workflow";
-import type { ControlDetail } from "@/api/playbook-types";
-import type { Ticket, TicketControl, TicketControlStep } from "@/data/types";
+import type { ControlDetail } from "@/automation-api/playbook-types";
+import type { Ticket, TicketControl, TicketControlStep } from "@/database/types";
 
 const CONTROL = "example-control";
 

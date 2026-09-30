@@ -15,11 +15,11 @@ import { AssessmentStatusBadge, PlatformBadge } from "@/components/data-display"
 import { ApplicationIcon } from "@/components/application-icon";
 import { useAssessments } from "@/hooks/queries/assessments";
 import { addApp } from "@/workflows/app-registration";
-import { assessmentRunRequestData } from "@/data/services/assessments";
+import { assessmentRunRequestData } from "@/database/assessments";
 import { latestAssessmentPerApp } from "@/lib/assessments";
 import { createDebug } from "@/lib/debug";
 import { errorMessage, formatDate, cn } from "@/lib/utils";
-import type { Platform } from "@/data/types";
+import type { Platform } from "@/database/types";
 
 const debug = createDebug("page:NewAssessment");
 

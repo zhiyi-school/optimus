@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { RunRecord } from "@/api/automation-types";
+import type { RunRecord } from "@/automation-api/types";
 import { canExportSarif, sarifFileName } from "./sarif";
 
 function run(overrides: Partial<RunRecord> = {}): RunRecord {

@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ComposerSubmission } from "@/hooks/conversation-composer";
-import type { Finding, Ticket } from "@/data/types";
+import type { Finding, Ticket } from "@/database/types";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -52,7 +52,7 @@ function completedRows(stepKeys = ["step-one"], status = "completed") {
   stepRows = stepKeys.map((key) => ({ id: `tc-1-${key}`, ticket_control_id: "tc-1", step_key: key, status }));
 }
 
-vi.mock("@/data/supabase", () => ({
+vi.mock("@/database/client", () => ({
   ATTACHMENTS_BUCKET: "ticket-attachments",
   EVIDENCE_BUCKET: "evidence",
   supabase: { from: () => ({}), auth: {}, storage: { from: () => ({}) } },

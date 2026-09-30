@@ -12,7 +12,7 @@ import type {
   DemonstrationStep,
   DemonstrationTableBlock,
   RiskDefinition,
-} from "@/api/automation-types";
+} from "@/automation-api/types";
 import { EmptyState, LoadingState } from "@/components/common";
 import { CodeBlock } from "@/components/code-block";
 import { PlaybookFigure, PlaybookGallery } from "@/components/playbook-content";

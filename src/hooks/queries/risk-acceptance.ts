@@ -3,8 +3,8 @@
  */
 
 import { useMutation } from "@tanstack/react-query";
-import { riskAcceptanceData } from "@/data/services/risk-acceptance";
-import type { RiskAcceptanceDecision } from "@/data/types";
+import { riskAcceptanceData } from "@/database/risk-acceptance";
+import type { RiskAcceptanceDecision } from "@/database/types";
 import { useInvalidateQueries } from "./invalidation";
 import { ticketKeys } from "@/hooks/query-keys";
 import { createDebug } from "@/lib/debug";

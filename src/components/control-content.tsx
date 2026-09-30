@@ -8,13 +8,13 @@ import { EmptyState } from "@/components/common";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
 import { PlaybookContent } from "@/components/playbook-content";
-import { playbookApi } from "@/api/playbook-services";
+import { playbookApi } from "@/automation-api/playbook-endpoints";
 import { createDebug } from "@/lib/debug";
 import { introRepeatsSummary } from "@/lib/control-content";
 import { errorMessage, formatBytes } from "@/lib/utils";
-import type { AutomationPlatform } from "@/api/automation-types";
-import type { ControlDetail, ControlSourceMetadata, ControlStep } from "@/api/playbook-types";
-import type { ControlProgressStatus, TicketControlStep } from "@/data/types";
+import type { AutomationPlatform } from "@/automation-api/types";
+import type { ControlDetail, ControlSourceMetadata, ControlStep } from "@/automation-api/playbook-types";
+import type { ControlProgressStatus, TicketControlStep } from "@/database/types";
 
 const debug = createDebug("component:control-content");
 

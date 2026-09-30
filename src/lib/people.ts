@@ -2,7 +2,7 @@
  * Display helpers for people and their roles.
  */
 
-import type { UserRole } from "@/data/types";
+import type { UserRole } from "@/database/types";
 
 /** Up to two uppercase initials from a display name. */
 export function initialsOf(name: string): string {

@@ -7,7 +7,7 @@ import { useTicketControlSteps, useTicketControls } from "@/hooks/queries/contro
 import { useRiskControls } from "@/hooks/queries/playbook";
 import { createDebug } from "@/lib/debug";
 import { remediationWorkflow } from "@/lib/remediation-workflow";
-import type { Finding, RetestRun, Ticket } from "@/data/types";
+import type { Finding, RetestRun, Ticket } from "@/database/types";
 
 const debug = createDebug("hooks:remediation-readiness");
 

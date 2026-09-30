@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { conversationTimeline } from "@/lib/conversation-timeline";
-import type { AutomationResultRow } from "@/api/automation-types";
-import type { RiskConversationEntry } from "@/data/types";
+import type { AutomationResultRow } from "@/automation-api/types";
+import type { RiskConversationEntry } from "@/database/types";
 
 function entry(
   id: string,

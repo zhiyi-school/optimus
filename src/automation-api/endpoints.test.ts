@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const get = vi.fn();
 const post = vi.fn();
 
-vi.mock("@/api/automation-client", () => ({
+vi.mock("@/automation-api/client", () => ({
   automationAssetUrl: (path: string) => `http://127.0.0.1:8080${path}`,
   automationClient: {
     get: (...args: unknown[]) => get(...args),
@@ -12,7 +12,7 @@ vi.mock("@/api/automation-client", () => ({
   },
 }));
 
-const { iconApi, syncApi } = await import("./automation-services");
+const { iconApi, syncApi } = await import("./endpoints");
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -72,7 +72,7 @@ describe("resyncRun", () => {
   });
 });
 
-const { assessmentApi } = await import("./automation-services");
+const { assessmentApi } = await import("./endpoints");
 
 describe("SARIF export", () => {
   it("fetches the export as bytes rather than parsing it in the browser", async () => {

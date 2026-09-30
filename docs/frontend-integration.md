@@ -147,8 +147,8 @@ status codes, identifier semantics and error behaviour. A server that returns
 `200` with a different body, or a different value in `status`, will fail in ways
 that look like dashboard bugs.
 
-The dashboard's expectations are encoded in `src/api/automation-types.ts` and
-`src/api/automation-services.ts`; treat those as the specification.
+The dashboard's expectations are encoded in `src/automation-api/types.ts` and
+`src/automation-api/endpoints.ts`; treat those as the specification.
 
 ### Values that must match exactly
 
@@ -275,11 +275,11 @@ backend does not support the feature" and degrades instead of erroring.
 
 | Layer | Location | Role |
 | --- | --- | --- |
-| HTTP client | `src/api/automation-client.ts` | axios instance, 30s timeout, error interceptor producing `AutomationApiError` |
-| Typed services | `src/api/automation-services.ts` | `testApi`, `configApi`, `provisioningApi`, `iconApi`, `assessmentApi`, `syncApi`, plus URL helpers |
-| Types | `src/api/automation-types.ts` | the response shapes above |
+| HTTP client | `src/automation-api/client.ts` | axios instance, 30s timeout, error interceptor producing `AutomationApiError` |
+| Typed services | `src/automation-api/endpoints.ts` | `testApi`, `configApi`, `provisioningApi`, `iconApi`, `assessmentApi`, `syncApi`, plus URL helpers |
+| Types | `src/automation-api/types.ts` | the response shapes above |
 | Query hooks | `src/hooks/queries/` | Domain TanStack Query wrappers, polling intervals, cache invalidation |
-| Supabase services | `src/data/services/` | Domain dashboard reads and writes |
+| Supabase services | `src/database/` | Domain dashboard reads and writes |
 | Pure logic | `src/workflows/automation-run.ts`, `src/lib/` | run matching, sync presentation, SARIF gating — unit-tested |
 
 Polling intervals and timeouts: [configuration.md](./configuration.md).

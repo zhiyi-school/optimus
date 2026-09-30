@@ -2,7 +2,7 @@
  * Extracting masked plaintext-literal findings from an app's static analysis report.
  */
 
-import type { AutomationResultRow } from "@/api/automation-types";
+import type { AutomationResultRow } from "@/automation-api/types";
 import { artifactNamed } from "@/lib/automation-evidence";
 import { createDebug } from "@/lib/debug";
 

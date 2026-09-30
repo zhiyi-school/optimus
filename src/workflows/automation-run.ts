@@ -2,13 +2,13 @@
  * Starting and polling automation runs, and locating active runs and a risk's progress within one.
  */
 
-import { assessmentApi } from "@/api/automation-services";
+import { assessmentApi } from "@/automation-api/endpoints";
 import type {
   AutomationPlatform,
   RunProgressEvent,
   RunRecord,
   StartRunRequest,
-} from "@/api/automation-types";
+} from "@/automation-api/types";
 import { createDebug } from "@/lib/debug";
 
 const debug = createDebug("workflows:automation-run");

@@ -2,7 +2,7 @@
  * Role capabilities and the pure access decisions built on them; the database still enforces authorization.
  */
 
-import type { Profile, UserRole } from "@/data/types";
+import type { Profile, UserRole } from "@/database/types";
 import { createDebug } from "@/lib/debug";
 
 const debug = createDebug("auth:permissions");

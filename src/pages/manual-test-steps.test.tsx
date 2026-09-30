@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { DemonstrationImage } from "@/api/automation-types";
+import type { DemonstrationImage } from "@/automation-api/types";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -17,7 +17,7 @@ function stepsBlock(id: string, items: { id?: string; text: string }[]) {
   return { id, type: "steps", items: items.map((item) => ({ ...item, images: [] })) };
 }
 
-vi.mock("@/data/supabase", () => ({
+vi.mock("@/database/client", () => ({
   ATTACHMENTS_BUCKET: "ticket-attachments",
   EVIDENCE_BUCKET: "evidence",
   supabase: { from: () => ({}), auth: {}, storage: { from: () => ({}) } },

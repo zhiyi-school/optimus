@@ -2,9 +2,9 @@
  * Supabase operations on risk acceptance requests and their review decisions.
  */
 
-import { supabase } from "@/data/supabase";
-import type { RiskAcceptance, RiskAcceptanceDecision, Ticket } from "@/data/types";
-import { requireUserId } from "./common";
+import { supabase } from "@/database/client";
+import type { RiskAcceptance, RiskAcceptanceDecision, Ticket } from "@/database/types";
+import { requireUserId } from "./session";
 import { activityData } from "./activity";
 import { ticketData } from "./tickets";
 import { createDebug } from "@/lib/debug";

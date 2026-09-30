@@ -10,7 +10,7 @@ import type {
   RetestRun,
   RiskConversation,
   Ticket,
-} from "@/data/types";
+} from "@/database/types";
 import type { Capability } from "@/auth/permissions";
 
 export const CLASSIFICATION_OPTIONS: { value: FindingStatus; label: string }[] = [

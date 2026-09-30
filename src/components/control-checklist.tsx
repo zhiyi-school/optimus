@@ -7,7 +7,7 @@ import { AlertTriangle, ArrowRight, CheckCircle2, Circle, CircleDot } from "luci
 import { EmptyState } from "@/components/common";
 import { Card, CardContent } from "@/components/ui/card";
 import { ProgressBar, ToneBadge } from "@/components/resolve-display";
-import type { ControlProgressStatus } from "@/data/types";
+import type { ControlProgressStatus } from "@/database/types";
 import { createDebug } from "@/lib/debug";
 import { controlStatusLabels, type LiveControl } from "@/lib/resolve";
 

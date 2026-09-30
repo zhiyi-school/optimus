@@ -4,7 +4,7 @@
 
 import { createContext, useContext } from "react";
 import type { Session } from "@supabase/supabase-js";
-import type { Profile } from "@/data/types";
+import type { Profile } from "@/database/types";
 import type { Capability } from "@/auth/permissions";
 import { createDebug } from "@/lib/debug";
 

@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { DashboardSyncStatus, RunSyncStatus } from "@/api/automation-types";
+import type { DashboardSyncStatus, RunSyncStatus } from "@/automation-api/types";
 import { automationKeys } from "@/hooks/query-keys";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -11,7 +11,7 @@ import { automationKeys } from "@/hooks/query-keys";
 let nextStatus: DashboardSyncStatus | "missing" = "completed";
 const fetched: string[] = [];
 
-vi.mock("@/api/automation-services", () => ({
+vi.mock("@/automation-api/endpoints", () => ({
   syncApi: {
     getRunSyncStatus: async (runId: string) => {
       fetched.push(runId);

@@ -41,13 +41,13 @@ import type {
   ComposerActionOffer,
   ComposerSubmission,
 } from "@/hooks/conversation-composer";
-import type { AutomationResultRow } from "@/api/automation-types";
+import type { AutomationResultRow } from "@/automation-api/types";
 import type {
   FindingStatus,
   Profile,
   RiskConversationAttachment,
   RiskConversationEntry,
-} from "@/data/types";
+} from "@/database/types";
 
 const debug = createDebug("component:conversation-panel");
 

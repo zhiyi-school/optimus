@@ -40,7 +40,7 @@ authenticated VPN or reverse-proxy entrypoint, not the bare FastAPI server.
 Wherever the dashboard starts a run (Assessments page, Test Workspace, ticket
 retest), the platform is a single-select (`ios`/`android`) and the config
 path is never user-entered — it's always the backend's standard
-`configs/<platform>.yaml` (`src/api/automation-services.ts#defaultConfigPath`).
+`configs/<platform>.yaml` (`src/automation-api/endpoints.ts#defaultConfigPath`).
 Apps and risks are multi-selects: apps come from `GET /config/{platform}/apps`
 (the `id` field — matched by the backend against an app's `id`, `name`,
 `package_name`, or `bundle_id`), risks come from `GET /platforms/{platform}/risks`
@@ -149,7 +149,7 @@ unreachable or predates these endpoints (`404`/`501`/no response), the app is
 still created dashboard-side exactly as before. A *rejection* (4xx with a
 validation detail) is surfaced to the user instead, since that's actionable —
 `isBackendUnavailable` / `describeAutomationError` in
-`src/api/automation-services.ts` draw that line.
+`src/automation-api/endpoints.ts` draw that line.
 
 ## Application icons
 
@@ -445,8 +445,8 @@ GET /platforms/{platform}/controls/{control_id}/source/download          the arc
 GET /platforms/{platform}/playbook/status                                diagnostics
 ```
 
-`src/api/playbook-services.ts` is the only place these are called from; the
-response shapes are in `src/api/playbook-types.ts`.
+`src/automation-api/playbook-endpoints.ts` is the only place these are called from; the
+response shapes are in `src/automation-api/playbook-types.ts`.
 
 **The dashboard never parses playbook Markdown.** A control's steps arrive as
 typed blocks — `paragraph`, `caption`, `heading`, `code`, `list`, `table`,
@@ -503,7 +503,7 @@ the backend can add a block type before the dashboard understands it.
 
 Screenshots live in the playbook itself, not in this repo. Each image carries
 a backend-relative `url` plus an `exists` flag resolved at request time;
-`automationAssetUrl` in `src/api/automation-client.ts` joins the `url` onto
+`automationAssetUrl` in `src/automation-api/client.ts` joins the `url` onto
 `VITE_API_BASE_URL`. When `exists` is false — a moved or renamed playbook —
 the page shows a placeholder in the image's slot instead of a broken image,
 which is why the flag is worth having.

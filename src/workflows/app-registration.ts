@@ -2,13 +2,13 @@
  * Adding an app: backend registration, dashboard rows, assessment and provisioning ticket, with rollback.
  */
 
-import { configApi, conflictingAppId, describeAutomationError, isBackendUnavailable, provisioningApi, testApi } from "@/api/automation-services";
-import type { AppProvisioning, AutomationPlatform, RegisterAppRequest, RiskDefinition } from "@/api/automation-types";
-import type { Application, Assessment, Ticket } from "@/data/types";
-import { activityData } from "@/data/services/activity";
-import { applicationData } from "@/data/services/applications";
-import { assessmentData } from "@/data/services/assessments";
-import { ticketData } from "@/data/services/tickets";
+import { configApi, conflictingAppId, describeAutomationError, isBackendUnavailable, provisioningApi, testApi } from "@/automation-api/endpoints";
+import type { AppProvisioning, AutomationPlatform, RegisterAppRequest, RiskDefinition } from "@/automation-api/types";
+import type { Application, Assessment, Ticket } from "@/database/types";
+import { activityData } from "@/database/activity";
+import { applicationData } from "@/database/applications";
+import { assessmentData } from "@/database/assessments";
+import { ticketData } from "@/database/tickets";
 import { createDebug, errorSummary } from "@/lib/debug";
 import { UserFacingError } from "@/lib/utils";
 

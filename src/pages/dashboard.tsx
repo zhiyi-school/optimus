@@ -11,7 +11,7 @@ import { CtaCard } from "@/components/cta-card";
 import { useDashboardMetrics } from "@/hooks/queries/tickets";
 import { createDebug } from "@/lib/debug";
 import { findingStatusConfig } from "@/lib/status";
-import type { UserRole } from "@/data/types";
+import type { UserRole } from "@/database/types";
 
 const debug = createDebug("page:Dashboard");
 

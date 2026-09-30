@@ -4,8 +4,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { roleCan, type Capability } from "@/auth/permissions";
-import type { ControlDetail as ControlDefinition } from "@/api/playbook-types";
-import type { TicketControl, TicketControlStep, UserRole } from "@/data/types";
+import type { ControlDetail as ControlDefinition } from "@/automation-api/playbook-types";
+import type { TicketControl, TicketControlStep, UserRole } from "@/database/types";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -94,7 +94,7 @@ const controlRow = {
   updated_at: "2026-01-01T00:00:00Z",
 } as TicketControl;
 
-vi.mock("@/data/supabase", () => ({
+vi.mock("@/database/client", () => ({
   ATTACHMENTS_BUCKET: "ticket-attachments",
   EVIDENCE_BUCKET: "evidence",
   supabase: { from: () => ({}), auth: {}, storage: { from: () => ({}) } },

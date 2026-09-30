@@ -30,7 +30,7 @@ import {
 } from "@/hooks/queries/reference";
 import { createDebug } from "@/lib/debug";
 import { formatShortDate } from "@/lib/utils";
-import type { Application, Profile, Team, TeamType, UserRole } from "@/data/types";
+import type { Application, Profile, Team, TeamType, UserRole } from "@/database/types";
 import { ApplicationIcon } from "@/components/application-icon";
 
 const debug = createDebug("page:Admin");

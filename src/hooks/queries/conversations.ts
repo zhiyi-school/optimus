@@ -4,13 +4,13 @@
 
 import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { riskConversationData } from "@/data/services/conversations";
+import { riskConversationData } from "@/database/conversations";
 import {
   conversationAttachmentData,
   type PendingConversationAttachment,
-} from "@/data/services/conversation-attachments";
-import { retestData } from "@/data/services/retests";
-import type { RiskConversationAttachment, RiskConversationEntry } from "@/data/types";
+} from "@/database/conversation-attachments";
+import { retestData } from "@/database/retests";
+import type { RiskConversationAttachment, RiskConversationEntry } from "@/database/types";
 import { useInvalidateQueries } from "./invalidation";
 import {
   conversationAttachmentInvalidationKeys,

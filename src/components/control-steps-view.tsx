@@ -14,7 +14,7 @@ import {
 import { createDebug } from "@/lib/debug";
 import { controlSummary } from "@/lib/control-content";
 import { stepCountLabel } from "@/lib/utils";
-import type { ControlDetail } from "@/api/playbook-types";
+import type { ControlDetail } from "@/automation-api/playbook-types";
 
 const debug = createDebug("component:control-steps-view");
 

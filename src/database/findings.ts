@@ -2,8 +2,8 @@
  * Supabase operations on findings, their history and risk classification.
  */
 
-import { supabase } from "@/data/supabase";
-import type { Application, Finding, FindingStatus } from "@/data/types";
+import { supabase } from "@/database/client";
+import type { Application, Finding, FindingStatus } from "@/database/types";
 import { createDebug } from "@/lib/debug";
 
 const debug = createDebug("data:findings");

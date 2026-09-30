@@ -20,7 +20,7 @@ import { useRiskCatalogue } from "@/hooks/queries/automation";
 import { useFindingRetests, useTickets } from "@/hooks/queries/tickets";
 import { useApplications } from "@/hooks/queries/reference";
 import { useRiskWorkspaceData } from "@/hooks/risk-workspace-data";
-import { assessmentApi } from "@/api/automation-services";
+import { assessmentApi } from "@/automation-api/endpoints";
 import { createDebug } from "@/lib/debug";
 import { PlaintextLiteralsCard } from "@/components/plaintext-literals";
 import {

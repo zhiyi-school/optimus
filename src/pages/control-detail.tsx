@@ -23,7 +23,7 @@ import { useTicket } from "@/hooks/queries/tickets";
 import { createDebug } from "@/lib/debug";
 import { changedSinceCompleted, contentHashes } from "@/lib/control-content";
 import { liveControls } from "@/lib/resolve";
-import { resolveRiskPath } from "@/lib/risk-routes";
+import { resolveRiskPath } from "@/routing/risk-routes";
 
 const debug = createDebug("page:ControlDetail");
 

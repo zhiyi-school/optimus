@@ -2,14 +2,14 @@
  * Supabase operations on risk conversations, their entries and realtime updates.
  */
 
-import { supabase } from "@/data/supabase";
+import { supabase } from "@/database/client";
 import type {
   RiskConversation,
   RiskConversationEntry,
   RiskConversationEntryKind,
-} from "@/data/types";
+} from "@/database/types";
 import { createDebug } from "@/lib/debug";
-import { requireUserId } from "./common";
+import { requireUserId } from "./session";
 
 const debug = createDebug("data:conversations");
 

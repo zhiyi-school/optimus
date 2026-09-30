@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ControlDetail } from "@/api/playbook-types";
+import type { ControlDetail } from "@/automation-api/playbook-types";
 import type {
   Finding,
   Profile,
@@ -7,7 +7,7 @@ import type {
   TicketControl,
   TicketControlStep,
   TicketStatus,
-} from "@/data/types";
+} from "@/database/types";
 import { defaultRouteFor, resolveAccess, roleCan } from "@/auth/permissions";
 import {
   activeRemediationTicket,

@@ -5,7 +5,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { roleCan, type Capability } from "@/auth/permissions";
-import type { Finding, RetestRun, Ticket, UserRole } from "@/data/types";
+import type { Finding, RetestRun, Ticket, UserRole } from "@/database/types";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -122,7 +122,7 @@ function ticket(overrides: Partial<Ticket> = {}): Ticket {
   } as Ticket;
 }
 
-vi.mock("@/data/supabase", () => ({
+vi.mock("@/database/client", () => ({
   ATTACHMENTS_BUCKET: "ticket-attachments",
   EVIDENCE_BUCKET: "evidence",
   supabase: { from: () => ({}), auth: {}, storage: { from: () => ({}) } },

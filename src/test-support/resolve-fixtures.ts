@@ -2,13 +2,13 @@
  * Synthetic tickets, control progress rows and playbook control definitions for Resolve rule tests.
  */
 
-import type { ControlDetail } from "@/api/playbook-types";
+import type { ControlDetail } from "@/automation-api/playbook-types";
 import type {
   ControlProgressStatus,
   Ticket,
   TicketControl,
   TicketControlStep,
-} from "@/data/types";
+} from "@/database/types";
 
 export const APP = "app-1";
 export const ROTATE = "rotate-example-key";

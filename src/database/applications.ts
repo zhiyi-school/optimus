@@ -2,8 +2,8 @@
  * Supabase operations on applications.
  */
 
-import { supabase } from "@/data/supabase";
-import type { Application } from "@/data/types";
+import { supabase } from "@/database/client";
+import type { Application } from "@/database/types";
 import { createDebug } from "@/lib/debug";
 import { activityData } from "./activity";
 

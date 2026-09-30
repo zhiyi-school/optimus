@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { StatusBadge } from "@/components/data-display";
 import { mapVerdictToFindingStatus } from "@/lib/status";
 import type { LatestResultDetail } from "@/lib/automation-evidence";
-import type { RiskVerdict } from "@/api/automation-types";
+import type { RiskVerdict } from "@/automation-api/types";
 
 const STATUS_LABELS: Record<string, string> = {
   CAPTURE_PIPELINE_SILENT: "Capture pipeline silent",

@@ -2,7 +2,7 @@
  * Queue order of a risk's reassessment requests and who may withdraw one.
  */
 
-import type { RetestRun, Ticket } from "@/data/types";
+import type { RetestRun, Ticket } from "@/database/types";
 
 /** Deterministic queue order: oldest first, id breaking a tie. */
 function byQueueOrder(a: RetestRun, b: RetestRun): number {

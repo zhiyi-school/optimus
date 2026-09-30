@@ -95,7 +95,7 @@ describe("the conversation is keyed by application, not by assessment", () => {
   });
 
   it("looks it up and creates it on the application key alone", () => {
-    const service = source("src/data/services/conversations.ts");
+    const service = source("src/database/conversations.ts");
     expect(service).toContain('.eq("application_id", applicationId)');
     expect(service).toContain('onConflict: "application_id,risk_id"');
     for (const path of sourceFiles()) {
@@ -163,14 +163,14 @@ describe("the legacy conversations are gone from the dashboard", () => {
   });
 
   it("has no legacy realtime subscription left", () => {
-    const services = sourceFiles("src/data").map(source).join("\n");
+    const services = sourceFiles("src/database").map(source).join("\n");
     expect(services).not.toContain("subscribeToTicket");
     expect(services).not.toContain("subscribeToAssessment");
     expect(services).toContain("subscribeToConversation");
   });
 
   it("subscribes to one conversation at a time, scoped to that conversation", () => {
-    const services = source("src/data/services/conversations.ts");
+    const services = source("src/database/conversations.ts");
     expect(services).toContain("filter: `conversation_id=eq.${conversationId}`");
     expect(source("src/hooks/queries/conversations.ts").match(/subscribeToConversation/g)).toHaveLength(1);
   });

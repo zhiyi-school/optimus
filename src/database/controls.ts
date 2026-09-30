@@ -2,15 +2,15 @@
  * Supabase operations on a ticket's control and step progress.
  */
 
-import { supabase } from "@/data/supabase";
+import { supabase } from "@/database/client";
 import type {
   ControlProgressStatus,
   ControlReconciliation,
   TicketControl,
   TicketControlStep,
-} from "@/data/types";
+} from "@/database/types";
 import { createDebug } from "@/lib/debug";
-import { requireUserId } from "./common";
+import { requireUserId } from "./session";
 import { activityData } from "./activity";
 
 const debug = createDebug("data:controls");

@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ApplicationIcon } from "@/components/application-icon";
-import type { Application } from "@/data/types";
+import type { Application } from "@/database/types";
 
 const withIcon = {
   external_id: "example_app",

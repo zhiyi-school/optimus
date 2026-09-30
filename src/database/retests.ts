@@ -2,8 +2,8 @@
  * Supabase operations on reassessment (retest) requests: the queue, claiming, withdrawal and run linking.
  */
 
-import { supabase } from "@/data/supabase";
-import type { RetestRun } from "@/data/types";
+import { supabase } from "@/database/client";
+import type { RetestRun } from "@/database/types";
 import { activityData } from "./activity";
 import { riskConversationData } from "./conversations";
 import { createDebug } from "@/lib/debug";

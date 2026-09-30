@@ -5,7 +5,7 @@
 import { useState } from "react";
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { assessmentApi } from "@/api/automation-services";
+import { assessmentApi } from "@/automation-api/endpoints";
 import { createDebug } from "@/lib/debug";
 import { sarifFileName } from "@/lib/sarif";
 import { errorMessage } from "@/lib/utils";

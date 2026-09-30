@@ -2,7 +2,7 @@
  * The playbook content block types the dashboard knows how to render.
  */
 
-import type { PlaybookBlock } from "@/api/playbook-types";
+import type { PlaybookBlock } from "@/automation-api/playbook-types";
 
 export const RENDERABLE_BLOCKS = [
   "heading",

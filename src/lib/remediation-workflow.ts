@@ -2,8 +2,8 @@
  * Shared selection, reconciliation and readiness decisions for a remediation's approach.
  */
 
-import type { ControlDetail } from "@/api/playbook-types";
-import type { RetestRun, Ticket, TicketControl, TicketControlStep } from "@/data/types";
+import type { ControlDetail } from "@/automation-api/playbook-types";
+import type { RetestRun, Ticket, TicketControl, TicketControlStep } from "@/database/types";
 import {
   canEditRemediation,
   canSelectApproach,

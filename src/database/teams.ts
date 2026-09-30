@@ -2,8 +2,8 @@
  * Supabase operations on teams.
  */
 
-import { supabase } from "@/data/supabase";
-import type { Team } from "@/data/types";
+import { supabase } from "@/database/client";
+import type { Team } from "@/database/types";
 import { createDebug } from "@/lib/debug";
 
 const debug = createDebug("data:teams");

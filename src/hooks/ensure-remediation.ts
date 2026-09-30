@@ -12,7 +12,7 @@ import {
   selectedControlReconciliationPlan,
 } from "@/lib/resolve";
 import { createDebug } from "@/lib/debug";
-import type { Finding } from "@/data/types";
+import type { Finding } from "@/database/types";
 
 const debug = createDebug("hooks:ensure-remediation");
 

@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { RunRecord } from "@/api/automation-types";
+import type { RunRecord } from "@/automation-api/types";
 
 const startRun = vi.fn();
 const getRun = vi.fn();
 
-vi.mock("@/api/automation-services", () => ({
+vi.mock("@/automation-api/endpoints", () => ({
   assessmentApi: {
     startRun: (...args: unknown[]) => startRun(...args),
     getRun: (...args: unknown[]) => getRun(...args),

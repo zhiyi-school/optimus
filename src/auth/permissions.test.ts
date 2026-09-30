@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Profile, UserRole } from "@/data/types";
+import type { Profile, UserRole } from "@/database/types";
 import {
   defaultRouteFor,
   hasRole,

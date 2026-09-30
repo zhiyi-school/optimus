@@ -3,12 +3,12 @@
  */
 
 import { useState } from "react";
-import { conversationAttachmentData } from "@/data/services/conversation-attachments";
+import { conversationAttachmentData } from "@/database/conversation-attachments";
 import { attachmentSource } from "@/lib/attachments";
 import { createDebug } from "@/lib/debug";
 import { downloadFile } from "@/lib/download";
 import { UserFacingError, errorMessage } from "@/lib/utils";
-import type { RiskConversationAttachment } from "@/data/types";
+import type { RiskConversationAttachment } from "@/database/types";
 
 const debug = createDebug("hooks:attachment-download");
 

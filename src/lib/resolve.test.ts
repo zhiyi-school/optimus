@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { ControlDetail } from "@/api/playbook-types";
+import type { ControlDetail } from "@/automation-api/playbook-types";
 import type {
   Finding,
   TicketControl,
   TicketControlStep,
   TicketStatus,
-} from "@/data/types";
+} from "@/database/types";
 import {
   SECURITY_FINALISED,
   activeRemediationTicket,

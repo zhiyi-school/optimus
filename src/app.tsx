@@ -8,7 +8,7 @@ import { useAuth } from "@/auth/auth-context";
 import { defaultRouteFor, type Capability } from "@/auth/permissions";
 import { Layout } from "@/components/layout";
 import { ErrorState, LoadingState } from "@/components/common";
-import { ResolveGuard } from "@/components/resolve-guard";
+import { ResolveGuard } from "@/routing/resolve-guard";
 import Assessments from "@/pages/assessments";
 import Resolve from "@/pages/resolve";
 

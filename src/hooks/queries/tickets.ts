@@ -3,13 +3,13 @@
  */
 
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { controlProgressData } from "@/data/services/controls";
-import { findingData } from "@/data/services/findings";
-import { metricsData } from "@/data/services/metrics";
-import { riskConversationData } from "@/data/services/conversations";
-import { retestData } from "@/data/services/retests";
-import { ticketData, type TicketFilters } from "@/data/services/tickets";
-import type { ControlReconciliation, FindingStatus } from "@/data/types";
+import { controlProgressData } from "@/database/controls";
+import { findingData } from "@/database/findings";
+import { metricsData } from "@/database/metrics";
+import { riskConversationData } from "@/database/conversations";
+import { retestData } from "@/database/retests";
+import { ticketData, type TicketFilters } from "@/database/tickets";
+import type { ControlReconciliation, FindingStatus } from "@/database/types";
 import { useInvalidateQueries } from "./invalidation";
 import { conversationInvalidationKeys, ticketLifecycleInvalidationKeys } from "./invalidation-rules";
 import { assessmentKeys, evidenceKeys, ticketKeys } from "@/hooks/query-keys";

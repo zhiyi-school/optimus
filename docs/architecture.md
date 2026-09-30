@@ -128,20 +128,26 @@ row-level security.
 
 ```text
 src/
-├── api/                  # Automation backend client (never call fetch() from a page)
-│   ├── automation-client.ts
-│   ├── automation-services.ts
-│   └── automation-types.ts
-├── data/                 # Supabase client + grouped data services
-│   ├── supabase.ts
-│   ├── services/         # One module per table group
-│   │   ├── assessments.ts
-│   │   ├── conversations.ts            # conversations, entries, realtime
-│   │   ├── conversation-attachments.ts # attachment rows, bucket, signing
-│   │   ├── tickets.ts                  # tickets
-│   │   ├── retests.ts                  # reassessment requests (retest_runs)
-│   │   └── risk-acceptance.ts          # risk acceptance requests and reviews
-│   └── types.ts
+├── routing/              # Route guards and URL builders
+│   ├── resolve-guard.tsx
+│   └── risk-routes.ts
+├── automation-api/       # Automation backend client (never call fetch() from a page)
+│   ├── client.ts
+│   ├── endpoints.ts
+│   ├── types.ts
+│   ├── playbook-endpoints.ts
+│   └── playbook-types.ts
+├── database/             # Supabase client, row types and one module per table group
+│   ├── client.ts
+│   ├── types.ts
+│   ├── session.ts                  # requireUserId
+│   ├── assessments.ts
+│   ├── conversations.ts            # conversations, entries, realtime
+│   ├── conversation-attachments.ts # attachment rows, bucket, signing
+│   ├── tickets.ts                  # tickets
+│   ├── retests.ts                  # reassessment requests (retest_runs)
+│   ├── risk-acceptance.ts          # risk acceptance requests and reviews
+│   └── …                           # activity, applications, controls, evidence, findings, metrics, teams, users
 ├── workflows/            # Browser-side operations spanning both backends
 │   ├── app-registration.ts   # addApp: register, create rows, roll back
 │   └── automation-run.ts     # runAndWait and active-run/progress lookups
@@ -200,9 +206,9 @@ invalidation groups live beside their domain hooks in
 semantics. Ticket action modules own their controls directly, while
 `use-reassessment-run.ts` owns the asynchronous run sequence.
 
-Conversation persistence belongs to `data/services/conversations.ts`.
+Conversation persistence belongs to `database/conversations.ts`.
 Attachment byte and metadata stages belong to
-`data/services/conversation-attachments.ts`; the submission coordinator retains
+`database/conversation-attachments.ts`; the submission coordinator retains
 their partial-success context. The services call the current RPCs and columns
 directly; there are no older-schema fallbacks.
 Assessment services contain assessment and assessment-run-request operations
@@ -230,8 +236,8 @@ ticket and reassessment behavior.
 
 | Change | Owner and required verification |
 | --- | --- |
-| Automation API field, enum or request | `src/api/automation-types.ts` and `automation-services.ts`; extend `automation-services.test.ts` and coordinate the backend contract tests |
-| Supabase read/write | One domain module under `src/data/services/`; correct older schemas with a new fix, not client fallbacks, and add service tests |
+| Automation API field, enum or request | `src/automation-api/types.ts` and `endpoints.ts`; extend `endpoints.test.ts` and coordinate the backend contract tests |
+| Supabase read/write | One domain module under `src/database/`; correct older schemas with a new fix, not client fallbacks, and add service tests |
 | Query behavior | The matching `src/hooks/queries/` module; query keys belong to `query-keys.ts`, narrow invalidation groups to `queries/invalidation-rules.ts` |
 | Workflow/submission behavior | Pure rules under `src/lib/`, coordination under focused hooks, database enforcement in a new fix and SQL test |
 | Database fix | Next numbered `supabase/fixes/` file plus fresh, legacy-chain, `0024` upgrade, equivalence, final-schema and RLS coverage through `npm run test:database` |
@@ -274,7 +280,7 @@ A remediation has no page of its own. `RemediationSection`
 (`src/components/remediation-section.tsx`) is a section of the
 feature-risk workspace, beneath the risk header and beside its conversation, so
 a developer never leaves the thread to work through the controls.
-Links into it are built by `resolveRiskPath` (`src/lib/risk-routes.ts`), which
+Links into it are built by `resolveRiskPath` (`src/routing/risk-routes.ts`), which
 degrades to the application, then to `/resolve`, when a ticket names no risk or
 no application. Closing, cancelling or finishing the guided
 steps returns to the same place.

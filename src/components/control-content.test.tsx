@@ -11,8 +11,8 @@ import {
   ControlStepsEmpty,
   type ControlStepProgress,
 } from "@/components/control-content";
-import type { ControlDetail, ControlSourceMetadata } from "@/api/playbook-types";
-import type { TicketControlStep } from "@/data/types";
+import type { ControlDetail, ControlSourceMetadata } from "@/automation-api/playbook-types";
+import type { TicketControlStep } from "@/database/types";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { ControlReconciliation } from "@/data/types";
+import type { ControlReconciliation } from "@/database/types";
 
 const CONTROL_ID = "example-feature-01-risk-01-control-01";
 
@@ -33,7 +33,7 @@ function table(name: string) {
   return chain;
 }
 
-vi.mock("@/data/supabase", () => ({
+vi.mock("@/database/client", () => ({
   ATTACHMENTS_BUCKET: "attachments",
   supabase: { from: (name: string) => table(name) },
 }));

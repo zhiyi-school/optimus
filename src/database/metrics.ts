@@ -2,8 +2,8 @@
  * Dashboard overview metrics from the `dashboard_metrics` RPC, with a per-table count fallback.
  */
 
-import { supabase } from "@/data/supabase";
-import type { AssessmentStatus, FindingStatus, TicketStatus, TicketType } from "@/data/types";
+import { supabase } from "@/database/client";
+import type { AssessmentStatus, FindingStatus, TicketStatus, TicketType } from "@/database/types";
 import { createDebug } from "@/lib/debug";
 
 const debug = createDebug("data:metrics");

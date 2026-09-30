@@ -33,7 +33,7 @@ import { ApplicationIcon } from "@/components/application-icon";
 import { latestAssessmentPerApp } from "@/lib/assessments";
 import { createDebug } from "@/lib/debug";
 import { cn, compareByName, errorMessage, formatDate } from "@/lib/utils";
-import type { Assessment, Application } from "@/data/types";
+import type { Assessment, Application } from "@/database/types";
 
 const debug = createDebug("page:Assessments");
 

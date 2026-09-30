@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import fixtureJson from "@/test-fixtures/playbook-control-v1.json";
 import { ControlStepBody } from "@/components/control-content";
 import { PlaybookContent } from "@/components/playbook-content";
-import type { ControlDetail } from "@/api/playbook-types";
+import type { ControlDetail } from "@/automation-api/playbook-types";
 import { selectedControlReconciliationPlan } from "@/lib/resolve";
 
 const fixture = fixtureJson as ControlDetail;

@@ -2,8 +2,8 @@
  * Builds a risk conversation's combined timeline of entries and automated runs.
  */
 
-import type { AutomationResultRow } from "@/api/automation-types";
-import type { RiskConversationEntry } from "@/data/types";
+import type { AutomationResultRow } from "@/automation-api/types";
+import type { RiskConversationEntry } from "@/database/types";
 import { createDebug } from "@/lib/debug";
 
 const debug = createDebug("lib:conversation-timeline");

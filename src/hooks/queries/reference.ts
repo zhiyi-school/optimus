@@ -3,10 +3,10 @@
  */
 
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { applicationData } from "@/data/services/applications";
-import { teamData } from "@/data/services/teams";
-import { userData } from "@/data/services/users";
-import type { UserRole } from "@/data/types";
+import { applicationData } from "@/database/applications";
+import { teamData } from "@/database/teams";
+import { userData } from "@/database/users";
+import type { UserRole } from "@/database/types";
 import { useInvalidateQueries } from "./invalidation";
 import { assessmentKeys, evidenceKeys, referenceKeys, ticketKeys } from "@/hooks/query-keys";
 import { createDebug } from "@/lib/debug";

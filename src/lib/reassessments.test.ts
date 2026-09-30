@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { RetestRun, TicketStatus } from "@/data/types";
+import type { RetestRun, TicketStatus } from "@/database/types";
 import { canWithdrawReassessment } from "./reassessments";
 import { ticket } from "@/test-support/resolve-fixtures";
 

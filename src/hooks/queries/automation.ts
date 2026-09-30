@@ -4,8 +4,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { assessmentApi, provisioningApi, syncApi, testApi } from "@/api/automation-services";
-import type { AutomationPlatform, DashboardSyncStatus, RunProgressEvent } from "@/api/automation-types";
+import { assessmentApi, provisioningApi, syncApi, testApi } from "@/automation-api/endpoints";
+import type { AutomationPlatform, DashboardSyncStatus, RunProgressEvent } from "@/automation-api/types";
 import { findActiveRun, findPlatformRun, type ActiveRunFilter } from "@/workflows/automation-run";
 import { syncPollInterval } from "@/lib/dashboard-sync";
 import { dashboardSyncInvalidationPrefixes } from "./invalidation-rules";

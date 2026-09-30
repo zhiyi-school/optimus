@@ -34,7 +34,7 @@ import {
 import { useFindingRetests, useFindingTickets } from "@/hooks/queries/tickets";
 import { useRiskWorkspaceData } from "@/hooks/risk-workspace-data";
 import { DashboardSyncNotice } from "@/components/dashboard-sync-notice";
-import { assessmentApi, defaultConfigPath } from "@/api/automation-services";
+import { assessmentApi, defaultConfigPath } from "@/automation-api/endpoints";
 import {
   riskProgressInRun,
   runAndWait,
@@ -53,7 +53,7 @@ import { activeRemediationTicket, resumableRemediationTicket } from "@/lib/resol
 import { cn, errorMessage, formatDate } from "@/lib/utils";
 import { findingsByTestId } from "@/lib/assessments";
 import { assessmentKeys, automationKeys, evidenceKeys, ticketKeys } from "@/hooks/query-keys";
-import { retestData } from "@/data/services/retests";
+import { retestData } from "@/database/retests";
 
 const debug = createDebug("page:TestDetail");
 

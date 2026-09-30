@@ -4,8 +4,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { AssessmentSidebar } from "@/components/assessment-sidebar";
-import type { RiskDefinition } from "@/api/automation-types";
-import type { Application, Assessment, Finding } from "@/data/types";
+import type { RiskDefinition } from "@/automation-api/types";
+import type { Application, Assessment, Finding } from "@/database/types";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

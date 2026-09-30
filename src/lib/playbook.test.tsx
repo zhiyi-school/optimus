@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { isValidElement, type ReactElement } from "react";
-import type { PlaybookBlock } from "@/api/playbook-types";
+import type { PlaybookBlock } from "@/automation-api/playbook-types";
 import { plainText, renderInline } from "./inline-markdown";
 import { RENDERABLE_BLOCKS, isRenderable, renderableBlocks } from "./playbook";
 

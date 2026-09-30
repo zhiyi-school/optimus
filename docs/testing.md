@@ -61,16 +61,16 @@ real browser.
 | Area | File |
 | --- | --- |
 | Run start/poll behaviour, in-flight run matching, per-risk phase | `src/workflows/automation-run.test.ts` |
-| Automation API client — SARIF and sync methods, error degradation, URL escaping | `src/api/automation-services.test.ts` |
+| Automation API client — SARIF and sync methods, error degradation, URL escaping | `src/automation-api/endpoints.test.ts` |
 | Dashboard sync presentation, polling start/stop, retry gating | `src/lib/dashboard-sync.test.ts` |
 | SARIF export gating and download filename | `src/lib/sarif.test.ts` |
 | Run event stream labels | `src/lib/run-stream.test.ts` |
 | Query-key shapes, entity/prefix distinction, domain invalidation groups | `src/hooks/query-keys.test.ts` |
 | Query polling, mutation invalidation, and conversation subscription cleanup | `src/hooks/queries/queries.test.tsx` |
 | Reassessment claim/start/publish ordering | `src/hooks/use-reassessment-run.test.tsx` |
-| Conversation persistence, attachment fallback, and entry idempotency | `src/data/services/conversations.test.ts` |
+| Conversation persistence, attachment fallback, and entry idempotency | `src/database/conversations.test.ts` |
 | Message/action submission, attachment-only retry and conversation scoping | `src/hooks/conversation-composer.test.tsx` |
-| Metrics RPC fallback | `src/data/services/metrics.test.ts` |
+| Metrics RPC fallback | `src/database/metrics.test.ts` |
 | Test page keying (state must not leak between tests) | `src/pages/test-detail.test.tsx` |
 | Capability model, `/resolve` access states, post-login routing | `src/auth/permissions.test.ts` |
 | Remediation progress formulas, control seeding, workflow gates | `src/lib/resolve.test.ts` |
@@ -80,7 +80,7 @@ real browser.
 | Shared approach selection, reconciliation and reassessment reason codes | `src/lib/remediation-workflow.test.ts` |
 | The whole developer lifecycle, sign-in to closure | `src/lib/resolve-workflow.test.ts` |
 | Playbook block allowlist and inline-link safety | `src/lib/playbook.test.tsx` |
-| Playbook API client — escaping, error degradation | `src/api/playbook-services.test.ts` |
+| Playbook API client — escaping, error degradation | `src/automation-api/playbook-endpoints.test.ts` |
 | Generated backend playbook transport, rendering identities, reconciliation | `src/components/playbook-contract.test.tsx` |
 
 `src/test-fixtures/playbook-control-v1.json` is generated from the backend's
@@ -100,7 +100,7 @@ New behaviour of that kind should follow the same shape.
 and confirm the test fails, then restore it. Several tests here exist because
 that step caught an assertion that would have passed either way.
 
-**Mock at the module boundary.** API tests `vi.mock("@/api/automation-client")`
+**Mock at the module boundary.** API tests `vi.mock("@/automation-api/client")`
 and assert on the calls, so they exercise the real service code without a
 network. Match the real error shape — the client's interceptor always attaches
 `status`, and code paths depend on that.

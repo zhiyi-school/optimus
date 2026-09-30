@@ -2,7 +2,7 @@
  * Run state and stage sequencing for an assessment's execution request and provisioning workflow.
  */
 
-import type { Assessment, AssessmentRunRequest } from "@/data/types";
+import type { Assessment, AssessmentRunRequest } from "@/database/types";
 import { createDebug } from "@/lib/debug";
 import type { Tone } from "@/lib/status";
 

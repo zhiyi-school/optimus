@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { DashboardSyncStatus, RunSyncStatus } from "@/api/automation-types";
+import type { DashboardSyncStatus, RunSyncStatus } from "@/automation-api/types";
 import {
   SYNC_STATUS_POLL_INTERVAL_MS,
   SYNC_STATUS_POLL_MAX_ATTEMPTS,

@@ -41,8 +41,8 @@ import { useRemediationReconciliation } from "@/hooks/remediation-reconciliation
 import { useEnsureRemediation } from "@/hooks/ensure-remediation";
 import { useRemediationReadiness } from "@/hooks/remediation-readiness";
 import { cn, errorMessage } from "@/lib/utils";
-import type { ControlDetail } from "@/api/playbook-types";
-import type { Finding } from "@/data/types";
+import type { ControlDetail } from "@/automation-api/playbook-types";
+import type { Finding } from "@/database/types";
 
 const debug = createDebug("component:remediation-section");
 

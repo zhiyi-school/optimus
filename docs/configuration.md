@@ -58,7 +58,7 @@ from the domain root.
 
 ## Automation API client timeout
 
-`src/api/automation-client.ts` sets a 30-second axios timeout on every
+`src/automation-api/client.ts` sets a 30-second axios timeout on every
 request to the automation backend:
 
 ```ts
@@ -117,7 +117,7 @@ backend-side lock.
   for live progress while the page is open, and keep their normal `GET /runs`
   polling active as the fallback if the stream is unavailable or drops.
 - **Risk conversations**: not polled — pushed instantly via the scoped Supabase
-  Realtime subscription in `src/data/services/conversations.ts`.
+  Realtime subscription in `src/database/conversations.ts`.
 
 ## TanStack Query defaults
 
@@ -137,7 +137,7 @@ const queryClient = new QueryClient({
 
 ## Supabase client session behavior
 
-`src/data/supabase.ts` configures the auth client:
+`src/database/client.ts` configures the auth client:
 
 ```ts
 auth: {

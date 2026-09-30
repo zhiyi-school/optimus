@@ -5,7 +5,7 @@ import {
   preferredAssessmentRisk,
   type AssessmentRow,
 } from "./assessments";
-import type { Finding, FindingStatus } from "@/data/types";
+import type { Finding, FindingStatus } from "@/database/types";
 
 const CATALOGUE = [
   { risk_id: "example-feature-01-risk-01" },

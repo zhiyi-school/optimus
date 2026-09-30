@@ -9,8 +9,8 @@ import { Input, Textarea } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useCreateRiskAcceptanceTicket, useReviewRiskAcceptance } from "@/hooks/queries/risk-acceptance";
 import { createDebug } from "@/lib/debug";
-import { resolveRiskPath } from "@/lib/risk-routes";
-import type { Finding } from "@/data/types";
+import { resolveRiskPath } from "@/routing/risk-routes";
+import type { Finding } from "@/database/types";
 
 const debug = createDebug("component:ticket-actions:acceptance");
 

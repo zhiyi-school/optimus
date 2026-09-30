@@ -12,7 +12,7 @@
 ## Ownership and boundaries
 
 - `src/pages/` composes route views; components render UI. Put substantial query coordination and asynchronous behavior in focused hooks, and pure decisions in domain utilities.
-- `src/api/` owns automation/playbook transport and its types. `src/data/services/` owns Supabase operations. Pages should use these boundaries rather than introduce direct network/database calls.
+- `src/automation-api/` owns automation/playbook transport and its types. `src/database/` owns Supabase operations. `src/routing/` owns route guards and URL builders. Pages should use these boundaries rather than introduce direct network/database calls.
 - `src/hooks/queries/` owns domain query hooks. `src/hooks/query-keys.ts` owns key shapes; invalidation groups belong in `src/hooks/queries/invalidation-rules.ts`. Preserve entity-versus-prefix semantics, polling, enabled conditions, and subscription cleanup.
 - `src/lib/remediation-workflow.ts` owns shared selection/readiness decisions; messages belong in `src/lib/remediation-workflow-messages.ts`. Reuse the readiness and reconciliation hooks instead of adding competing page rules.
 - `src/hooks/conversation-submission.ts` owns record-then-attach coordination. Conversation persistence and attachment persistence have their own data services.

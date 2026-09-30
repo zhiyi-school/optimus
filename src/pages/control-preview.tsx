@@ -12,7 +12,7 @@ import { useControlDetail, useControlSource } from "@/hooks/queries/playbook";
 import { useFinding } from "@/hooks/queries/evidence";
 import { createDebug } from "@/lib/debug";
 import { isRemediationControl, playbookControlStatusLabels } from "@/lib/resolve";
-import { resolveRiskPath } from "@/lib/risk-routes";
+import { resolveRiskPath } from "@/routing/risk-routes";
 
 const debug = createDebug("page:ControlPreview");
 

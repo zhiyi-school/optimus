@@ -4,8 +4,8 @@
 
 import { useMemo } from "react";
 import { RiskSidebar, type RiskSidebarEntry } from "@/components/risk-sidebar";
-import type { RiskDefinition } from "@/api/automation-types";
-import type { Application, Assessment, Finding } from "@/data/types";
+import type { RiskDefinition } from "@/automation-api/types";
+import type { Application, Assessment, Finding } from "@/database/types";
 
 interface AssessmentSidebarProps {
   application: Application | null | undefined;

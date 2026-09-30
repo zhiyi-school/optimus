@@ -2,14 +2,14 @@
  * Automation backend endpoints for playbook controls, their source archives and playbook status.
  */
 
-import { automationAssetUrl, automationClient } from "@/api/automation-client";
-import { isBackendUnavailable } from "@/api/automation-services";
-import type { AutomationPlatform } from "@/api/automation-types";
+import { automationAssetUrl, automationClient } from "@/automation-api/client";
+import { isBackendUnavailable } from "@/automation-api/endpoints";
+import type { AutomationPlatform } from "@/automation-api/types";
 import type {
   ControlDetail,
   ControlSourceMetadata,
   PlaybookStatus,
-} from "@/api/playbook-types";
+} from "@/automation-api/playbook-types";
 import { createDebug, errorSummary } from "@/lib/debug";
 
 const debug = createDebug("api:playbook");

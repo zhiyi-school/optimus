@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { focusManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { RiskConversationEntry } from "@/data/types";
+import type { RiskConversationEntry } from "@/database/types";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -35,13 +35,13 @@ function entry(id: string): RiskConversationEntry {
   };
 }
 
-vi.mock("@/data/supabase", () => ({
+vi.mock("@/database/client", () => ({
   ATTACHMENTS_BUCKET: "ticket-attachments",
   EVIDENCE_BUCKET: "evidence",
   supabase: { from: () => ({}), auth: {}, storage: { from: () => ({}) } },
 }));
 
-vi.mock("@/data/services/assessments", () => ({
+vi.mock("@/database/assessments", () => ({
   assessmentData: {
     getWithApplication: () => detailFetch(),
   },
@@ -53,7 +53,7 @@ vi.mock("@/data/services/assessments", () => ({
   },
 }));
 
-vi.mock("@/data/services/conversations", () => ({
+vi.mock("@/database/conversations", () => ({
   riskConversationData: {
     find: (applicationId: string, riskId: string) => {
       calls.push("find");
@@ -87,7 +87,7 @@ vi.mock("@/data/services/conversations", () => ({
   },
 }));
 
-vi.mock("@/data/services/conversation-attachments", () => ({
+vi.mock("@/database/conversation-attachments", () => ({
   conversationAttachmentData: {
     uploadBytes: () => Promise.resolve(),
     saveMetadata: (pending: { entryId: string }) => {
@@ -97,7 +97,7 @@ vi.mock("@/data/services/conversation-attachments", () => ({
   },
 }));
 
-vi.mock("@/api/automation-services", () => ({
+vi.mock("@/automation-api/endpoints", () => ({
   assessmentApi: {},
   configApi: {},
   provisioningApi: {},
@@ -105,7 +105,7 @@ vi.mock("@/api/automation-services", () => ({
   testApi: {},
 }));
 
-vi.mock("@/api/playbook-services", () => ({ playbookApi: {} }));
+vi.mock("@/automation-api/playbook-endpoints", () => ({ playbookApi: {} }));
 
 const { useAssessment, useAssessmentRunRequest } = await import("@/hooks/queries/assessments");
 const { useRiskConversation, useRiskConversationEntries, useSaveConversationAttachment } =

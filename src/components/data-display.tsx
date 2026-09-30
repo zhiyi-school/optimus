@@ -14,7 +14,7 @@ import {
   testRunStatusConfig,
   assessmentStatusConfig,
 } from "@/lib/status";
-import type { FindingStatus, Platform } from "@/data/types";
+import type { FindingStatus, Platform } from "@/database/types";
 
 const debug = createDebug("component:data-display");
 

@@ -3,8 +3,8 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ControlDetail } from "@/api/playbook-types";
-import type { Ticket, TicketControl, TicketControlStep, TicketStatus } from "@/data/types";
+import type { ControlDetail } from "@/automation-api/playbook-types";
+import type { Ticket, TicketControl, TicketControlStep, TicketStatus } from "@/database/types";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -127,7 +127,7 @@ function stepRow(controlRowId: string, stepKey: string, status = "not_started"):
   };
 }
 
-vi.mock("@/data/supabase", () => ({
+vi.mock("@/database/client", () => ({
   ATTACHMENTS_BUCKET: "ticket-attachments",
   EVIDENCE_BUCKET: "evidence",
   supabase: { from: () => ({}), auth: {}, storage: { from: () => ({}) } },

@@ -3,8 +3,8 @@
  */
 
 import { useQuery } from "@tanstack/react-query";
-import { evidenceData } from "@/data/services/evidence";
-import { findingData, type FindingFilters } from "@/data/services/findings";
+import { evidenceData } from "@/database/evidence";
+import { findingData, type FindingFilters } from "@/database/findings";
 import { evidenceKeys } from "@/hooks/query-keys";
 import { createDebug } from "@/lib/debug";
 

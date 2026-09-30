@@ -2,7 +2,7 @@
  * Automation backend endpoints for risks, app config and provisioning, runs, reports and sync.
  */
 
-import { automationAssetUrl, automationClient } from "@/api/automation-client";
+import { automationAssetUrl, automationClient } from "@/automation-api/client";
 import type {
   AppConfigEntry,
   AppProvisioning,
@@ -13,7 +13,7 @@ import type {
   RunRecord,
   RunSyncStatus,
   StartRunRequest,
-} from "@/api/automation-types";
+} from "@/automation-api/types";
 import { createDebug, errorSummary } from "@/lib/debug";
 
 const debug = createDebug("api:automation");

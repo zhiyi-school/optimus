@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { attachmentMeta, attachmentSource, attachmentStorageKey } from "@/lib/attachments";
-import type { RiskConversationAttachment } from "@/data/types";
+import type { RiskConversationAttachment } from "@/database/types";
 
 function attachment(
   overrides: Partial<RiskConversationAttachment> = {},

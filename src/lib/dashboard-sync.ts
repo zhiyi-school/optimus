@@ -2,7 +2,7 @@
  * Presentation and polling rules for a run's dashboard sync status.
  */
 
-import type { DashboardSyncStatus, RunSyncStatus } from "@/api/automation-types";
+import type { DashboardSyncStatus, RunSyncStatus } from "@/automation-api/types";
 import type { Tone } from "@/lib/status";
 
 export const SYNC_STATUS_POLL_INTERVAL_MS = 4000;

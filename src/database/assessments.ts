@@ -2,12 +2,12 @@
  * Supabase operations on assessments and assessment run requests.
  */
 
-import { supabase } from "@/data/supabase";
+import { supabase } from "@/database/client";
 import type {
   Application,
   Assessment,
   AssessmentRunRequest,
-} from "@/data/types";
+} from "@/database/types";
 import { createDebug } from "@/lib/debug";
 
 const debug = createDebug("data:assessments");

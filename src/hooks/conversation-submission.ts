@@ -14,10 +14,10 @@ import {
   conversationAttachmentData,
   createPendingConversationAttachment,
   type PendingConversationAttachment,
-} from "@/data/services/conversation-attachments";
+} from "@/database/conversation-attachments";
 import { createDebug } from "@/lib/debug";
 import { errorMessage } from "@/lib/utils";
-import type { FindingStatus } from "@/data/types";
+import type { FindingStatus } from "@/database/types";
 
 const debug = createDebug("hooks:conversation-submission");
 

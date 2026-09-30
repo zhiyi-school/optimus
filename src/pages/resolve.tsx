@@ -23,7 +23,7 @@ import {
   type ApplicationRemediation,
 } from "@/lib/resolve";
 import { compareByName, formatDate } from "@/lib/utils";
-import type { Application } from "@/data/types";
+import type { Application } from "@/database/types";
 
 const debug = createDebug("page:Resolve");
 

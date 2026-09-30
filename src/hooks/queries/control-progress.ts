@@ -3,14 +3,14 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { controlProgressData } from "@/data/services/controls";
-import { ticketData } from "@/data/services/tickets";
+import { controlProgressData } from "@/database/controls";
+import { ticketData } from "@/database/tickets";
 import type {
   ControlProgressStatus,
   ControlReconciliation,
   TicketControl,
   TicketControlStep,
-} from "@/data/types";
+} from "@/database/types";
 import { useInvalidateQueries } from "./invalidation";
 import { controlProgressInvalidationKeys, ticketLifecycleInvalidationKeys } from "./invalidation-rules";
 import { ticketKeys } from "@/hooks/query-keys";

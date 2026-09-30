@@ -2,7 +2,7 @@
  * Selecting automation results and turning their evidence refs into displayable evidence items.
  */
 
-import type { AutomationResultRow, EvidenceRef } from "@/api/automation-types";
+import type { AutomationResultRow, EvidenceRef } from "@/automation-api/types";
 import type { EvidenceItem } from "@/lib/evidence-types";
 import { createDebug } from "@/lib/debug";
 import { formatDate, formatDuration } from "@/lib/utils";

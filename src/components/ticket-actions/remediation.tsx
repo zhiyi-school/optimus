@@ -16,9 +16,9 @@ import {
 import { useRiskControls } from "@/hooks/queries/playbook";
 import { activeRemediationTicket, effectiveSelectedControlId, resumableRemediationTicket, selectableControls, selectedControl, selectedControlReconciliationPlan } from "@/lib/resolve";
 import { createDebug } from "@/lib/debug";
-import { resolveRiskPath } from "@/lib/risk-routes";
+import { resolveRiskPath } from "@/routing/risk-routes";
 import { errorMessage, formatDate } from "@/lib/utils";
-import type { Application, Finding, Ticket } from "@/data/types";
+import type { Application, Finding, Ticket } from "@/database/types";
 
 const debug = createDebug("component:ticket-actions:remediation");
 

@@ -6,7 +6,7 @@ import { Download, Paperclip } from "lucide-react";
 import { useAttachmentDownload } from "@/hooks/attachment-download";
 import { attachmentMeta } from "@/lib/attachments";
 import { createDebug } from "@/lib/debug";
-import type { RiskConversationAttachment } from "@/data/types";
+import type { RiskConversationAttachment } from "@/database/types";
 
 const debug = createDebug("component:attachments");
 

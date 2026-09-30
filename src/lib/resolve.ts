@@ -7,7 +7,7 @@ import type {
   ControlStatus,
   ControlStep,
   ControlSummary,
-} from "@/api/playbook-types";
+} from "@/automation-api/playbook-types";
 import type {
   ControlProgressStatus,
   ControlReconciliation,
@@ -16,7 +16,7 @@ import type {
   TicketControl,
   TicketControlStep,
   TicketStatus,
-} from "@/data/types";
+} from "@/database/types";
 import type { Tone } from "@/lib/status";
 import { createDebug } from "@/lib/debug";
 

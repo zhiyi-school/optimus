@@ -29,7 +29,7 @@ describe("application icon surfaces", () => {
   });
 
   it("never stores or reads image bytes in the dashboard database", () => {
-    const services = readFileSync("src/data/services/applications.ts", "utf8");
+    const services = readFileSync("src/database/applications.ts", "utf8");
     expect(services).not.toContain("base64");
     expect(services).not.toContain("icon_data");
   });

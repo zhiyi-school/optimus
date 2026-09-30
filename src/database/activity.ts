@@ -2,9 +2,9 @@
  * Supabase writes to the activity log.
  */
 
-import { supabase } from "@/data/supabase";
+import { supabase } from "@/database/client";
 import { createDebug } from "@/lib/debug";
-import { requireUserId } from "./common";
+import { requireUserId } from "./session";
 
 const debug = createDebug("data:activity");
 

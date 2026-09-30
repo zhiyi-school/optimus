@@ -2,9 +2,9 @@
  * Resolving an application's icon URL from the automation backend.
  */
 
-import { iconApi } from "@/api/automation-services";
-import type { AutomationPlatform } from "@/api/automation-types";
-import type { Application } from "@/data/types";
+import { iconApi } from "@/automation-api/endpoints";
+import type { AutomationPlatform } from "@/automation-api/types";
+import type { Application } from "@/database/types";
 
 export type ApplicationIconSource = Pick<
   Application,

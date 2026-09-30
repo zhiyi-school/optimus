@@ -4,7 +4,7 @@
 
 import { createDebug } from "@/lib/debug";
 import { compareByName } from "@/lib/utils";
-import type { Application, Assessment, Finding, FindingStatus } from "@/data/types";
+import type { Application, Assessment, Finding, FindingStatus } from "@/database/types";
 
 export type AssessmentRow = Assessment & { application: Application | null };
 

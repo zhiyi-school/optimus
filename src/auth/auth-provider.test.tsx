@@ -3,7 +3,7 @@ import { act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Profile } from "@/data/types";
+import type { Profile } from "@/database/types";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -41,7 +41,7 @@ function sessionFor(userId: string, token = "example-token") {
   return { access_token: token, user: { id: userId } };
 }
 
-vi.mock("@/data/supabase", () => ({
+vi.mock("@/database/client", () => ({
   ATTACHMENTS_BUCKET: "ticket-attachments",
   EVIDENCE_BUCKET: "evidence",
   supabase: {
@@ -63,7 +63,7 @@ vi.mock("@/data/supabase", () => ({
   },
 }));
 
-vi.mock("@/data/services/users", () => ({
+vi.mock("@/database/users", () => ({
   userData: {
     getCurrentProfile: () => {
       const userId = currentUserId;

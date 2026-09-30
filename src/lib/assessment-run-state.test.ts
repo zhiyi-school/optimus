@@ -7,7 +7,7 @@ import {
   type AssessmentRunState,
   type RawStageInput,
 } from "@/lib/assessment-run-state";
-import type { AssessmentRunRequest, AssessmentRunRequestStatus } from "@/data/types";
+import type { AssessmentRunRequest, AssessmentRunRequestStatus } from "@/database/types";
 
 function request(
   status: AssessmentRunRequestStatus,

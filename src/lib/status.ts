@@ -2,11 +2,11 @@
  * Labels and tones for finding, severity, test run, ticket, conversation and assessment statuses.
  */
 
-import type { RiskVerdict } from "@/api/automation-types";
+import type { RiskVerdict } from "@/automation-api/types";
 import type {
   FindingStatus,
   RiskConversationEntryKind,
-} from "@/data/types";
+} from "@/database/types";
 
 export type Tone = "danger" | "success" | "warning" | "neutral" | "info";
 

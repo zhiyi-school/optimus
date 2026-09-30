@@ -7,7 +7,7 @@ import { appTypeIcon } from "@/lib/entity-icons";
 import { applicationIconUrl, type ApplicationIconSource } from "@/lib/application-icon";
 import { createDebug } from "@/lib/debug";
 import { cn } from "@/lib/utils";
-import type { Application } from "@/data/types";
+import type { Application } from "@/database/types";
 
 const debug = createDebug("component:application-icon");
 

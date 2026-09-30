@@ -12,9 +12,9 @@ import {
 } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/data/supabase";
-import { userData } from "@/data/services/users";
-import type { Profile } from "@/data/types";
+import { supabase } from "@/database/client";
+import { userData } from "@/database/users";
+import type { Profile } from "@/database/types";
 import { roleCan, type Capability } from "@/auth/permissions";
 import { AuthContext, type AuthContextValue } from "@/auth/auth-context";
 

@@ -2,7 +2,7 @@
  * Summaries of a control's playbook content and detection of step content that changed after completion.
  */
 
-import type { ControlDetail, ControlStep } from "@/api/playbook-types";
+import type { ControlDetail, ControlStep } from "@/automation-api/playbook-types";
 import { createDebug } from "@/lib/debug";
 import type { LiveStep } from "@/lib/resolve";
 

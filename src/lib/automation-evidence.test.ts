@@ -7,7 +7,7 @@ import {
   latestResult,
   latestResultDetail,
 } from "@/lib/automation-evidence";
-import type { AutomationResultRow, EvidenceRef } from "@/api/automation-types";
+import type { AutomationResultRow, EvidenceRef } from "@/automation-api/types";
 import type { EvidenceItem } from "@/components/evidence";
 
 const APP = "example_app";

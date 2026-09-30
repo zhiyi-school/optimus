@@ -2,7 +2,7 @@
  * Decisions and naming for SARIF report exports.
  */
 
-import type { RunRecord } from "@/api/automation-types";
+import type { RunRecord } from "@/automation-api/types";
 
 /** True for a completed run with a timestamp, the only kind the backend will export as SARIF. */
 export function canExportSarif(

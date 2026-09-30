@@ -2,9 +2,9 @@
  * Supabase operations on tickets: lookups, creation, status, approach, withdrawal and resumption.
  */
 
-import { supabase } from "@/data/supabase";
-import type { Application, Finding, Ticket, TicketStatus, TicketType } from "@/data/types";
-import { requireUserId } from "./common";
+import { supabase } from "@/database/client";
+import type { Application, Finding, Ticket, TicketStatus, TicketType } from "@/database/types";
+import { requireUserId } from "./session";
 import { activityData } from "./activity";
 import { riskConversationData } from "./conversations";
 import { createDebug } from "@/lib/debug";

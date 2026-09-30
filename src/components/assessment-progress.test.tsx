@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { EnvironmentSetupStages } from "@/components/assessment-progress";
-import type { ProvisioningStage } from "@/api/automation-types";
+import type { ProvisioningStage } from "@/automation-api/types";
 import type { AssessmentRunState } from "@/lib/assessment-run-state";
 import type { Tone } from "@/lib/status";
 

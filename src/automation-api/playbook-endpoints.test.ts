@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const get = vi.fn();
 const post = vi.fn();
 
-vi.mock("@/api/automation-client", () => ({
+vi.mock("@/automation-api/client", () => ({
   automationAssetUrl: (path: string) => `http://127.0.0.1:8080${path}`,
   automationClient: {
     get: (...args: unknown[]) => get(...args),
@@ -12,7 +12,7 @@ vi.mock("@/api/automation-client", () => ({
   },
 }));
 
-const { playbookApi } = await import("./playbook-services");
+const { playbookApi } = await import("./playbook-endpoints");
 
 beforeEach(() => {
   vi.clearAllMocks();

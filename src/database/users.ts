@@ -2,10 +2,10 @@
  * Supabase operations on user profiles.
  */
 
-import { supabase } from "@/data/supabase";
-import type { Profile } from "@/data/types";
+import { supabase } from "@/database/client";
+import type { Profile } from "@/database/types";
 import { createDebug } from "@/lib/debug";
-import { requireUserId } from "./common";
+import { requireUserId } from "./session";
 
 const debug = createDebug("data:users");
 

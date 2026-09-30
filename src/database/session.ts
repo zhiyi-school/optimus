@@ -2,7 +2,7 @@
  * Helpers shared by the Supabase data services.
  */
 
-import { supabase } from "@/data/supabase";
+import { supabase } from "@/database/client";
 import { createDebug } from "@/lib/debug";
 import { UserFacingError } from "@/lib/utils";
 

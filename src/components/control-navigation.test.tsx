@@ -5,8 +5,8 @@ import { MemoryRouter, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ControlChecklist } from "@/components/control-checklist";
 import { liveControls } from "@/lib/resolve";
-import type { ControlDetail } from "@/api/playbook-types";
-import type { TicketControl, TicketControlStep } from "@/data/types";
+import type { ControlDetail } from "@/automation-api/playbook-types";
+import type { TicketControl, TicketControlStep } from "@/database/types";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

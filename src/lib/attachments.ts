@@ -3,7 +3,7 @@
  */
 
 import { formatBytes } from "@/lib/utils";
-import type { RiskConversationAttachment } from "@/data/types";
+import type { RiskConversationAttachment } from "@/database/types";
 
 export type AttachmentSource =
   | { provider: "supabase"; path: string }

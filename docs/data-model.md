@@ -361,7 +361,7 @@ roles itself.
 ## Storage path conventions
 
 Both buckets are private; the frontend reads files via short-lived signed
-URLs (`src/data/services/conversation-attachments.ts`), never public URLs. The storage RLS policies
+URLs (`src/database/conversation-attachments.ts`), never public URLs. The storage RLS policies
 in `0006_storage.sql` parse access from the object path, so upload code and
 policy must agree on these conventions:
 

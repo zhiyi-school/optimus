@@ -2,11 +2,11 @@
  * Supabase storage and metadata operations for risk conversation attachments: listing, staged upload and signing.
  */
 
-import { supabase, ATTACHMENTS_BUCKET } from "@/data/supabase";
+import { supabase, ATTACHMENTS_BUCKET } from "@/database/client";
 import { attachmentStorageKey } from "@/lib/attachments";
-import type { RiskConversationAttachment } from "@/data/types";
+import type { RiskConversationAttachment } from "@/database/types";
 import { createDebug } from "@/lib/debug";
-import { requireUserId } from "./common";
+import { requireUserId } from "./session";
 
 const debug = createDebug("data:attachments");
 
