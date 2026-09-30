@@ -160,7 +160,7 @@ src/
 │   ├── layout/            # App shell, page blocks, risk workspace and sidebar
 │   ├── shared/            # Application icon, badges and table, progress display, CTA card
 │   ├── assessment/        # Assessment progress and sidebar, run events, sync notice, SARIF download
-│   ├── conversation/      # Conversation panel, attachments, reassessment queue
+│   ├── conversation/      # Panel (feed, composer, entries, scroll pinning), attachments, reassessment queue
 │   ├── evidence/          # Evidence rail and plaintext-literals card
 │   ├── playbook/          # Playbook content, inline markdown, code block, guided steps
 │   └── remediation/       # Remediation section and actions, controls, risk acceptance
