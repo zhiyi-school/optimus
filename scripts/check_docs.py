@@ -28,6 +28,7 @@ SOURCE_PREFIXES = (
     "src/",
     "supabase/",
     "tests/",
+    "tools/",
 )
 
 
