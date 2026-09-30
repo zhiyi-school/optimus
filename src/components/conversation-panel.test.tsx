@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RiskConversationPanel } from "@/components/conversation-panel";
-import type { ComposerSubmission } from "@/hooks/conversation-composer";
+import type { ComposerSubmission } from "@/hooks/conversation/composer";
 import { conversationTimeline } from "@/domain/conversation/timeline";
 import type { AutomationResultRow } from "@/automation-api/types";
 import type {

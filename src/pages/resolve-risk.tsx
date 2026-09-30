@@ -11,7 +11,7 @@ import { ToneBadge } from "@/components/resolve-display";
 import { RiskSidebar, type RiskSidebarEntry } from "@/components/risk-sidebar";
 import { EvidenceRail, RiskDetailGrid, RiskHeader, RiskWorkspace } from "@/components/risk-workspace";
 import { RiskConversationActions } from "@/components/ticket-actions/composition";
-import { useRiskComposer } from "@/hooks/conversation-composer";
+import { useRiskComposer } from "@/hooks/conversation/composer";
 import { EvidenceList } from "@/components/evidence";
 import { RiskConversationPanel } from "@/components/conversation-panel";
 import { RemediationSection } from "@/components/remediation-section";

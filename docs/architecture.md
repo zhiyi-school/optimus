@@ -164,18 +164,13 @@ src/
 │   └── ticket-actions/    # Remediation, acceptance, reassessment, composition
 ├── pages/                 # One file per route (see Routes below)
 ├── hooks/
-│   ├── query-keys.ts      # Exact entity and prefix key factories
-│   ├── queries/           # Hooks grouped by assessment, automation, control
-│   │                      # progress, conversation, evidence, playbook,
+│   ├── queries/           # TanStack Query hooks grouped by assessment, automation,
+│   │                      # control progress, conversation, evidence, playbook,
 │   │                      # reference, risk acceptance, and ticket
-│   ├── attachment-download.ts
-│   ├── conversation-composer.ts
-│   ├── conversation-submission.ts
-│   ├── ensure-remediation.ts
-│   ├── remediation-readiness.ts
-│   ├── remediation-reconciliation.ts
-│   ├── risk-workspace-data.ts
-│   └── use-reassessment-run.ts
+│   │   └── keys.ts        # Exact entity and prefix key factories
+│   ├── conversation/      # composer, record-then-attach submission, attachment download
+│   ├── remediation/       # ensure-remediation, readiness, reconciliation
+│   └── risk-workspace-data.ts
 ├── domain/                # Pure rules and view models: no React, no network
 │   ├── status-labels.ts   # Status labels and tones
 │   ├── assessment/        # Assessment selection, run state, icons
@@ -211,8 +206,9 @@ invoke that explicitly disposable workflow.
 Query implementations and consumers import domain modules directly. Repeated
 invalidation groups live beside their domain hooks in
 `hooks/queries/invalidation-rules.ts` and retain narrow prefix-versus-entity
-semantics. Ticket action modules own their controls directly, while
-`use-reassessment-run.ts` owns the asynchronous run sequence.
+semantics. Ticket action modules own their controls directly; the test page
+claims a queued reassessment before starting its run through
+`workflows/automation-run.ts`.
 
 Conversation persistence belongs to `database/conversations.ts`.
 Attachment byte and metadata stages belong to
@@ -232,7 +228,7 @@ Remediation availability is calculated once in
 `domain/remediation/workflow.ts`. The pure calculator returns reason codes and a
 separate module owns their text. `remediation-readiness.ts` owns the queries
 that feed it, `remediation-reconciliation.ts` persists the selection and
-progress it plans, and `conversation-submission.ts` owns the record-then-attach
+progress it plans, and `hooks/conversation/submission.ts` owns the record-then-attach
 state machine.
 
 Both roles' feature-risk workspaces, `TestDetail` and `ResolveRisk`, load the
@@ -246,7 +242,7 @@ ticket and reassessment behavior.
 | --- | --- |
 | Automation API field, enum or request | `src/automation-api/types.ts` and `endpoints.ts`; extend `endpoints.test.ts` and coordinate the backend contract tests |
 | Supabase read/write | One domain module under `src/database/`; correct older schemas with a new fix, not client fallbacks, and add service tests |
-| Query behavior | The matching `src/hooks/queries/` module; query keys belong to `query-keys.ts`, narrow invalidation groups to `queries/invalidation-rules.ts` |
+| Query behavior | The matching `src/hooks/queries/` module; query keys belong to `hooks/queries/keys.ts`, narrow invalidation groups to `queries/invalidation-rules.ts` |
 | Workflow/submission behavior | Pure rules under `src/domain/`, coordination under focused hooks, database enforcement in a new fix and SQL test |
 | Database fix | Next numbered `supabase/fixes/` file plus fresh, legacy-chain, `0024` upgrade, equivalence, final-schema and RLS coverage through `npm run test:database` |
 | Playbook rendering | Backend parser fixture plus `src/test-fixtures/playbook-control-v1.json` and `playbook-contract.test.tsx`; do not copy parser rules into the frontend |

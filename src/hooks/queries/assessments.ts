@@ -7,7 +7,7 @@ import { assessmentData, assessmentRunRequestData } from "@/database/assessments
 import { isTransitionalRunState } from "@/domain/assessment/run-state";
 import type { Application, Assessment } from "@/database/types";
 import { useInvalidateQueries } from "./invalidation";
-import { assessmentKeys } from "@/hooks/query-keys";
+import { assessmentKeys } from "@/hooks/queries/keys";
 import { createDebug } from "@/lib/debug";
 
 const debug = createDebug("hooks:queries:assessments");

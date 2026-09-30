@@ -6,7 +6,7 @@ import { useMutation } from "@tanstack/react-query";
 import { riskAcceptanceData } from "@/database/risk-acceptance";
 import type { RiskAcceptanceDecision } from "@/database/types";
 import { useInvalidateQueries } from "./invalidation";
-import { ticketKeys } from "@/hooks/query-keys";
+import { ticketKeys } from "@/hooks/queries/keys";
 import { createDebug } from "@/lib/debug";
 
 const debug = createDebug("hooks:queries:risk-acceptance");

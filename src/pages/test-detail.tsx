@@ -19,7 +19,7 @@ import { RunEventTimeline } from "@/components/run-events";
 import { CtaCard } from "@/components/cta-card";
 import { RiskConversationPanel } from "@/components/conversation-panel";
 import { RiskConversationActions } from "@/components/ticket-actions/composition";
-import { useRiskComposer } from "@/hooks/conversation-composer";
+import { useRiskComposer } from "@/hooks/conversation/composer";
 import {
   useAssessment,
 } from "@/hooks/queries/assessments";
@@ -52,7 +52,7 @@ import { nextReassessment } from "@/domain/remediation/reassessments";
 import { activeRemediationTicket, resumableRemediationTicket } from "@/domain/remediation/resolve-rules";
 import { cn, errorMessage, formatDate } from "@/lib/utils";
 import { findingsByTestId } from "@/domain/assessment/assessments";
-import { assessmentKeys, automationKeys, evidenceKeys, ticketKeys } from "@/hooks/query-keys";
+import { assessmentKeys, automationKeys, evidenceKeys, ticketKeys } from "@/hooks/queries/keys";
 import { retestData } from "@/database/retests";
 
 const debug = createDebug("page:TestDetail");

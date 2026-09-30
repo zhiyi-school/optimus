@@ -34,13 +34,13 @@ import {
 } from "@/domain/status-labels";
 import { cn, errorMessage, formatDate, formatDuration } from "@/lib/utils";
 import { createDebug } from "@/lib/debug";
-import { CLASSIFICATION_OPTIONS } from "@/hooks/conversation-composer";
+import { CLASSIFICATION_OPTIONS } from "@/hooks/conversation/composer";
 import type {
   ComposerAction,
   ComposerActionKind,
   ComposerActionOffer,
   ComposerSubmission,
-} from "@/hooks/conversation-composer";
+} from "@/hooks/conversation/composer";
 import type { AutomationResultRow } from "@/automation-api/types";
 import type {
   FindingStatus,

@@ -2,7 +2,7 @@
  * Lists the outstanding reassessment requests in a risk conversation for testers.
  */
 
-import type { RiskConversationContext } from "@/hooks/conversation-composer";
+import type { RiskConversationContext } from "@/hooks/conversation/composer";
 import { outstandingReassessments } from "@/domain/remediation/reassessments";
 import { formatDate } from "@/lib/utils";
 

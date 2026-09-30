@@ -5,7 +5,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { evidenceData } from "@/database/evidence";
 import { findingData, type FindingFilters } from "@/database/findings";
-import { evidenceKeys } from "@/hooks/query-keys";
+import { evidenceKeys } from "@/hooks/queries/keys";
 import { createDebug } from "@/lib/debug";
 
 const debug = createDebug("hooks:queries:evidence");

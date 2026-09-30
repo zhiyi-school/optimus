@@ -17,7 +17,7 @@ import {
   conversationEntryInvalidationKeys,
   conversationInvalidationKeys,
 } from "./invalidation-rules";
-import { assessmentKeys, conversationKeys, ticketKeys } from "@/hooks/query-keys";
+import { assessmentKeys, conversationKeys, ticketKeys } from "@/hooks/queries/keys";
 import { createDebug } from "@/lib/debug";
 
 const debug = createDebug("hooks:queries:conversations");

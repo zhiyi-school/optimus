@@ -65,11 +65,11 @@ real browser.
 | Dashboard sync presentation, polling start/stop, retry gating | `src/domain/run/dashboard-sync.test.ts` |
 | SARIF export gating and download filename | `src/domain/run/sarif.test.ts` |
 | Run event stream labels | `src/domain/run/event-stream.test.ts` |
-| Query-key shapes, entity/prefix distinction, domain invalidation groups | `src/hooks/query-keys.test.ts` |
+| Query-key shapes, entity/prefix distinction, domain invalidation groups | `src/hooks/queries/keys.test.ts` |
 | Query polling, mutation invalidation, and conversation subscription cleanup | `src/hooks/queries/queries.test.tsx` |
-| Reassessment claim/start/publish ordering | `src/hooks/use-reassessment-run.test.tsx` |
+| Reassessment request, claim, start and run linking | `src/database/conversations.test.ts` |
 | Conversation persistence, attachment fallback, and entry idempotency | `src/database/conversations.test.ts` |
-| Message/action submission, attachment-only retry and conversation scoping | `src/hooks/conversation-composer.test.tsx` |
+| Message/action submission, attachment-only retry and conversation scoping | `src/hooks/conversation/composer.test.tsx` |
 | Metrics RPC fallback | `src/database/metrics.test.ts` |
 | Test page keying (state must not leak between tests) | `src/pages/test-detail.test.tsx` |
 | Capability model, `/resolve` access states, post-login routing | `src/auth/permissions.test.ts` |

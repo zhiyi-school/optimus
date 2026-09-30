@@ -5,14 +5,14 @@ import {
   conversationKeys,
   evidenceKeys,
   ticketKeys,
-} from "./query-keys";
+} from "@/hooks/queries/keys";
 import {
   conversationAttachmentInvalidationKeys,
   conversationEntryInvalidationKeys,
   controlProgressInvalidationKeys,
   conversationInvalidationKeys,
   ticketLifecycleInvalidationKeys,
-} from "./queries/invalidation-rules";
+} from "@/hooks/queries/invalidation-rules";
 
 describe("query key compatibility", () => {
   it("preserves entity key parameter order", () => {

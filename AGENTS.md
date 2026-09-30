@@ -13,9 +13,9 @@
 
 - `src/pages/` composes route views; components render UI. Put substantial query coordination and asynchronous behavior in focused hooks, and pure decisions in domain utilities.
 - `src/automation-api/` owns automation/playbook transport and its types. `src/database/` owns Supabase operations. `src/routing/` owns route guards and URL builders. Pages should use these boundaries rather than introduce direct network/database calls.
-- `src/hooks/queries/` owns domain query hooks. `src/hooks/query-keys.ts` owns key shapes; invalidation groups belong in `src/hooks/queries/invalidation-rules.ts`. Preserve entity-versus-prefix semantics, polling, enabled conditions, and subscription cleanup.
+- `src/hooks/queries/` owns domain query hooks. `src/hooks/queries/keys.ts` owns key shapes; invalidation groups belong in `src/hooks/queries/invalidation-rules.ts`. Preserve entity-versus-prefix semantics, polling, enabled conditions, and subscription cleanup.
 - `src/domain/remediation/workflow.ts` owns shared selection/readiness decisions; messages belong in `src/domain/remediation/workflow-messages.ts`. Reuse the readiness and reconciliation hooks instead of adding competing page rules.
-- `src/hooks/conversation-submission.ts` owns record-then-attach coordination. Conversation persistence and attachment persistence have their own data services.
+- `src/hooks/conversation/submission.ts` owns record-then-attach coordination. Conversation persistence and attachment persistence have their own data services.
 - The frontend requires the schema through the latest fix and has no older-schema fallbacks. Correct the database with a new fix rather than adding client-side compatibility code.
 - `src/components/ticket-actions/` contains focused actions and composition. Keep domain types outside UI components when non-UI code consumes them.
 - Import the owning modules directly. Do not recreate the removed query/service/action barrels solely for old test mocks. Test support is not a production compatibility layer.

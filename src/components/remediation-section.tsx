@@ -37,9 +37,9 @@ import {
   controlProgress,
 } from "@/domain/remediation/resolve-rules";
 import { remediationBlockMessage } from "@/domain/remediation/workflow-messages";
-import { useRemediationReconciliation } from "@/hooks/remediation-reconciliation";
-import { useEnsureRemediation } from "@/hooks/ensure-remediation";
-import { useRemediationReadiness } from "@/hooks/remediation-readiness";
+import { useRemediationReconciliation } from "@/hooks/remediation/reconciliation";
+import { useEnsureRemediation } from "@/hooks/remediation/ensure-remediation";
+import { useRemediationReadiness } from "@/hooks/remediation/readiness";
 import { cn, errorMessage } from "@/lib/utils";
 import type { ControlDetail } from "@/automation-api/playbook-types";
 import type { Finding } from "@/database/types";

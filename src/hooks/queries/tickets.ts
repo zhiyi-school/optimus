@@ -12,7 +12,7 @@ import { ticketData, type TicketFilters } from "@/database/tickets";
 import type { ControlReconciliation, FindingStatus } from "@/database/types";
 import { useInvalidateQueries } from "./invalidation";
 import { conversationInvalidationKeys, ticketLifecycleInvalidationKeys } from "./invalidation-rules";
-import { assessmentKeys, evidenceKeys, ticketKeys } from "@/hooks/query-keys";
+import { assessmentKeys, evidenceKeys, ticketKeys } from "@/hooks/queries/keys";
 import { createDebug } from "@/lib/debug";
 
 const debug = createDebug("hooks:queries:tickets");

@@ -9,7 +9,7 @@ import type { AutomationPlatform, DashboardSyncStatus, RunProgressEvent } from "
 import { findActiveRun, findPlatformRun, type ActiveRunFilter } from "@/workflows/automation-run";
 import { syncPollInterval } from "@/domain/run/dashboard-sync";
 import { dashboardSyncInvalidationPrefixes } from "./invalidation-rules";
-import { automationKeys } from "@/hooks/query-keys";
+import { automationKeys } from "@/hooks/queries/keys";
 import type { RunEventStreamState } from "@/domain/run/event-stream";
 import { createDebug } from "@/lib/debug";
 

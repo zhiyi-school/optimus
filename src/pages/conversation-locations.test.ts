@@ -62,14 +62,14 @@ describe("the conversation has exactly one home", () => {
   });
 
   it("owns the classification control, which no longer sits on the finding page", () => {
-    expect(source("src/hooks/conversation-submission.ts")).toContain("useClassifyRisk");
+    expect(source("src/hooks/conversation/submission.ts")).toContain("useClassifyRisk");
     for (const path of sourceFiles("src/pages")) {
       expect(source(path), path).not.toContain("useClassifyRisk");
     }
   });
 
   it("owns the reassessment controls, which no longer sit on a ticket page", () => {
-    expect(source("src/hooks/conversation-submission.ts")).toContain("useRequestReassessment");
+    expect(source("src/hooks/conversation/submission.ts")).toContain("useRequestReassessment");
     const page = source("src/components/remediation-section.tsx");
     expect(page).not.toContain("RequestReassessment");
     expect(page).not.toContain("RunRetest");

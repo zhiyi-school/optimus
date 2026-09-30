@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ComposerSubmission } from "@/hooks/conversation-composer";
+import type { ComposerSubmission } from "@/hooks/conversation/composer";
 import type { Finding, Ticket } from "@/database/types";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -131,7 +131,7 @@ vi.mock("@/test-support/query-hooks", () => ({
   }),
 }));
 
-const { useRiskComposer, AttachmentError } = await import("@/hooks/conversation-composer");
+const { useRiskComposer, AttachmentError } = await import("@/hooks/conversation/composer");
 
 const finding = { id: FINDING, status: "at_risk" } as Finding;
 let ticketStatus = "in_progress";

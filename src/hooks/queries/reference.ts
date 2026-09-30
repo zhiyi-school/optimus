@@ -8,7 +8,7 @@ import { teamData } from "@/database/teams";
 import { userData } from "@/database/users";
 import type { UserRole } from "@/database/types";
 import { useInvalidateQueries } from "./invalidation";
-import { assessmentKeys, evidenceKeys, referenceKeys, ticketKeys } from "@/hooks/query-keys";
+import { assessmentKeys, evidenceKeys, referenceKeys, ticketKeys } from "@/hooks/queries/keys";
 import { createDebug } from "@/lib/debug";
 
 const debug = createDebug("hooks:queries:reference");

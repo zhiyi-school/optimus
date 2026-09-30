@@ -2,7 +2,7 @@
  * Risk conversation composer hook, classification options and action offers.
  */
 
-import { useConversationSubmission } from "@/hooks/conversation-submission";
+import { useConversationSubmission } from "@/hooks/conversation/submission";
 import type {
   Application,
   Finding,
@@ -19,12 +19,12 @@ export const CLASSIFICATION_OPTIONS: { value: FindingStatus; label: string }[] =
   { value: "inconclusive", label: "Inconclusive" },
 ];
 
-export { AttachmentError } from "@/hooks/conversation-submission";
+export { AttachmentError } from "@/hooks/conversation/submission";
 export type {
   ComposerAction,
   ComposerActionKind,
   ComposerSubmission,
-} from "@/hooks/conversation-submission";
+} from "@/hooks/conversation/submission";
 
 /** What the composer may offer this reader, and why an offer cannot be used. */
 export type ComposerActionOffer =

@@ -8,7 +8,7 @@ import {
   conversationKeys,
   evidenceKeys,
   ticketKeys,
-} from "@/hooks/query-keys";
+} from "@/hooks/queries/keys";
 
 export const dashboardSyncInvalidationPrefixes = [
   evidenceKeys.findings(),
