@@ -5,9 +5,9 @@
 import { useMemo } from "react";
 import { Navigate, useParams } from "react-router-dom";
 import { findingsByTestId, preferredAssessmentRisk } from "@/domain/assessment/assessments";
-import { LoadingState, ErrorState, EmptyState } from "@/components/common";
+import { LoadingState, ErrorState, EmptyState } from "@/components/layout/page-blocks";
 import { Card, CardContent } from "@/components/ui/card";
-import { AssessmentSidebar } from "@/components/assessment-sidebar";
+import { AssessmentSidebar } from "@/components/assessment/assessment-sidebar";
 import { useAssessment } from "@/hooks/queries/assessments";
 import { useFindings } from "@/hooks/queries/evidence";
 import { useRiskCatalogue } from "@/hooks/queries/automation";

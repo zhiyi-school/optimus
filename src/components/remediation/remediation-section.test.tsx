@@ -224,7 +224,7 @@ vi.mock("@/test-support/query-hooks", () => {
   };
 });
 
-const { RemediationSection } = await import("@/components/remediation-section");
+const { RemediationSection } = await import("@/components/remediation/remediation-section");
 
 let container: HTMLDivElement;
 let root: Root;

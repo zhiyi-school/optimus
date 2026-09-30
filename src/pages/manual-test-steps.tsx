@@ -13,10 +13,10 @@ import type {
   DemonstrationTableBlock,
   RiskDefinition,
 } from "@/automation-api/types";
-import { EmptyState, LoadingState } from "@/components/common";
-import { CodeBlock } from "@/components/code-block";
-import { PlaybookFigure, PlaybookGallery } from "@/components/playbook-content";
-import { EstimatedTime, GuidedSteps, type GuidedStep } from "@/components/guided-steps";
+import { EmptyState, LoadingState } from "@/components/layout/page-blocks";
+import { CodeBlock } from "@/components/playbook/code-block";
+import { PlaybookFigure, PlaybookGallery } from "@/components/playbook/playbook-content";
+import { EstimatedTime, GuidedSteps, type GuidedStep } from "@/components/playbook/guided-steps";
 import { createDebug } from "@/lib/debug";
 import { renderInline } from "@/components/playbook/inline-markdown";
 import { stepCountLabel } from "@/lib/utils";

@@ -4,9 +4,9 @@
 
 import { Link } from "react-router-dom";
 import { AlertTriangle, ArrowRight, CheckCircle2, Circle, CircleDot } from "lucide-react";
-import { EmptyState } from "@/components/common";
+import { EmptyState } from "@/components/layout/page-blocks";
 import { Card, CardContent } from "@/components/ui/card";
-import { ProgressBar, ToneBadge } from "@/components/resolve-display";
+import { ProgressBar, ToneBadge } from "@/components/shared/progress-display";
 import type { ControlProgressStatus } from "@/database/types";
 import { createDebug } from "@/lib/debug";
 import { controlStatusLabels, type LiveControl } from "@/domain/remediation/resolve-rules";

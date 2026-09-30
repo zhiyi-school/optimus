@@ -3,8 +3,8 @@
  */
 
 import { useState } from "react";
-import { PageHeader, LoadingState, ErrorState, EmptyState } from "@/components/common";
-import { DataTable, type DataTableColumn, PlatformBadge } from "@/components/data-display";
+import { PageHeader, LoadingState, ErrorState, EmptyState } from "@/components/layout/page-blocks";
+import { DataTable, type DataTableColumn, PlatformBadge } from "@/components/shared/badges-and-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
@@ -31,7 +31,7 @@ import {
 import { createDebug } from "@/lib/debug";
 import { formatShortDate } from "@/lib/utils";
 import type { Application, Profile, Team, TeamType, UserRole } from "@/database/types";
-import { ApplicationIcon } from "@/components/application-icon";
+import { ApplicationIcon } from "@/components/shared/application-icon";
 
 const debug = createDebug("page:Admin");
 

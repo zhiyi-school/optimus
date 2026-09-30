@@ -14,7 +14,7 @@ import {
 import { useAuth } from "@/auth/auth-context";
 import { defaultRouteFor } from "@/auth/permissions";
 import { Button } from "@/components/ui/button";
-import { LoadingState } from "@/components/common";
+import { LoadingState } from "@/components/layout/page-blocks";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { createDebug } from "@/lib/debug";

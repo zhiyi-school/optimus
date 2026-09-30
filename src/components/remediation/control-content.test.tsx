@@ -10,7 +10,7 @@ import {
   ControlStepBody,
   ControlStepsEmpty,
   type ControlStepProgress,
-} from "@/components/control-content";
+} from "@/components/remediation/control-content";
 import type { ControlDetail, ControlSourceMetadata } from "@/automation-api/playbook-types";
 import type { TicketControlStep } from "@/database/types";
 

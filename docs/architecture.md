@@ -157,11 +157,13 @@ src/
 │   └── permissions.ts    # Capability model
 ├── components/
 │   ├── ui/                # Small shadcn-style primitives
-│   ├── common.tsx         # PageHeader, StatCard, Empty/Error/Loading states...
-│   ├── data-display.tsx   # Badges, DataTable
-│   ├── evidence.tsx
-│   ├── layout.tsx         # App shell and navigation
-│   └── ticket-actions/    # Remediation, acceptance, reassessment, composition
+│   ├── layout/            # App shell, page blocks, risk workspace and sidebar
+│   ├── shared/            # Application icon, badges and table, progress display, CTA card
+│   ├── assessment/        # Assessment progress and sidebar, run events, sync notice, SARIF download
+│   ├── conversation/      # Conversation panel, attachments, reassessment queue
+│   ├── evidence/          # Evidence rail and plaintext-literals card
+│   ├── playbook/          # Playbook content, inline markdown, code block, guided steps
+│   └── remediation/       # Remediation section and actions, controls, risk acceptance
 ├── pages/                 # One file per route (see Routes below)
 ├── hooks/
 │   ├── queries/           # TanStack Query hooks grouped by assessment, automation,
@@ -221,7 +223,7 @@ domain mapping code does not depend on a React component.
 
 The playbook parser remains backend-owned. The frontend keeps only the generated
 `src/test-fixtures/playbook-control-v1.json` transport artifact and renders it in
-`components/playbook-contract.test.tsx`; this verifies the repository boundary
+`components/playbook/playbook-contract.test.tsx`; this verifies the repository boundary
 without copying parser rules or the external playbook into application code.
 
 Remediation availability is calculated once in
@@ -281,7 +283,7 @@ than a fallback list of every application. RLS refuses the same thing
 independently, so the guard is UX, not authorization.
 
 A remediation has no page of its own. `RemediationSection`
-(`src/components/remediation-section.tsx`) is a section of the
+(`src/components/remediation/remediation-section.tsx`) is a section of the
 feature-risk workspace, beneath the risk header and beside its conversation, so
 a developer never leaves the thread to work through the controls.
 Links into it are built by `resolveRiskPath` (`src/routing/risk-routes.ts`), which
@@ -319,7 +321,7 @@ By the time a user is inside a specific test, setup is already done, so
 immediately — it shows only execution/reporting progress
 (`TestRunStages`), never the environment-setup stages
 (`EnvironmentSetupStages`). Both live in
-`src/components/assessment-progress.tsx`.
+`src/components/assessment/assessment-progress.tsx`.
 
 The two run-detail routes answer different questions. A backend run can
 cover many apps and risks at once (e.g. "run every configured iOS app"),

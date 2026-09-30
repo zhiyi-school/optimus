@@ -5,7 +5,7 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/auth-context";
-import { LoadingState, ErrorState } from "@/components/common";
+import { LoadingState, ErrorState } from "@/components/layout/page-blocks";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,13 +16,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ControlChecklist } from "@/components/control-checklist";
+import { ControlChecklist } from "@/components/remediation/control-checklist";
 import {
   ResumeRemediationButton,
   WithdrawRemediationDialog,
   WithdrawalNotice,
-} from "@/components/ticket-actions/remediation";
-import { PlaybookUpdatedNotice, ToneBadge } from "@/components/resolve-display";
+} from "@/components/remediation/remediation-actions";
+import { PlaybookUpdatedNotice, ToneBadge } from "@/components/shared/progress-display";
 import {
   useReconcileTicketControls,
   useSelectRemediationControl,

@@ -5,10 +5,10 @@
 import { useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { RefreshCw } from "lucide-react";
-import { PageHeader, LoadingState, ErrorState, EmptyState } from "@/components/common";
-import { DataTable, type DataTableColumn } from "@/components/data-display";
-import { ApplicationIcon } from "@/components/application-icon";
-import { ProgressBar, ToneBadge } from "@/components/resolve-display";
+import { PageHeader, LoadingState, ErrorState, EmptyState } from "@/components/layout/page-blocks";
+import { DataTable, type DataTableColumn } from "@/components/shared/badges-and-table";
+import { ApplicationIcon } from "@/components/shared/application-icon";
+import { ProgressBar, ToneBadge } from "@/components/shared/progress-display";
 import { useApplications, useTeams } from "@/hooks/queries/reference";
 import { useFindings } from "@/hooks/queries/evidence";
 import { useControlProgressForTickets } from "@/hooks/queries/control-progress";

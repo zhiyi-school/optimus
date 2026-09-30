@@ -3,7 +3,7 @@
  */
 
 import { Card, CardContent } from "@/components/ui/card";
-import { StatusBadge } from "@/components/data-display";
+import { StatusBadge } from "@/components/shared/badges-and-table";
 import { mapVerdictToFindingStatus } from "@/domain/status-labels";
 import type { LatestResultDetail } from "@/domain/evidence/automation-evidence";
 import type { RiskVerdict } from "@/automation-api/types";

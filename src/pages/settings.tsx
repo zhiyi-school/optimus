@@ -4,7 +4,7 @@
 
 import type { ReactNode } from "react";
 import { useAuth } from "@/auth/auth-context";
-import { PageHeader } from "@/components/common";
+import { PageHeader } from "@/components/layout/page-blocks";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useTeams } from "@/hooks/queries/reference";

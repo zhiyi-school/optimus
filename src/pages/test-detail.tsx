@@ -6,19 +6,19 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ListChecks, Zap } from "lucide-react";
-import { LoadingState, ErrorState } from "@/components/common";
+import { LoadingState, ErrorState } from "@/components/layout/page-blocks";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { StatusBadge, PlatformBadge, SeverityBadge } from "@/components/data-display";
+import { StatusBadge, PlatformBadge, SeverityBadge } from "@/components/shared/badges-and-table";
 import { Badge } from "@/components/ui/badge";
-import { EvidenceList } from "@/components/evidence";
-import { EvidenceRail, RiskDetailGrid, RiskHeader, RiskWorkspace } from "@/components/risk-workspace";
-import { AssessmentSidebar } from "@/components/assessment-sidebar";
-import { TestRunStages } from "@/components/assessment-progress";
-import { RunEventTimeline } from "@/components/run-events";
-import { CtaCard } from "@/components/cta-card";
-import { RiskConversationPanel } from "@/components/conversation-panel";
-import { RiskConversationActions } from "@/components/ticket-actions/composition";
+import { EvidenceList } from "@/components/evidence/evidence";
+import { EvidenceRail, RiskDetailGrid, RiskHeader, RiskWorkspace } from "@/components/layout/risk-workspace";
+import { AssessmentSidebar } from "@/components/assessment/assessment-sidebar";
+import { TestRunStages } from "@/components/assessment/assessment-progress";
+import { RunEventTimeline } from "@/components/assessment/run-events";
+import { CtaCard } from "@/components/shared/cta-card";
+import { RiskConversationPanel } from "@/components/conversation/conversation-panel";
+import { RiskConversationActions } from "@/components/conversation/reassessment-queue";
 import { useRiskComposer } from "@/hooks/conversation/composer";
 import {
   useAssessment,
@@ -33,7 +33,7 @@ import {
 } from "@/hooks/queries/automation";
 import { useFindingRetests, useFindingTickets } from "@/hooks/queries/tickets";
 import { useRiskWorkspaceData } from "@/hooks/risk-workspace-data";
-import { DashboardSyncNotice } from "@/components/dashboard-sync-notice";
+import { DashboardSyncNotice } from "@/components/assessment/dashboard-sync-notice";
 import { assessmentApi, defaultConfigPath } from "@/automation-api/endpoints";
 import {
   riskProgressInRun,
@@ -46,8 +46,8 @@ import { hasRole } from "@/auth/permissions";
 import { createDebug } from "@/lib/debug";
 import { riskIcon } from "@/domain/assessment/entity-icons";
 import { latestResultDetail } from "@/domain/evidence/automation-evidence";
-import { PlaintextLiteralsCard } from "@/components/plaintext-literals";
-import { LatestResultPanel } from "@/components/latest-result";
+import { PlaintextLiteralsCard } from "@/components/evidence/plaintext-literals";
+import { LatestResultPanel } from "@/components/assessment/latest-result";
 import { nextReassessment } from "@/domain/remediation/reassessments";
 import { activeRemediationTicket, resumableRemediationTicket } from "@/domain/remediation/resolve-rules";
 import { cn, errorMessage, formatDate } from "@/lib/utils";

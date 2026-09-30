@@ -135,7 +135,7 @@ vi.mock("@/auth/auth-context", () => ({
   }),
 }));
 
-vi.mock("@/components/remediation-section", () => ({
+vi.mock("@/components/remediation/remediation-section", () => ({
   RemediationSection: ({ ticketId }: { ticketId?: string }) => <p>{`remediation:${ticketId ?? "none"}`}</p>,
 }));
 

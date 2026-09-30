@@ -21,7 +21,7 @@ vi.mock("@/database/conversation-attachments", () => ({
   },
 }));
 
-const { AttachmentList } = await import("@/components/attachments");
+const { AttachmentList } = await import("@/components/conversation/attachments");
 
 function attachment(
   overrides: Partial<RiskConversationAttachment> = {},

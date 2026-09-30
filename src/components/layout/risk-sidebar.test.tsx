@@ -4,7 +4,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { RiskSidebar, type RiskSidebarEntry } from "@/components/risk-sidebar";
+import { RiskSidebar, type RiskSidebarEntry } from "@/components/layout/risk-sidebar";
 import type { Application } from "@/database/types";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -219,13 +219,13 @@ describe("both roles use the one sidebar", () => {
   });
 
   it("reaches the developer's sidebar through the same component security uses", () => {
-    const adapter = readFileSync("src/components/assessment-sidebar.tsx", "utf8");
-    expect(adapter).toContain('from "@/components/risk-sidebar"');
+    const adapter = readFileSync("src/components/assessment/assessment-sidebar.tsx", "utf8");
+    expect(adapter).toContain('from "@/components/layout/risk-sidebar"');
     expect(adapter).toContain("<RiskSidebar");
   });
 
   it("gives both roles the same workspace geometry", () => {
-    const workspace = readFileSync("src/components/risk-workspace.tsx", "utf8");
+    const workspace = readFileSync("src/components/layout/risk-workspace.tsx", "utf8");
     expect(workspace).toContain("lg:grid-cols-[17rem_minmax(0,1fr)]");
     for (const path of ["src/pages/test-detail.tsx", "src/pages/resolve-risk.tsx"]) {
       expect(readFileSync(path, "utf8"), path).not.toContain("lg:grid-cols-3");

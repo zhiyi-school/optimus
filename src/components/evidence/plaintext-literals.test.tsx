@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { PlaintextLiteralsCard } from "@/components/plaintext-literals";
+import { PlaintextLiteralsCard } from "@/components/evidence/plaintext-literals";
 import { plaintextLiterals, type PlaintextAnalysis } from "@/domain/evidence/plaintext-literals";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

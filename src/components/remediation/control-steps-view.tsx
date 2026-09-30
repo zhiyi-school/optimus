@@ -4,13 +4,13 @@
 
 import { useState, type ReactNode } from "react";
 import { FileText } from "lucide-react";
-import { ErrorState } from "@/components/common";
-import { EstimatedTime, GuidedSteps, type GuidedStep } from "@/components/guided-steps";
+import { ErrorState } from "@/components/layout/page-blocks";
+import { EstimatedTime, GuidedSteps, type GuidedStep } from "@/components/playbook/guided-steps";
 import {
   ControlStepBody,
   ControlStepsEmpty,
   type ControlStepProgress,
-} from "@/components/control-content";
+} from "@/components/remediation/control-content";
 import { createDebug } from "@/lib/debug";
 import { controlSummary } from "@/domain/remediation/control-content";
 import { stepCountLabel } from "@/lib/utils";

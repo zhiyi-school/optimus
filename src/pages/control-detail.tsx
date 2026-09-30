@@ -5,14 +5,14 @@
 import { useMemo, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { useAuth } from "@/auth/auth-context";
-import { LoadingState, ErrorState } from "@/components/common";
-import { PlaybookUpdatedNotice } from "@/components/resolve-display";
+import { LoadingState, ErrorState } from "@/components/layout/page-blocks";
+import { PlaybookUpdatedNotice } from "@/components/shared/progress-display";
 import {
   ControlGuidance,
   ControlSupportingInfo,
   type ControlStepProgress,
-} from "@/components/control-content";
-import { ControlStepsView, ControlUnavailable } from "@/components/control-steps-view";
+} from "@/components/remediation/control-content";
+import { ControlStepsView, ControlUnavailable } from "@/components/remediation/control-steps-view";
 import {
   useSetControlStepStatus,
   useTicketControlSteps,

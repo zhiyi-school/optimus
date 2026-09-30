@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { ApplicationIcon } from "@/components/application-icon";
+import { ApplicationIcon } from "@/components/shared/application-icon";
 import type { Application } from "@/database/types";
 
 const withIcon = {

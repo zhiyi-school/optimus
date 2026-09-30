@@ -2,7 +2,7 @@
  * Placeholder route page for learning resources.
  */
 
-import { PageHeader, EmptyState } from "@/components/common";
+import { PageHeader, EmptyState } from "@/components/layout/page-blocks";
 
 /** Renders the Learn page header with an empty state until resources are added. */
 export default function Learn() {

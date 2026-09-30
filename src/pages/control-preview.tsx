@@ -3,11 +3,11 @@
  */
 
 import { useParams } from "react-router-dom";
-import { LoadingState, ErrorState } from "@/components/common";
-import { ToneBadge } from "@/components/resolve-display";
-import { ControlGuidance, ControlSupportingInfo } from "@/components/control-content";
-import { ControlStepsView, ControlUnavailable } from "@/components/control-steps-view";
-import { WorkOnRiskButton } from "@/components/ticket-actions/remediation";
+import { LoadingState, ErrorState } from "@/components/layout/page-blocks";
+import { ToneBadge } from "@/components/shared/progress-display";
+import { ControlGuidance, ControlSupportingInfo } from "@/components/remediation/control-content";
+import { ControlStepsView, ControlUnavailable } from "@/components/remediation/control-steps-view";
+import { WorkOnRiskButton } from "@/components/remediation/remediation-actions";
 import { useControlDetail, useControlSource } from "@/hooks/queries/playbook";
 import { useFinding } from "@/hooks/queries/evidence";
 import { createDebug } from "@/lib/debug";

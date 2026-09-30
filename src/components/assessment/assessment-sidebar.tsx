@@ -3,7 +3,7 @@
  */
 
 import { useMemo } from "react";
-import { RiskSidebar, type RiskSidebarEntry } from "@/components/risk-sidebar";
+import { RiskSidebar, type RiskSidebarEntry } from "@/components/layout/risk-sidebar";
 import type { RiskDefinition } from "@/automation-api/types";
 import type { Application, Assessment, Finding } from "@/database/types";
 

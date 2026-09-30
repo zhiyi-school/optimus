@@ -5,9 +5,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { AlertTriangle, Plus, RefreshCw, SlidersHorizontal, Trash2 } from "lucide-react";
-import { PageHeader, FilterBar, LoadingState, ErrorState, EmptyState } from "@/components/common";
-import { DataTable, type DataTableColumn, AssessmentStatusBadge } from "@/components/data-display";
-import { AssessmentStatusPanel } from "@/components/assessment-progress";
+import { PageHeader, FilterBar, LoadingState, ErrorState, EmptyState } from "@/components/layout/page-blocks";
+import { DataTable, type DataTableColumn, AssessmentStatusBadge } from "@/components/shared/badges-and-table";
+import { AssessmentStatusPanel } from "@/components/assessment/assessment-progress";
 import { Select } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,7 +29,7 @@ import {
   useDeleteApplication,
 } from "@/hooks/queries/reference";
 import { useAuth } from "@/auth/auth-context";
-import { ApplicationIcon } from "@/components/application-icon";
+import { ApplicationIcon } from "@/components/shared/application-icon";
 import { latestAssessmentPerApp } from "@/domain/assessment/assessments";
 import { createDebug } from "@/lib/debug";
 import { cn, compareByName, errorMessage, formatDate } from "@/lib/utils";

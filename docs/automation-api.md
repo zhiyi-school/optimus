@@ -159,7 +159,7 @@ The backend owns the IPA/APK and the icon extracted from it. Supabase holds only
 stores image data.
 
 `src/domain/assessment/application-icon.ts` turns a row into a URL, and
-`src/components/application-icon.tsx` renders it:
+`src/components/shared/application-icon.tsx` renders it:
 
 ```ts
 applicationIconUrl(application)
@@ -451,7 +451,7 @@ response shapes are in `src/automation-api/playbook-types.ts`.
 **The dashboard never parses playbook Markdown.** A control's steps arrive as
 typed blocks — `paragraph`, `caption`, `heading`, `code`, `list`, `table`,
 `image` — and `src/domain/playbook/blocks.ts` filters them against an allowlist before
-`src/components/playbook-content.tsx` renders them. Any block kind the backend
+`src/components/playbook/playbook-content.tsx` renders them. Any block kind the backend
 grows later is dropped rather than passed through, nothing is ever injected as
 raw HTML, and `renderInline()` only produces links for `http`/`https` URLs, so a
 `javascript:` or `data:` target in the playbook cannot become an anchor.

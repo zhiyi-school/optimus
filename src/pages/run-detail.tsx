@@ -3,12 +3,12 @@
  */
 
 import { useParams } from "react-router-dom";
-import { PageHeader, LoadingState, ErrorState, EmptyState } from "@/components/common";
+import { PageHeader, LoadingState, ErrorState, EmptyState } from "@/components/layout/page-blocks";
 import { Card, CardContent } from "@/components/ui/card";
-import { PlatformBadge, StatusBadge, TestRunStatusBadge } from "@/components/data-display";
-import { RunEventTimeline } from "@/components/run-events";
-import { DashboardSyncNotice } from "@/components/dashboard-sync-notice";
-import { DownloadSarifButton } from "@/components/download-sarif-button";
+import { PlatformBadge, StatusBadge, TestRunStatusBadge } from "@/components/shared/badges-and-table";
+import { RunEventTimeline } from "@/components/assessment/run-events";
+import { DashboardSyncNotice } from "@/components/assessment/dashboard-sync-notice";
+import { DownloadSarifButton } from "@/components/assessment/download-sarif-button";
 import { createDebug } from "@/lib/debug";
 import { canExportSarif } from "@/domain/run/sarif";
 import {

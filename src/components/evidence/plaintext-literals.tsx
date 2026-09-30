@@ -5,7 +5,7 @@
 import { KeyRound } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
-import { ErrorState, LoadingState } from "@/components/common";
+import { ErrorState, LoadingState } from "@/components/layout/page-blocks";
 import type { PlaintextAnalysis, PlaintextLiteral } from "@/domain/evidence/plaintext-literals";
 
 /** Location of a literal: its bundle file and key path, or the reporting analyzer. */

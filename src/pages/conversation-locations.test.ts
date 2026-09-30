@@ -37,12 +37,12 @@ describe("the conversation has exactly one home", () => {
   });
 
   it("is not composed on the remediation section", () => {
-    const page = source("src/components/remediation-section.tsx");
+    const page = source("src/components/remediation/remediation-section.tsx");
     expect(page).not.toContain("<RiskConversationPanel");
   });
 
   it("is not pointed at from the remediation section, which is already on the same page", () => {
-    for (const path of ["src/components/remediation-section.tsx", "src/pages/resolve-risk.tsx"]) {
+    for (const path of ["src/components/remediation/remediation-section.tsx", "src/pages/resolve-risk.tsx"]) {
       expect(source(path), path).not.toContain("RiskConversationLink");
       expect(source(path), path).not.toContain("Talking to security");
       expect(source(path), path).not.toContain("Open risk conversation");
@@ -70,13 +70,13 @@ describe("the conversation has exactly one home", () => {
 
   it("owns the reassessment controls, which no longer sit on a ticket page", () => {
     expect(source("src/hooks/conversation/submission.ts")).toContain("useRequestReassessment");
-    const page = source("src/components/remediation-section.tsx");
+    const page = source("src/components/remediation/remediation-section.tsx");
     expect(page).not.toContain("RequestReassessment");
     expect(page).not.toContain("RunRetest");
   });
 
   it("composes classification and reassessment rather than standing them beside the thread", () => {
-    const actions = source("src/components/ticket-actions/composition.tsx");
+    const actions = source("src/components/conversation/reassessment-queue.tsx");
     expect(actions).not.toContain("ClassifyRiskDialog");
     expect(actions).not.toContain("RequestReassessmentButton");
     expect(actions).not.toContain("RunRetestButton");
@@ -106,7 +106,7 @@ describe("the conversation is keyed by application, not by assessment", () => {
   });
 
   it("reuses the application's conversation when a remediation starts", () => {
-    const actions = source("src/components/ticket-actions/remediation.tsx");
+    const actions = source("src/components/remediation/remediation-actions.tsx");
     expect(actions).toContain("applicationId: finding.application_id");
     expect(actions).toContain("originAssessmentId: finding.assessment_id");
   });

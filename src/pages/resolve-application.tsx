@@ -3,9 +3,9 @@
  */
 
 import { Navigate, useParams } from "react-router-dom";
-import { PageHeader, LoadingState, ErrorState, EmptyState } from "@/components/common";
-import { ApplicationIcon } from "@/components/application-icon";
-import { PlatformBadge } from "@/components/data-display";
+import { PageHeader, LoadingState, ErrorState, EmptyState } from "@/components/layout/page-blocks";
+import { ApplicationIcon } from "@/components/shared/application-icon";
+import { PlatformBadge } from "@/components/shared/badges-and-table";
 import { useApplications } from "@/hooks/queries/reference";
 import { useFindings } from "@/hooks/queries/evidence";
 import { useTickets } from "@/hooks/queries/tickets";

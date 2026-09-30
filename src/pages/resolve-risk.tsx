@@ -5,16 +5,16 @@
 import { useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { useAuth } from "@/auth/auth-context";
-import { LoadingState, ErrorState, EmptyState } from "@/components/common";
-import { PlatformBadge, SeverityBadge, StatusBadge } from "@/components/data-display";
-import { ToneBadge } from "@/components/resolve-display";
-import { RiskSidebar, type RiskSidebarEntry } from "@/components/risk-sidebar";
-import { EvidenceRail, RiskDetailGrid, RiskHeader, RiskWorkspace } from "@/components/risk-workspace";
-import { RiskConversationActions } from "@/components/ticket-actions/composition";
+import { LoadingState, ErrorState, EmptyState } from "@/components/layout/page-blocks";
+import { PlatformBadge, SeverityBadge, StatusBadge } from "@/components/shared/badges-and-table";
+import { ToneBadge } from "@/components/shared/progress-display";
+import { RiskSidebar, type RiskSidebarEntry } from "@/components/layout/risk-sidebar";
+import { EvidenceRail, RiskDetailGrid, RiskHeader, RiskWorkspace } from "@/components/layout/risk-workspace";
+import { RiskConversationActions } from "@/components/conversation/reassessment-queue";
 import { useRiskComposer } from "@/hooks/conversation/composer";
-import { EvidenceList } from "@/components/evidence";
-import { RiskConversationPanel } from "@/components/conversation-panel";
-import { RemediationSection } from "@/components/remediation-section";
+import { EvidenceList } from "@/components/evidence/evidence";
+import { RiskConversationPanel } from "@/components/conversation/conversation-panel";
+import { RemediationSection } from "@/components/remediation/remediation-section";
 import { useFindings } from "@/hooks/queries/evidence";
 import { useRiskCatalogue } from "@/hooks/queries/automation";
 import { useFindingRetests, useTickets } from "@/hooks/queries/tickets";
@@ -22,7 +22,7 @@ import { useApplications } from "@/hooks/queries/reference";
 import { useRiskWorkspaceData } from "@/hooks/risk-workspace-data";
 import { assessmentApi } from "@/automation-api/endpoints";
 import { createDebug } from "@/lib/debug";
-import { PlaintextLiteralsCard } from "@/components/plaintext-literals";
+import { PlaintextLiteralsCard } from "@/components/evidence/plaintext-literals";
 import {
   activeRemediationTicket,
   developerRiskOrder,

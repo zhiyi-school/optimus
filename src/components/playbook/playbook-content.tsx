@@ -5,7 +5,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { ImageOff } from "lucide-react";
 import { automationAssetUrl } from "@/automation-api/client";
-import { CodeBlock } from "@/components/code-block";
+import { CodeBlock } from "@/components/playbook/code-block";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import type { PlaybookBlock, PlaybookTableBlock } from "@/automation-api/playbook-types";
 import { createDebug } from "@/lib/debug";

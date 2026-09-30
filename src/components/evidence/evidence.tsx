@@ -11,7 +11,7 @@ import {
   Image as ImageIcon,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { EmptyState } from "@/components/common";
+import { EmptyState } from "@/components/layout/page-blocks";
 import { createDebug } from "@/lib/debug";
 import { downloadFile } from "@/lib/download";
 import { errorMessage, formatBytes } from "@/lib/utils";

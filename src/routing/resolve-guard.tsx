@@ -7,7 +7,7 @@ import { Navigate } from "react-router-dom";
 import { ShieldAlert, UserCog } from "lucide-react";
 import { useAuth } from "@/auth/auth-context";
 import { resolveAccess } from "@/auth/permissions";
-import { LoadingState } from "@/components/common";
+import { LoadingState } from "@/components/layout/page-blocks";
 import { Card, CardContent } from "@/components/ui/card";
 
 /** Renders children only for signed-in active developers with a team, otherwise a login redirect or notice. */

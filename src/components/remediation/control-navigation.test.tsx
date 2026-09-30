@@ -3,7 +3,7 @@ import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { ControlChecklist } from "@/components/control-checklist";
+import { ControlChecklist } from "@/components/remediation/control-checklist";
 import { liveControls } from "@/domain/remediation/resolve-rules";
 import type { ControlDetail } from "@/automation-api/playbook-types";
 import type { TicketControl, TicketControlStep } from "@/database/types";

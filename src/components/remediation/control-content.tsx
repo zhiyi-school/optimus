@@ -4,10 +4,10 @@
 
 import { useState, type ReactNode } from "react";
 import { CheckCircle2, ChevronDown, Circle, Download, ExternalLink } from "lucide-react";
-import { EmptyState } from "@/components/common";
+import { EmptyState } from "@/components/layout/page-blocks";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
-import { PlaybookContent } from "@/components/playbook-content";
+import { PlaybookContent } from "@/components/playbook/playbook-content";
 import { playbookApi } from "@/automation-api/playbook-endpoints";
 import { createDebug } from "@/lib/debug";
 import { introRepeatsSummary } from "@/domain/remediation/control-content";

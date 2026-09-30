@@ -8,7 +8,7 @@ import {
   latestResultDetail,
 } from "@/domain/evidence/automation-evidence";
 import type { AutomationResultRow, EvidenceRef } from "@/automation-api/types";
-import type { EvidenceItem } from "@/components/evidence";
+import type { EvidenceItem } from "@/components/evidence/evidence";
 
 const APP = "example_app";
 const RISK = "example-feature-01-risk-01";

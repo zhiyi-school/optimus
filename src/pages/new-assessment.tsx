@@ -6,13 +6,13 @@ import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent }
 import { Link, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { Boxes, ChevronLeft, Plus, ShieldCheck, Terminal, Trash2, X } from "lucide-react";
-import { LoadingState } from "@/components/common";
+import { LoadingState } from "@/components/layout/page-blocks";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input, Select } from "@/components/ui/input";
-import { AssessmentStatusBadge, PlatformBadge } from "@/components/data-display";
-import { ApplicationIcon } from "@/components/application-icon";
+import { AssessmentStatusBadge, PlatformBadge } from "@/components/shared/badges-and-table";
+import { ApplicationIcon } from "@/components/shared/application-icon";
 import { useAssessments } from "@/hooks/queries/assessments";
 import { addApp } from "@/workflows/app-registration";
 import { assessmentRunRequestData } from "@/database/assessments";

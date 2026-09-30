@@ -81,7 +81,7 @@ real browser.
 | The whole developer lifecycle, sign-in to closure | `src/domain/remediation/resolve-journey.test.ts` |
 | Playbook block allowlist and inline-link safety | `src/domain/playbook/blocks.test.tsx` |
 | Playbook API client — escaping, error degradation | `src/automation-api/playbook-endpoints.test.ts` |
-| Generated backend playbook transport, rendering identities, reconciliation | `src/components/playbook-contract.test.tsx` |
+| Generated backend playbook transport, rendering identities, reconciliation | `src/components/playbook/playbook-contract.test.tsx` |
 
 `src/test-fixtures/playbook-control-v1.json` is generated from the backend's
 sanitized Markdown fixture; it is not hand-maintained test data. The canonical
