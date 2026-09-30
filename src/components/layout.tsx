@@ -28,7 +28,7 @@ const roleLabels: Record<string, string> = {
   admin: "Admin",
 };
 
-const debug = createDebug("component:Layout");
+const debug = createDebug("component:layout");
 
 /** Nested risk, run and control routes keep their top-level tab underlined. */
 const ASSESS_ROUTES = ["/assessments", "/runs"];

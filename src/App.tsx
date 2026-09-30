@@ -6,7 +6,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { lazy, Suspense, type ReactNode } from "react";
 import { useAuth } from "@/auth/auth-context";
 import { defaultRouteFor, type Capability } from "@/auth/permissions";
-import { Layout } from "@/components/Layout";
+import { Layout } from "@/components/layout";
 import { ErrorState, LoadingState } from "@/components/common";
 import { ResolveGuard } from "@/components/resolve-guard";
 import Assessments from "@/pages/Assessments";

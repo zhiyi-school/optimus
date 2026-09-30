@@ -4,7 +4,6 @@ import { createRoot, type Root } from "react-dom/client";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ControlChecklist } from "@/components/control-checklist";
-import { ControlDefinitionList } from "@/components/control-definition-list";
 import { liveControls } from "@/lib/resolve";
 import type { ControlDetail } from "@/api/playbook-types";
 import type { TicketControl, TicketControlStep } from "@/data/types";
@@ -14,7 +13,6 @@ import type { TicketControl, TicketControlStep } from "@/data/types";
 const CONTROL_ID = "example-feature-01-risk-01-control-01";
 const SECOND_CONTROL_ID = "example-feature-01-risk-01-control-02";
 const TICKET_ROUTE = `/resolve/tickets/example-ticket-id/controls/${CONTROL_ID}`;
-const PREVIEW_ROUTE = `/resolve/findings/example-finding-id/controls/${CONTROL_ID}`;
 
 function definition(overrides: Partial<ControlDetail> = {}): ControlDetail {
   return {
@@ -158,16 +156,6 @@ function checklist(
       controls={rest.controls ?? liveControls(definitions, rows, steps)}
       linkTo={(id) => `/resolve/tickets/example-ticket-id/controls/${id}`}
       {...rest}
-    />
-  );
-}
-
-function previewList(props: Partial<Parameters<typeof ControlDefinitionList>[0]> = {}) {
-  return (
-    <ControlDefinitionList
-      controls={[definition()]}
-      linkTo={(id) => `/resolve/findings/example-finding-id/controls/${id}`}
-      {...props}
     />
   );
 }
@@ -326,133 +314,5 @@ describe("ControlChecklist card navigation", () => {
 
     expect(container.textContent).toContain("no developer controls for this risk yet");
     expect(anchors()).toHaveLength(0);
-  });
-});
-
-describe("ControlDefinitionList card navigation", () => {
-  it("opens the preview from the title", () => {
-    render(previewList());
-    click(withText("Control 1"));
-    expect(path()).toBe(PREVIEW_ROUTE);
-  });
-
-  it("opens the preview from the summary", () => {
-    render(previewList());
-    click(withText("Example control summary."));
-    expect(path()).toBe(PREVIEW_ROUTE);
-  });
-
-  it("opens the preview from the approach badge", () => {
-    render(previewList());
-    click(withText("Approach"));
-    expect(path()).toBe(PREVIEW_ROUTE);
-  });
-
-  it("opens the preview from the step count", () => {
-    render(previewList());
-    click(withText("2 steps"));
-    expect(path()).toBe(PREVIEW_ROUTE);
-  });
-
-  it("opens the preview from the card's own padding", () => {
-    render(previewList());
-    click(card().firstElementChild);
-    expect(path()).toBe(PREVIEW_ROUTE);
-  });
-
-  it("still opens the preview from the View remediation steps text", () => {
-    render(previewList());
-    click(withText("View remediation steps"));
-    expect(path()).toBe(PREVIEW_ROUTE);
-  });
-
-  it("navigates when the focused card is activated from the keyboard", () => {
-    render(previewList());
-    const anchor = card();
-    act(() => anchor.focus());
-
-    expect(document.activeElement).toBe(anchor);
-    click(anchor);
-    expect(path()).toBe(PREVIEW_ROUTE);
-  });
-
-  it("carries a visible focus style", () => {
-    render(previewList());
-    expect(card().className).toContain("focus-visible:ring");
-  });
-
-  it("goes to a preview route, never to a ticket", () => {
-    render(previewList());
-    expect(card().getAttribute("href")).toBe(PREVIEW_ROUTE);
-    expect(card().getAttribute("href")).not.toContain("/tickets/");
-  });
-
-  it("is one link per control, with nothing interactive inside it", () => {
-    render(
-      previewList({
-        controls: [definition(), definition({ control_id: SECOND_CONTROL_ID, title: "Control 2" })],
-      }),
-    );
-
-    expect(anchors()).toHaveLength(2);
-    for (const anchor of anchors()) {
-      expect(anchor.querySelector("a, button, input, select, textarea")).toBeNull();
-    }
-  });
-
-  it("shows the title, summary and step count of every control", () => {
-    render(previewList());
-    expect(container.textContent).toContain("Control 1");
-    expect(container.textContent).toContain("Example control summary.");
-    expect(container.textContent).toContain("2 steps");
-  });
-
-  it("says one step in the singular", () => {
-    render(previewList({ controls: [definition({ step_count: 1 })] }));
-    expect(container.textContent).toContain("1 step");
-    expect(container.textContent).not.toContain("1 steps");
-  });
-
-  it("offers an active control as an approach and a deprioritised one not at all", () => {
-    render(
-      previewList({
-        controls: [
-          definition(),
-          definition({
-            control_id: SECOND_CONTROL_ID,
-            title: "Control 2",
-            status: "deprioritized",
-          }),
-        ],
-      }),
-    );
-
-    expect(container.textContent).toContain("Approach");
-    expect(container.textContent).toContain("Not offered");
-    expect(container.textContent).toContain("Deprioritised");
-    expect(container.textContent).toContain("Not offered as a remediation approach.");
-  });
-
-  it("never offers a deprecated control the catalogue still marks required", () => {
-    render(previewList({ controls: [definition({ status: "deprecated", required: true })] }));
-    expect(container.textContent).toContain("Not offered");
-  });
-
-  it("offers nothing that could record progress", () => {
-    render(previewList());
-    expect(container.querySelector("button")).toBeNull();
-    expect(container.querySelector("input")).toBeNull();
-    expect(container.querySelector("textarea")).toBeNull();
-  });
-
-  it("explains itself when the risk has no controls", () => {
-    render(previewList({ controls: [] }));
-    expect(container.textContent).toContain("no developer controls for this risk yet");
-    expect(anchors()).toHaveLength(0);
-  });
-
-  it("explains itself when the backend returned nothing at all", () => {
-    render(previewList({ controls: undefined }));
-    expect(container.textContent).toContain("no developer controls for this risk yet");
   });
 });

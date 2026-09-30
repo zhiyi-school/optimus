@@ -1,12 +1,11 @@
 /**
- * Shared page building blocks: headers, stat cards, loading, error and empty states, search and banners.
+ * Shared page building blocks: headers, stat cards, filter bars and loading, error and empty states.
  */
 
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { AlertTriangle, Inbox, Loader2, Search } from "lucide-react";
+import { AlertTriangle, Inbox, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -126,65 +125,9 @@ export function EmptyState({
   );
 }
 
-/** Text input with a search icon that reports its value on change. */
-export function SearchInput({
-  value,
-  onChange,
-  placeholder = "Search…",
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
-}) {
-  return (
-    <div className="relative w-full max-w-xs">
-      <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-      <Input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="pl-8"
-      />
-    </div>
-  );
-}
-
 /** Wrapping row for filter controls. */
 export function FilterBar({ children }: { children: ReactNode }) {
   return (
     <div className="mb-4 flex flex-wrap items-center gap-2">{children}</div>
-  );
-}
-
-/** Info or success banner with an optional action and a dismiss button. */
-export function DismissibleBanner({
-  message,
-  action,
-  onDismiss,
-  tone = "info",
-}: {
-  message: ReactNode;
-  action?: ReactNode;
-  onDismiss: () => void;
-  tone?: "info" | "success";
-}) {
-  const toneClass =
-    tone === "success"
-      ? "border-success/20 bg-success/5 text-success"
-      : "border-primary/20 bg-primary/5 text-primary";
-  return (
-    <div className={cn("mb-4 flex items-center justify-between gap-3 rounded-lg border px-4 py-3 text-sm", toneClass)}>
-      <span className="text-foreground">{message}</span>
-      <div className="flex shrink-0 items-center gap-3">
-        {action}
-        <button
-          type="button"
-          onClick={onDismiss}
-          className="text-xs text-muted-foreground hover:text-foreground"
-        >
-          Dismiss
-        </button>
-      </div>
-    </div>
   );
 }

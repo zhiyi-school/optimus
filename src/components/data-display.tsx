@@ -1,5 +1,5 @@
 /**
- * Status, severity and platform badges, a progress bar and a responsive data table.
+ * Status, severity and platform badges and a responsive data table.
  */
 
 import { Fragment, type ReactNode } from "react";
@@ -11,11 +11,10 @@ import {
   findingStatusConfig,
   severityLabelOf,
   severityToneOf,
-  ticketStatusConfig,
   testRunStatusConfig,
   assessmentStatusConfig,
 } from "@/lib/status";
-import type { FindingStatus, TicketStatus, Platform } from "@/data/types";
+import type { FindingStatus, Platform } from "@/data/types";
 
 const debug = createDebug("component:data-display");
 
@@ -41,12 +40,6 @@ export function PlatformBadge({ platform }: { platform: Platform | string }) {
   );
 }
 
-/** Badge for a ticket status. */
-export function TicketBadge({ status }: { status: TicketStatus }) {
-  const config = ticketStatusConfig[status];
-  return <Badge tone={config.tone}>{config.label}</Badge>;
-}
-
 /** Badge for a test run status, falling back to the raw status. */
 export function TestRunStatusBadge({ status }: { status: string }) {
   const config = testRunStatusConfig[status] ?? { label: status, tone: "neutral" as const };
@@ -61,24 +54,6 @@ export function AssessmentStatusBadge({ status }: { status: string }) {
       {status === "running" && <Circle className="h-2.5 w-2.5" />}
       {config.label}
     </Badge>
-  );
-}
-
-/** Horizontal bar and count showing value out of total. */
-export function ProgressBar({ value, total }: { value: number; total: number }) {
-  const pct = total > 0 ? Math.min(100, Math.round((value / total) * 100)) : 0;
-  return (
-    <div className="flex items-center gap-2">
-      <div className="h-1.5 w-24 overflow-hidden rounded-full bg-muted">
-        <div
-          className="h-full rounded-full bg-primary transition-all"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-      <span className="whitespace-nowrap text-xs text-muted-foreground">
-        {value} / {total}
-      </span>
-    </div>
   );
 }
 

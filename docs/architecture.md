@@ -152,11 +152,10 @@ src/
 ├── components/
 │   ├── ui/                # Small shadcn-style primitives
 │   ├── common.tsx         # PageHeader, StatCard, Empty/Error/Loading states...
-│   ├── data-display.tsx   # Badges, ProgressBar, DataTable
+│   ├── data-display.tsx   # Badges, DataTable
 │   ├── evidence.tsx
-│   ├── timeline.tsx
-│   ├── ticket-actions/    # Remediation, acceptance, reassessment, composition
-│   └── Layout.tsx
+│   ├── layout.tsx         # App shell and navigation
+│   └── ticket-actions/    # Remediation, acceptance, reassessment, composition
 ├── pages/                 # One file per route (see Routes below)
 ├── hooks/
 │   ├── query-keys.ts      # Exact entity and prefix key factories

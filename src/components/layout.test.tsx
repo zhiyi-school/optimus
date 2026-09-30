@@ -45,7 +45,7 @@ vi.mock("@/test-support/query-hooks", () => ({
   useTeams: () => ({ data: [{ id: "example-team-id", name: "Example Developer Team" }] }),
 }));
 
-const { Layout } = await import("@/components/Layout");
+const { Layout } = await import("@/components/layout");
 
 let container: HTMLDivElement;
 let root: Root;
