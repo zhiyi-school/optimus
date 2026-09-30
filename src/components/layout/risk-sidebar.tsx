@@ -16,7 +16,7 @@ import type { Application } from "@/database/types";
 import type { Tone } from "@/domain/status-labels";
 import { toneClasses } from "@/domain/status-labels";
 
-const debug = createDebug("component:risk-sidebar");
+const debug = createDebug("components:layout:risk-sidebar");
 
 export interface RiskSidebarEntry {
   riskId: string;

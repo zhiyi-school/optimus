@@ -12,7 +12,7 @@ import type {
 } from "@/automation-api/playbook-types";
 import { createDebug, errorSummary } from "@/lib/debug";
 
-const debug = createDebug("api:playbook");
+const debug = createDebug("automation-api:playbook-endpoints");
 
 const encode = encodeURIComponent;
 

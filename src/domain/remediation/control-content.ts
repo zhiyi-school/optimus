@@ -6,7 +6,7 @@ import type { ControlDetail, ControlStep } from "@/automation-api/playbook-types
 import { createDebug } from "@/lib/debug";
 import type { LiveStep } from "@/domain/remediation/resolve-rules";
 
-const debug = createDebug("lib:control-content");
+const debug = createDebug("domain:remediation:control-content");
 
 /** Keys of completed steps whose content changed since the hashes were captured. */
 export function changedSinceCompleted(

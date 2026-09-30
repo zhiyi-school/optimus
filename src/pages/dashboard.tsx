@@ -13,7 +13,7 @@ import { createDebug } from "@/lib/debug";
 import { findingStatusConfig } from "@/domain/status-labels";
 import type { UserRole } from "@/database/types";
 
-const debug = createDebug("page:Dashboard");
+const debug = createDebug("pages:dashboard");
 
 const roleGreeting: Record<UserRole, string> = {
   developer: "Findings and tickets that need your attention.",

@@ -12,7 +12,7 @@ import { useTickets } from "@/hooks/queries/tickets";
 import { createDebug } from "@/lib/debug";
 import { preferredDeveloperRisk } from "@/domain/remediation/resolve-rules";
 
-const debug = createDebug("page:ResolveApplication");
+const debug = createDebug("pages:resolve:application");
 
 /** Redirects to the application's most urgent developer risk, or shows an empty state when none exists. */
 export default function ResolveApplication() {

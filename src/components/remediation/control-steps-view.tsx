@@ -16,7 +16,7 @@ import { controlSummary } from "@/domain/remediation/control-content";
 import { stepCountLabel } from "@/lib/utils";
 import type { ControlDetail } from "@/automation-api/playbook-types";
 
-const debug = createDebug("component:control-steps-view");
+const debug = createDebug("components:remediation:control-steps-view");
 
 type ControlStepsViewProps = { backTo: string } & (
   | { control?: undefined; children: ReactNode }

@@ -10,7 +10,7 @@ import type {
 } from "@/database/types";
 import { createDebug } from "@/lib/debug";
 
-const debug = createDebug("data:assessments");
+const debug = createDebug("database:assessments");
 
 export const assessmentData = {
 

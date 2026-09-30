@@ -9,7 +9,7 @@ import { createDebug } from "@/lib/debug";
 import { remediationWorkflow } from "@/domain/remediation/workflow";
 import type { Finding, RetestRun, Ticket } from "@/database/types";
 
-const debug = createDebug("hooks:remediation-readiness");
+const debug = createDebug("hooks:remediation:readiness");
 
 /** Loads risk controls, ticket controls and steps, and computes the remediation workflow state. */
 export function useRemediationReadiness({

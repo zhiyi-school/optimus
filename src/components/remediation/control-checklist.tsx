@@ -11,7 +11,7 @@ import type { ControlProgressStatus } from "@/database/types";
 import { createDebug } from "@/lib/debug";
 import { controlStatusLabels, type LiveControl } from "@/domain/remediation/resolve-rules";
 
-const debug = createDebug("component:control-checklist");
+const debug = createDebug("components:remediation:control-checklist");
 
 const statusIcon: Record<ControlProgressStatus, typeof Circle> = {
   not_started: Circle,

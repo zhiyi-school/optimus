@@ -5,7 +5,7 @@
 import axios, { type AxiosInstance } from "axios";
 import { createDebug } from "@/lib/debug";
 
-const debug = createDebug("api:automation");
+const debug = createDebug("automation-api:client");
 const baseURL = import.meta.env.VITE_API_BASE_URL as string | undefined;
 const requestStartedAt = new WeakMap<object, number>();
 

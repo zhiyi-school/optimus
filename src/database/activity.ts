@@ -6,7 +6,7 @@ import { supabase } from "@/database/client";
 import { createDebug } from "@/lib/debug";
 import { requireUserId } from "./session";
 
-const debug = createDebug("data:activity");
+const debug = createDebug("database:activity");
 
 export const activityData = {
   /** Records an activity entry, attributed to the signed-in user when there is one. */

@@ -8,7 +8,7 @@ import type { Profile } from "@/database/types";
 import type { Capability } from "@/auth/permissions";
 import { createDebug } from "@/lib/debug";
 
-const debug = createDebug("auth:context");
+const debug = createDebug("auth:auth-context");
 
 export interface AuthContextValue {
   session: Session | null;

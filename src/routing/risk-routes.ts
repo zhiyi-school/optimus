@@ -4,7 +4,7 @@
 
 import { createDebug } from "@/lib/debug";
 
-const debug = createDebug("lib:risk-routes");
+const debug = createDebug("routing:risk-routes");
 
 /** Returns the Resolve risk page, falling back to the application, then Resolve, when links are missing. */
 export function resolveRiskPath(location: {

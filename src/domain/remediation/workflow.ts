@@ -20,7 +20,7 @@ import {
 } from "@/domain/remediation/resolve-rules";
 import { createDebug } from "@/lib/debug";
 
-const debug = createDebug("lib:remediation-workflow");
+const debug = createDebug("domain:remediation:workflow");
 
 export type RemediationReasonCode =
   | "approach_permission"

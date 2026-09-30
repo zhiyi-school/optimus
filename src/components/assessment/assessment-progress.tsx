@@ -19,7 +19,7 @@ import { useTickets } from "@/hooks/queries/tickets";
 import type { ProvisioningStage } from "@/automation-api/types";
 import type { Application, Assessment } from "@/database/types";
 
-const debug = createDebug("component:assessment-progress");
+const debug = createDebug("components:assessment:assessment-progress");
 
 const LIFECYCLE_LINE_CLASS: Record<AssessmentStagePresentation["lifecycle"], string> = {
   complete: "bg-primary/40",

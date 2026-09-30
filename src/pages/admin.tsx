@@ -33,7 +33,7 @@ import { formatShortDate } from "@/lib/utils";
 import type { Application, Profile, Team, TeamType, UserRole } from "@/database/types";
 import { ApplicationIcon } from "@/components/shared/application-icon";
 
-const debug = createDebug("page:Admin");
+const debug = createDebug("pages:admin");
 
 const roleLabels: Record<UserRole, string> = {
   developer: "Developer Team",

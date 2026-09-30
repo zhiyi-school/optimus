@@ -8,7 +8,7 @@ import type { RiskConversationAttachment } from "@/database/types";
 import { createDebug } from "@/lib/debug";
 import { requireUserId } from "./session";
 
-const debug = createDebug("data:attachments");
+const debug = createDebug("database:conversation-attachments");
 
 export interface PendingConversationAttachment {
   conversationId: string;

@@ -7,7 +7,7 @@ import type { Profile } from "@/database/types";
 import { createDebug } from "@/lib/debug";
 import { requireUserId } from "./session";
 
-const debug = createDebug("data:users");
+const debug = createDebug("database:users");
 
 export const userData = {
   /** Fetches the signed-in user's profile, or null when none exists. */

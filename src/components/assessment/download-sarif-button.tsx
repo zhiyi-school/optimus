@@ -10,7 +10,7 @@ import { createDebug } from "@/lib/debug";
 import { sarifFileName } from "@/domain/run/sarif";
 import { errorMessage } from "@/lib/utils";
 
-const debug = createDebug("component:download-sarif-button");
+const debug = createDebug("components:assessment:download-sarif-button");
 
 /** Renders the SARIF download button when an export is available for the run. */
 export function DownloadSarifButton({

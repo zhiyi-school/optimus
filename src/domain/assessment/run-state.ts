@@ -6,7 +6,7 @@ import type { Assessment, AssessmentRunRequest } from "@/database/types";
 import { createDebug } from "@/lib/debug";
 import type { Tone } from "@/domain/status-labels";
 
-const debug = createDebug("lib:assessment-run-state");
+const debug = createDebug("domain:assessment:run-state");
 
 const BLOCKER_LABELS: Record<string, string> = {
   no_device: "Waiting for a compatible test device",

@@ -20,7 +20,7 @@ import { resolveRiskPath } from "@/routing/risk-routes";
 import { errorMessage, formatDate } from "@/lib/utils";
 import type { Application, Finding, Ticket } from "@/database/types";
 
-const debug = createDebug("component:ticket-actions:remediation");
+const debug = createDebug("components:remediation:remediation-actions");
 
 /** Starts, continues or resumes remediation of a finding depending on its existing tickets. */
 export function WorkOnRiskButton({

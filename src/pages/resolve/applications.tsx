@@ -25,7 +25,7 @@ import {
 import { compareByName, formatDate } from "@/lib/utils";
 import type { Application } from "@/database/types";
 
-const debug = createDebug("page:Resolve");
+const debug = createDebug("pages:resolve:applications");
 
 interface Row {
   id: string;

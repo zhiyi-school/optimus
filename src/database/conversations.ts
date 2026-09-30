@@ -11,7 +11,7 @@ import type {
 import { createDebug } from "@/lib/debug";
 import { requireUserId } from "./session";
 
-const debug = createDebug("data:conversations");
+const debug = createDebug("database:conversations");
 
 export interface RiskConversationEntryInput {
   conversation_id: string;

@@ -16,7 +16,7 @@ import type { AutomationPlatform } from "@/automation-api/types";
 import type { ControlDetail, ControlSourceMetadata, ControlStep } from "@/automation-api/playbook-types";
 import type { ControlProgressStatus, TicketControlStep } from "@/database/types";
 
-const debug = createDebug("component:control-content");
+const debug = createDebug("components:remediation:control-content");
 
 export interface ControlStepProgress {
   byStepKey: Map<string, TicketControlStep>;

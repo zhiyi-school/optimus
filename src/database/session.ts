@@ -6,7 +6,7 @@ import { supabase } from "@/database/client";
 import { createDebug } from "@/lib/debug";
 import { UserFacingError } from "@/lib/utils";
 
-const debug = createDebug("data:users");
+const debug = createDebug("database:session");
 
 /** Returns the signed-in user's id, throwing a user-facing error when nobody is signed in. */
 export async function requireUserId(): Promise<string> {

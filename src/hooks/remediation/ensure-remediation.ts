@@ -14,7 +14,7 @@ import {
 import { createDebug } from "@/lib/debug";
 import type { Finding } from "@/database/types";
 
-const debug = createDebug("hooks:ensure-remediation");
+const debug = createDebug("hooks:remediation:ensure-remediation");
 
 /** Returns a callback yielding the existing ticket ID, or starting a remediation with the preferred control. */
 export function useEnsureRemediation(finding: Finding | undefined, ticketId: string | undefined) {

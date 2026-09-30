@@ -7,7 +7,7 @@ import type { Application } from "@/database/types";
 import { createDebug } from "@/lib/debug";
 import { activityData } from "./activity";
 
-const debug = createDebug("data:applications");
+const debug = createDebug("database:applications");
 
 export const applicationData = {
   /** Lists every visible application by name. */

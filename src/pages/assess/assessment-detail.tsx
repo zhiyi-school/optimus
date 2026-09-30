@@ -14,7 +14,7 @@ import { useRiskCatalogue } from "@/hooks/queries/automation";
 import { createDebug } from "@/lib/debug";
 import { formatDate } from "@/lib/utils";
 
-const debug = createDebug("page:AssessmentDetail");
+const debug = createDebug("pages:assess:assessment-detail");
 
 /** Shows a completed assessment or its preferred risk; other states redirect to the Assessments page. */
 export default function AssessmentDetail() {

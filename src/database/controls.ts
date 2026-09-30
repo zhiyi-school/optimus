@@ -13,7 +13,7 @@ import { createDebug } from "@/lib/debug";
 import { requireUserId } from "./session";
 import { activityData } from "./activity";
 
-const debug = createDebug("data:controls");
+const debug = createDebug("database:controls");
 
 /** Status fields to write, stamping completion time and user only when completed. */
 function completionFields(status: ControlProgressStatus, userId: string) {

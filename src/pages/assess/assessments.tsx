@@ -35,7 +35,7 @@ import { createDebug } from "@/lib/debug";
 import { cn, compareByName, errorMessage, formatDate } from "@/lib/utils";
 import type { Assessment, Application } from "@/database/types";
 
-const debug = createDebug("page:Assessments");
+const debug = createDebug("pages:assess:assessments");
 
 /** Statuses whose row expands to a status panel instead of opening the assessment. */
 const INCOMPLETE_STATUSES = ["queued", "waiting", "running", "failed"];

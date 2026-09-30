@@ -21,7 +21,7 @@ import { createDebug } from "@/lib/debug";
 import { errorMessage, formatDate, cn } from "@/lib/utils";
 import type { Platform } from "@/database/types";
 
-const debug = createDebug("page:NewAssessment");
+const debug = createDebug("pages:assess:new-assessment");
 
 type Screen = "form" | "review";
 

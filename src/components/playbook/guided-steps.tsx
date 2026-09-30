@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { createDebug } from "@/lib/debug";
 import { cn } from "@/lib/utils";
 
-const debug = createDebug("component:guided-steps");
+const debug = createDebug("components:playbook:guided-steps");
 
 // A footer action that navigates is a link, so it must not wrap a real button.
 const linkButton =

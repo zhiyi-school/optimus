@@ -9,7 +9,7 @@ import { activityData } from "./activity";
 import { ticketData } from "./tickets";
 import { createDebug } from "@/lib/debug";
 
-const debug = createDebug("data:risk-acceptance");
+const debug = createDebug("database:risk-acceptance");
 
 export const riskAcceptanceData = {
   /** Creates a risk acceptance ticket under review with its pending acceptance request. */

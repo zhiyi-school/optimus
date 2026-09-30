@@ -20,7 +20,7 @@ import type {
 import type { Tone } from "@/domain/status-labels";
 import { createDebug } from "@/lib/debug";
 
-const debug = createDebug("lib:resolve");
+const debug = createDebug("domain:remediation:resolve-rules");
 
 export const developerTicketLabels: Record<TicketStatus, { label: string; tone: Tone }> = {
   open: { label: "Action required", tone: "danger" },

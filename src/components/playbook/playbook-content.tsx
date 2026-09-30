@@ -12,7 +12,7 @@ import { createDebug } from "@/lib/debug";
 import { renderInline } from "@/components/playbook/inline-markdown";
 import { renderableBlocks } from "@/domain/playbook/blocks";
 
-const debug = createDebug("component:playbook-content");
+const debug = createDebug("components:playbook:playbook-content");
 
 /** Phone screenshots stay thumbnail-sized; diagrams and desktop captures get the wider cap. */
 const figureSize = {

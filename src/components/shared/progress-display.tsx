@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { toneClasses, type Tone } from "@/domain/status-labels";
 import type { Progress } from "@/domain/remediation/resolve-rules";
 
-const debug = createDebug("component:resolve-display");
+const debug = createDebug("components:shared:progress-display");
 
 /** Dismissible notice that the remediation instructions were updated. */
 export function PlaybookUpdatedNotice({ onDismiss }: { onDismiss: () => void }) {

@@ -7,7 +7,7 @@ import { Check, Copy, TriangleAlert } from "lucide-react";
 import { tokenize, type CodeTokenKind } from "@/domain/playbook/code-highlight";
 import { createDebug } from "@/lib/debug";
 
-const debug = createDebug("component:code-block");
+const debug = createDebug("components:playbook:code-block");
 
 const FEEDBACK_MS = 1500;
 

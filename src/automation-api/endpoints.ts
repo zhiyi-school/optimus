@@ -16,7 +16,7 @@ import type {
 } from "@/automation-api/types";
 import { createDebug, errorSummary } from "@/lib/debug";
 
-const debug = createDebug("api:automation");
+const debug = createDebug("automation-api:endpoints");
 
 /** Backend-relative path of a platform's default config file. */
 export function defaultConfigPath(platform: AutomationPlatform): string {

@@ -44,7 +44,9 @@ or rebuilding.
 ### Debug logging
 
 `src/lib/debug.ts` provides `createDebug(scope)`, whose statements write
-`console.debug` lines prefixed `[scope]`. They are silent unless either switch is on:
+`console.debug` lines prefixed `[scope]`. The scope is the file's path under `src/` with
+`/` written as `:`, so `src/database/tickets.ts` logs as `[database:tickets]`. They are
+silent unless either switch is on:
 
 - `VITE_DEBUG=true` in `.env`, which applies to every session of that build.
 - `localStorage.setItem("optimus:debug", "1")` in the browser console, followed by a

@@ -7,7 +7,7 @@ import type { ControlReconciliation, TicketControl, TicketControlStep } from "@/
 import { createDebug } from "@/lib/debug";
 import { isReconciled } from "@/domain/remediation/resolve-rules";
 
-const debug = createDebug("hooks:remediation-reconciliation");
+const debug = createDebug("hooks:remediation:reconciliation");
 
 interface MutationWithSettled<T> {
   mutate: (value: T, options: { onSettled: () => void }) => void;

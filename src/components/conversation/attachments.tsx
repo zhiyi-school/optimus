@@ -8,7 +8,7 @@ import { attachmentMeta } from "@/domain/conversation/attachments";
 import { createDebug } from "@/lib/debug";
 import type { RiskConversationAttachment } from "@/database/types";
 
-const debug = createDebug("component:attachments");
+const debug = createDebug("components:conversation:attachments");
 
 /** Lists attachments with metadata, a download button and a retry link after a failed download. */
 export function AttachmentList({ attachments }: { attachments: RiskConversationAttachment[] }) {

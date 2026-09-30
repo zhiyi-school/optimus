@@ -49,7 +49,7 @@ import type {
   RiskConversationEntry,
 } from "@/database/types";
 
-const debug = createDebug("component:conversation-panel");
+const debug = createDebug("components:conversation:conversation-panel");
 
 const ACTION_LABEL: Record<ComposerActionKind, string> = {
   classification: "Change classification",

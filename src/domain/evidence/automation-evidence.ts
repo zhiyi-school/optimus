@@ -7,7 +7,7 @@ import type { EvidenceItem } from "@/domain/evidence/evidence-types";
 import { createDebug } from "@/lib/debug";
 import { formatDate, formatDuration } from "@/lib/utils";
 
-const debug = createDebug("lib:automation-evidence");
+const debug = createDebug("domain:evidence:automation-evidence");
 
 export const AUTOMATION_SOURCE = "Automated test";
 export const MANUAL_SOURCE = "Security team";

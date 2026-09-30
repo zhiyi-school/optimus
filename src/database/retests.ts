@@ -8,7 +8,7 @@ import { activityData } from "./activity";
 import { riskConversationData } from "./conversations";
 import { createDebug } from "@/lib/debug";
 
-const debug = createDebug("data:retests");
+const debug = createDebug("database:retests");
 
 export const retestData = {
   /** Lists a finding's retest runs, newest first. */

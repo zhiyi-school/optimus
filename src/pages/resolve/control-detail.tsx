@@ -25,7 +25,7 @@ import { changedSinceCompleted, contentHashes } from "@/domain/remediation/contr
 import { liveControls } from "@/domain/remediation/resolve-rules";
 import { resolveRiskPath } from "@/routing/risk-routes";
 
-const debug = createDebug("page:ControlDetail");
+const debug = createDebug("pages:resolve:control-detail");
 
 /** Shows a ticket's control steps with progress tracking, flagging steps changed since completion. */
 export default function ControlDetail() {

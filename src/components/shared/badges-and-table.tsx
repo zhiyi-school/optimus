@@ -16,7 +16,7 @@ import {
 } from "@/domain/status-labels";
 import type { FindingStatus, Platform } from "@/database/types";
 
-const debug = createDebug("component:data-display");
+const debug = createDebug("components:shared:badges-and-table");
 
 /** Badge for a finding status. */
 export function StatusBadge({ status }: { status: FindingStatus }) {

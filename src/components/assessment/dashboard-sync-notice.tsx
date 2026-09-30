@@ -9,7 +9,7 @@ import { canRetrySync, dashboardSyncPresentation, syncCountsSummary } from "@/do
 import { createDebug } from "@/lib/debug";
 import { cn } from "@/lib/utils";
 
-const debug = createDebug("component:dashboard-sync-notice");
+const debug = createDebug("components:assessment:dashboard-sync-notice");
 
 /** Shows sync status, counts or detail, errors and a retry button when retry is allowed. */
 export function DashboardSyncNotice({

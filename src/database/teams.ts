@@ -6,7 +6,7 @@ import { supabase } from "@/database/client";
 import type { Team } from "@/database/types";
 import { createDebug } from "@/lib/debug";
 
-const debug = createDebug("data:teams");
+const debug = createDebug("database:teams");
 
 export const teamData = {
   /** Lists every team by name. */

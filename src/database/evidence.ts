@@ -6,7 +6,7 @@ import { supabase, EVIDENCE_BUCKET } from "@/database/client";
 import type { Evidence } from "@/database/types";
 import { createDebug } from "@/lib/debug";
 
-const debug = createDebug("data:evidence");
+const debug = createDebug("database:evidence");
 
 export const evidenceData = {
   /** Lists a finding's evidence, newest first. */

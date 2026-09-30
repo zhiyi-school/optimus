@@ -14,7 +14,7 @@ import { createDebug } from "@/lib/debug";
 import { isRemediationControl, playbookControlStatusLabels } from "@/domain/remediation/resolve-rules";
 import { resolveRiskPath } from "@/routing/risk-routes";
 
-const debug = createDebug("page:ControlPreview");
+const debug = createDebug("pages:resolve:control-preview");
 
 /** Shows a control's remediation steps for a finding, with an option to start remediation using it. */
 export default function ControlPreview() {

@@ -23,7 +23,7 @@ import { stepCountLabel } from "@/lib/utils";
 import { useAssessment } from "@/hooks/queries/assessments";
 import { useRiskCatalogue } from "@/hooks/queries/automation";
 
-const debug = createDebug("page:ManualTestSteps");
+const debug = createDebug("pages:assess:manual-test-steps");
 
 /** Renders a playbook setup table, deriving columns from the union of row keys. */
 function SetupTable({ block }: { block: DemonstrationTableBlock }) {

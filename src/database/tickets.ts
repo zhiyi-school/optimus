@@ -9,7 +9,7 @@ import { activityData } from "./activity";
 import { riskConversationData } from "./conversations";
 import { createDebug } from "@/lib/debug";
 
-const debug = createDebug("data:tickets");
+const debug = createDebug("database:tickets");
 
 export interface TicketFilters {
   type?: TicketType;

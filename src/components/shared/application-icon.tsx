@@ -9,7 +9,7 @@ import { createDebug } from "@/lib/debug";
 import { cn } from "@/lib/utils";
 import type { Application } from "@/database/types";
 
-const debug = createDebug("component:application-icon");
+const debug = createDebug("components:shared:application-icon");
 
 interface ApplicationIconProps {
   application: (ApplicationIconSource & Pick<Application, "app_type" | "name">) | null | undefined;

@@ -6,7 +6,7 @@ import type { AutomationResultRow } from "@/automation-api/types";
 import { artifactNamed } from "@/domain/evidence/automation-evidence";
 import { createDebug } from "@/lib/debug";
 
-const debug = createDebug("lib:plaintext-literals");
+const debug = createDebug("domain:evidence:plaintext-literals");
 
 export type PlaintextCategory = "credential" | "secret_key" | "credential_url" | "sensitive_value";
 

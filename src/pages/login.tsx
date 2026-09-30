@@ -19,7 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { createDebug } from "@/lib/debug";
 
-const debug = createDebug("page:Login");
+const debug = createDebug("pages:login");
 
 type Mode = "signin" | "signup";
 

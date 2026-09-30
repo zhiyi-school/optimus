@@ -19,7 +19,7 @@ import type { EvidenceItem } from "@/domain/evidence/evidence-types";
 
 export type { EvidenceItem } from "@/domain/evidence/evidence-types";
 
-const debug = createDebug("component:evidence");
+const debug = createDebug("components:evidence:evidence");
 
 /** How many rail items are shown before the reader asks for the rest. */
 export const RAIL_COLLAPSED_ITEMS = 5;

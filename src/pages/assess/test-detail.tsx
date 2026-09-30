@@ -55,7 +55,7 @@ import { findingsByTestId } from "@/domain/assessment/assessments";
 import { assessmentKeys, automationKeys, evidenceKeys, ticketKeys } from "@/hooks/queries/keys";
 import { retestData } from "@/database/retests";
 
-const debug = createDebug("page:TestDetail");
+const debug = createDebug("pages:assess:test-detail");
 
 /** Keys the test page on :testId so the routes sharing this element remount it per test. */
 export default function TestDetail() {

@@ -32,7 +32,7 @@ import {
 } from "@/domain/remediation/resolve-rules";
 import { riskIcon } from "@/domain/assessment/entity-icons";
 
-const debug = createDebug("page:ResolveRisk");
+const debug = createDebug("pages:resolve:risk");
 
 /** Remounts the risk page whenever the route's risk changes so per-risk state resets. */
 export default function ResolveRisk() {

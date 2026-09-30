@@ -21,7 +21,7 @@ import {
 import { mapVerdictToFindingStatus } from "@/domain/status-labels";
 import { errorMessage, formatDate, formatDuration } from "@/lib/utils";
 
-const debug = createDebug("page:RunDetail");
+const debug = createDebug("pages:assess:run-detail");
 
 /** Shows a run's metadata and sync status, streaming events while running and results once finished. */
 export default function RunDetail() {

@@ -8,7 +8,7 @@ import type { Application, Assessment, Finding, FindingStatus } from "@/database
 
 export type AssessmentRow = Assessment & { application: Application | null };
 
-const debug = createDebug("lib:assessments");
+const debug = createDebug("domain:assessment:assessments");
 
 /** Least reassuring first, so opening a completed assessment lands on work that still needs a decision. */
 const RISK_PRIORITY: (FindingStatus | "untested")[] = ["at_risk", "inconclusive", "untested"];

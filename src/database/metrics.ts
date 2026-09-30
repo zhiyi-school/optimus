@@ -6,7 +6,7 @@ import { supabase } from "@/database/client";
 import type { AssessmentStatus, FindingStatus, TicketStatus, TicketType } from "@/database/types";
 import { createDebug } from "@/lib/debug";
 
-const debug = createDebug("data:metrics");
+const debug = createDebug("database:metrics");
 
 export interface DashboardMetrics {
   findingCounts: Record<FindingStatus, number>;

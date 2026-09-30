@@ -6,7 +6,7 @@ import { supabase } from "@/database/client";
 import type { Application, Finding, FindingStatus } from "@/database/types";
 import { createDebug } from "@/lib/debug";
 
-const debug = createDebug("data:findings");
+const debug = createDebug("database:findings");
 
 /** Finding filters for debug logs, with the search text reduced to its length. */
 function filterSummary(filters: FindingFilters) {

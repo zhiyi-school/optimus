@@ -6,7 +6,7 @@ import type { AutomationResultRow } from "@/automation-api/types";
 import type { RiskConversationEntry } from "@/database/types";
 import { createDebug } from "@/lib/debug";
 
-const debug = createDebug("lib:conversation-timeline");
+const debug = createDebug("domain:conversation:timeline");
 
 export type ConversationTimelineItem =
   | { key: string; at: string; kind: "entry"; entry: RiskConversationEntry }

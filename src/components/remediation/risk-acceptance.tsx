@@ -12,7 +12,7 @@ import { createDebug } from "@/lib/debug";
 import { resolveRiskPath } from "@/routing/risk-routes";
 import type { Finding } from "@/database/types";
 
-const debug = createDebug("component:ticket-actions:acceptance");
+const debug = createDebug("components:remediation:risk-acceptance");
 
 /** Button and dialog for requesting risk acceptance of a finding. */
 export function AcceptRiskButton({ finding }: { finding: Finding }) {

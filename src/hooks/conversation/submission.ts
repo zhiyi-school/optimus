@@ -19,7 +19,7 @@ import { createDebug } from "@/lib/debug";
 import { errorMessage } from "@/lib/utils";
 import type { FindingStatus } from "@/database/types";
 
-const debug = createDebug("hooks:conversation-submission");
+const debug = createDebug("hooks:conversation:submission");
 
 export type ComposerAction =
   | { kind: "classification"; status: FindingStatus }

@@ -10,7 +10,7 @@ import { downloadFile } from "@/lib/download";
 import { UserFacingError, errorMessage } from "@/lib/utils";
 import type { RiskConversationAttachment } from "@/database/types";
 
-const debug = createDebug("hooks:attachment-download");
+const debug = createDebug("hooks:conversation:attachment-download");
 
 /** Mints an uncached signed URL per download so links cannot outlive access; server-held files are unsupported. */
 async function attachmentUrl(attachment: RiskConversationAttachment): Promise<string> {

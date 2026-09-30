@@ -44,7 +44,7 @@ import { cn, errorMessage } from "@/lib/utils";
 import type { ControlDetail } from "@/automation-api/playbook-types";
 import type { Finding } from "@/database/types";
 
-const debug = createDebug("component:remediation-section");
+const debug = createDebug("components:remediation:remediation-section");
 
 /** Shows the remediation approach and control checklist, reconciling selection and progress for the ticket. */
 export function RemediationSection({ ticketId, finding: fallback }: { ticketId?: string; finding?: Finding }) {
