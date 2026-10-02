@@ -11,10 +11,11 @@ import {
   normalizeAssessmentStages,
   type AssessmentStagePresentation,
 } from "@/domain/assessment/run-state";
+import { countCompletedTests } from "@/domain/run/run-progress";
 import { createDebug } from "@/lib/debug";
 import { cn, errorMessage, formatDate } from "@/lib/utils";
 import { useAssessmentRunRequest, useRequestAssessmentRun } from "@/hooks/queries/assessments";
-import { useAppProvisioning, useRunStatus, useRunSyncStatus } from "@/hooks/queries/automation";
+import { useAppProvisioning, useRunEvents, useRunStatus, useRunSyncStatus } from "@/hooks/queries/automation";
 import { useTickets } from "@/hooks/queries/tickets";
 import type { ProvisioningStage } from "@/automation-api/types";
 import type { Application, Assessment } from "@/database/types";
@@ -127,11 +128,13 @@ export function EnvironmentSetupStages({
   stages: reported,
   assessment,
   runState,
+  liveCompletedTests,
 }: {
   configurationReady?: boolean;
   stages?: ProvisioningStage[];
   assessment?: Pick<Assessment, "status" | "completed_tests" | "total_tests"> | null;
   runState: ReturnType<typeof assessmentRunState>;
+  liveCompletedTests?: number;
 }) {
   const stages = normalizeAssessmentStages({
     configurationReady,
@@ -143,6 +146,7 @@ export function EnvironmentSetupStages({
     })),
     runState,
     assessment,
+    liveCompletedTests,
   });
   return <StageList stages={stages} />;
 }
@@ -184,6 +188,10 @@ export function AssessmentStatusPanel({
   const { data: run } = useRunStatus(startedRunId, { poll: true });
   // The sync record only appears once the run has finished.
   const { data: sync } = useRunSyncStatus(startedRunId, { enabled: run?.status === "completed" });
+  // Kept enabled after the run ends so the finished count stays until the sync stores it.
+  const { events: runEvents } = useRunEvents(startedRunId, !!startedRunId);
+  const liveCompletedTests =
+    runEvents.length > 0 ? countCompletedTests(runEvents, application?.external_id) : undefined;
   const runState = assessmentRunState(assessment, runRequest.data, {
     run: run?.status,
     sync: sync?.status,
@@ -231,6 +239,7 @@ export function AssessmentStatusPanel({
         stages={provisioning?.stages}
         assessment={assessment}
         runState={runState}
+        liveCompletedTests={liveCompletedTests}
       />
 
       <div className="mt-4 flex flex-wrap items-center gap-3">

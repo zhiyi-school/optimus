@@ -117,6 +117,11 @@ backend-side lock.
   every assessment every 10 seconds (`ASSESSMENT_LIST_POLL_INTERVAL_MS`) while
   any is `queued`, `waiting` or `running`, and stops once all have completed or
   failed. Other callers do not poll.
+- **Live test count**: the expanded assessment row's `AssessmentStatusPanel`
+  opens `useRunEvents` for the run its request started and keeps it open until
+  the assessment completes, counting finished tests with `countCompletedTests`
+  (`src/domain/run/run-progress.ts`). The list row's count updates only when the
+  dashboard sync stores it.
 - **Assessment run request**: `useAssessmentRunRequest`
   (`src/hooks/queries/assessments.ts`) re-reads the assessment's queued run
   request every 10 seconds (`RUN_REQUEST_POLL_INTERVAL_MS = 10_000`) while it or

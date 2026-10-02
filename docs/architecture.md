@@ -334,7 +334,11 @@ stage list through `EnvironmentSetupStages`, falling back to the
 Once the request has started a run, the panel follows that run through the
 request's `run_id`: testing while `GET /runs/{run_id}` reports `running`, then
 analysis and reporting while the run's dashboard sync is pending, with a link
-to the run's page.
+to the run's page. While it follows the run, the panel also streams
+`GET /runs/{run_id}/events` and counts that app's `risk_completed` events, so
+"N of M security tests run" rises as each test finishes. The stored
+`completed_tests`, which only the dashboard sync writes, takes over once the
+assessment completes, and whenever there are no events to count.
 
 By the time a user is inside a specific test, setup is already done, so
 "Run automated test" on `/assessments/:id/tests/:testId` starts executing

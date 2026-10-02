@@ -223,6 +223,8 @@ export interface AssessmentStageContext {
   provisioningStages?: RawStageInput[];
   runState: AssessmentRunState;
   assessment: Pick<Assessment, "status" | "completed_tests" | "total_tests"> | null | undefined;
+  /** Tests the started run has finished so far, from its live events; the stored count wins once the assessment completes. */
+  liveCompletedTests?: number;
 }
 
 /** Builds the setup, testing and analysis stepper, keeping configuration and testing sources independent. */
@@ -249,10 +251,13 @@ export function normalizeAssessmentStages(ctx: AssessmentStageContext): Assessme
         },
       ];
 
-  const completedTests = ctx.assessment?.completed_tests ?? 0;
+  const assessmentDone = ctx.assessment?.status === "completed";
+  const completedTests =
+    !assessmentDone && ctx.liveCompletedTests !== undefined
+      ? ctx.liveCompletedTests
+      : (ctx.assessment?.completed_tests ?? 0);
   const totalTests = ctx.assessment?.total_tests ?? 0;
   const progress = totalTests > 0 ? `${completedTests} of ${totalTests} security tests run.` : undefined;
-  const assessmentDone = ctx.assessment?.status === "completed";
   const testingDone = assessmentDone || ctx.runState.testingFinished;
   const nonRetryableFailure = ctx.runState.tone === "danger" && !ctx.runState.canRetry;
 

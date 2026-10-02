@@ -409,6 +409,35 @@ describe("normalizing the full assessment workflow", () => {
     expect(stages.find((s) => s.id === "analysis")!.lifecycle).toBe("failed");
   });
 
+  it("shows the live count of finished tests while the run is testing", () => {
+    const stages = normalizeAssessmentStages({
+      configurationReady: true,
+      runState: runState({ label: "Automated tests are running", tone: "info" }),
+      assessment: { status: "running", completed_tests: 0, total_tests: 4 },
+      liveCompletedTests: 2,
+    });
+    expect(stages.find((s) => s.id === "testing")!.description).toBe("2 of 4 security tests run.");
+  });
+
+  it("falls back to the stored count when there is no live count", () => {
+    const stages = normalizeAssessmentStages({
+      configurationReady: true,
+      runState: runState({ label: "Automated tests are running", tone: "info" }),
+      assessment: { status: "running", completed_tests: 1, total_tests: 4 },
+    });
+    expect(stages.find((s) => s.id === "testing")!.description).toBe("1 of 4 security tests run.");
+  });
+
+  it("uses the stored count once the assessment has completed", () => {
+    const stages = normalizeAssessmentStages({
+      configurationReady: true,
+      runState: runState({ label: "Completed", tone: "success" }),
+      assessment: { status: "completed", completed_tests: 4, total_tests: 4 },
+      liveCompletedTests: 3,
+    });
+    expect(stages.find((s) => s.id === "testing")!.description).toBe("4 of 4 security tests run.");
+  });
+
   it("completes both testing and analysis, with no current stage, once the assessment is done", () => {
     const stages = normalizeAssessmentStages({
       configurationReady: true,
