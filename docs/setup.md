@@ -68,9 +68,9 @@ A local Supabase (CLI) option is documented at the bottom for development.
 1. **Create the project** at [supabase.com](https://supabase.com) (free
    tier is sufficient to start).
 2. **Apply the schema**: in the Supabase SQL Editor, run every file in
-   `supabase/migrations/` **in order** (`0001` to `0006`), then every file in
-   `supabase/fixes/` in order. The baseline builds the final schema directly;
-   the fixes are corrections made since. See
+   `supabase/migrations/` **in order** (`0001` to `0006`). The baseline builds
+   the final schema directly, including every fix in `supabase/fixes/`, so a
+   new project needs no fix. See
    [Database maintenance](./database-maintenance.md#layout) for what each file
    holds.
 

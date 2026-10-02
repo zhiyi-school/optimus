@@ -19,6 +19,7 @@ let owners: Record<string, unknown>[] = [];
 let detailFetch: () => Promise<unknown> = () => Promise.resolve(null);
 let runRequestCalls = 0;
 let runRequest: unknown = null;
+let assessmentList: { status: string }[] = [];
 let attachmentWrites = 0;
 
 function entry(id: string): RiskConversationEntry {
@@ -44,6 +45,7 @@ vi.mock("@/database/client", () => ({
 vi.mock("@/database/assessments", () => ({
   assessmentData: {
     getWithApplication: () => detailFetch(),
+    listWithApplications: () => Promise.resolve(assessmentList),
   },
   assessmentRunRequestData: {
     findForAssessment: () => {
@@ -107,7 +109,7 @@ vi.mock("@/automation-api/endpoints", () => ({
 
 vi.mock("@/automation-api/playbook-endpoints", () => ({ playbookApi: {} }));
 
-const { useAssessment, useAssessmentRunRequest } = await import("@/hooks/queries/assessments");
+const { useAssessment, useAssessmentRunRequest, useAssessments } = await import("@/hooks/queries/assessments");
 const { useRiskConversation, useRiskConversationEntries, useSaveConversationAttachment } =
   await import("@/hooks/queries/conversations");
 
@@ -283,6 +285,45 @@ describe("useAssessmentRunRequest polling and focus", () => {
     await settle();
 
     expect(runRequestCalls).toBe(initial);
+  });
+});
+
+describe("useAssessments polling while assessments are in progress", () => {
+  function ListProbe({ poll }: { poll?: boolean }) {
+    const { data } = useAssessments(poll === undefined ? undefined : { pollWhileInProgress: poll });
+    return <p>{data ? `rows:${data.length}` : "none"}</p>;
+  }
+
+  async function mountList(poll?: boolean) {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
+    });
+    await act(async () =>
+      root.render(
+        <QueryClientProvider client={client}>
+          <ListProbe poll={poll} />
+        </QueryClientProvider>,
+      ),
+    );
+    await settle();
+    const query = client.getQueryCache().find({ queryKey: ["assessments"] })!;
+    const { refetchInterval } = query.observers[0].options;
+    return typeof refetchInterval === "function" ? refetchInterval(query) : refetchInterval;
+  }
+
+  it.each(["queued", "waiting", "running"])("polls while an assessment is %s", async (status) => {
+    assessmentList = [{ status: "completed" }, { status }];
+    expect(await mountList(true)).toBe(10_000);
+  });
+
+  it("stops once every assessment has completed or failed", async () => {
+    assessmentList = [{ status: "completed" }, { status: "failed" }];
+    expect(await mountList(true)).toBe(false);
+  });
+
+  it("does not poll for a caller that did not ask to", async () => {
+    assessmentList = [{ status: "running" }];
+    expect(await mountList()).toBe(false);
   });
 });
 

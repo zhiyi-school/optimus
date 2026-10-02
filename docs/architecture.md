@@ -198,7 +198,7 @@ supabase/
 │   ├── 0004_rls_policies.sql
 │   ├── 0005_grants.sql
 │   └── 0006_storage.sql
-├── fixes/                 # Numbered corrections not yet in the baseline, applied everywhere
+├── fixes/                 # Numbered corrections for live projects, already in the baseline
 ├── legacy-migrations/     # Historical chain that live projects ran
 ├── tests/                 # SQL suites against the final schema
 │   └── legacy/            # Suites pinned to a historical migration version
@@ -206,7 +206,7 @@ supabase/
 ```
 
 `supabase/test-support/` and `scripts/test-database.sh` own the synthetic fresh
-installation, legacy-chain, `0024` upgrade and baseline-equivalence contract. See
+installation, baseline-alone, legacy-chain, `0024` upgrade and baseline-equivalence contract. See
 [Database maintenance](./database-maintenance.md); application modules never
 invoke that explicitly disposable workflow.
 
@@ -319,15 +319,22 @@ backend's assessment worker claims. See
 and [data-model.md](./data-model.md#manual-assessment-creation) for how it
 interacts with automation sync.
 
-On submit it returns to the assessments list. An assessment that has not
-completed has no page of its own yet: `/assessments/:assessmentId` redirects
-to the list with that row expanded (`?expanded=`), and once the assessment
-completes it redirects to the preferred risk's test page. The expanded row's
-`AssessmentStatusPanel` (`src/components/assessment/assessment-progress.tsx`)
-shows the run request's state and, while that is unsettled, polls
+On submit it returns to the assessments list with the new assessment's row
+expanded (`?expanded=`). An assessment that has not completed has no page of
+its own yet: `/assessments/:assessmentId` redirects to the list with that row
+expanded, and once the assessment completes it redirects to the preferred
+risk's test page. The list re-reads the assessments while any is in progress,
+and an expanded row that completes while it is open opens that page. The
+expanded row's `AssessmentStatusPanel`
+(`src/components/assessment/assessment-progress.tsx`) shows the run request's
+state and, while that is unsettled, polls
 `GET /config/{platform}/apps/{app_id}/provisioning` to render the backend's own
 stage list through `EnvironmentSetupStages`, falling back to the
 `app_provisioning` ticket's state when the backend has no readiness endpoint.
+Once the request has started a run, the panel follows that run through the
+request's `run_id`: testing while `GET /runs/{run_id}` reports `running`, then
+analysis and reporting while the run's dashboard sync is pending, with a link
+to the run's page.
 
 By the time a user is inside a specific test, setup is already done, so
 "Run automated test" on `/assessments/:id/tests/:testId` starts executing

@@ -353,8 +353,12 @@ create table assessment_run_requests (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   started_at timestamptz,
-  completed_at timestamptz
+  completed_at timestamptz,
+  run_id text
 );
+
+comment on column assessment_run_requests.run_id is
+  'The automation run the worker started for this request, set when the request completes. Null until a run starts, and on requests that never started one.';
 
 create index idx_assessment_run_requests_assessment on assessment_run_requests (assessment_id);
 create index idx_assessment_run_requests_claimable on assessment_run_requests (status, next_attempt_at);

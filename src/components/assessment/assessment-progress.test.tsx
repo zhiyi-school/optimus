@@ -53,6 +53,7 @@ function runState(overrides: Partial<AssessmentRunState> & { label: string; tone
     nextAttemptAt: null,
     canRetry: false,
     needsConfiguration: false,
+    testingFinished: false,
     ...overrides,
   };
 }

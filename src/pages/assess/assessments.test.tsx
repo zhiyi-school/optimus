@@ -16,6 +16,7 @@ let isFetching = false;
 let reports: string[] = [];
 let reportsFailed = false;
 const reportStatuses: (string | undefined)[] = [];
+const assessmentListOptions: unknown[] = [];
 
 function application(id: string, name: string): Application {
   return {
@@ -84,7 +85,10 @@ vi.mock("@/hooks/queries/risk-acceptance", async () => await import("@/test-supp
 vi.mock("@/test-support/query-hooks", () => {
   const idle = { data: undefined, isLoading: false, isError: false, refetch: () => {} };
   return {
-    useAssessments: () => ({ ...idle, data: assessments, isFetching }),
+    useAssessments: (opts?: unknown) => {
+      assessmentListOptions.push(opts);
+      return { ...idle, data: assessments, isFetching };
+    },
     useApplications: () => ({ ...idle, data: assessments.map((a) => a.application).filter(Boolean) }),
     useAutomationReports: (status?: string) => {
       reportStatuses.push(status);
@@ -99,6 +103,8 @@ vi.mock("@/test-support/query-hooks", () => {
       error: undefined,
     }),
     useAppProvisioning: () => ({ ...idle, data: undefined }),
+    useRunStatus: () => ({ ...idle, data: undefined }),
+    useRunSyncStatus: () => ({ ...idle, data: undefined }),
     useTickets: () => ({ ...idle, data: [] }),
   };
 });
@@ -114,6 +120,7 @@ beforeEach(() => {
   reports = [];
   reportsFailed = false;
   reportStatuses.length = 0;
+  assessmentListOptions.length = 0;
   assessments = [assessment({})];
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -339,6 +346,49 @@ describe("background refreshing", () => {
 
     expect(container.querySelector("[aria-label='Refreshing']")).not.toBeNull();
     expect(container.querySelector("table")).not.toBeNull();
+  });
+});
+
+describe("an assessment that finishes while it is open", () => {
+  it("keeps the list fresh while assessments are in progress", () => {
+    render();
+
+    expect(assessmentListOptions.at(-1)).toEqual({ pollWhileInProgress: true });
+  });
+
+  it("opens the assessment once the expanded row completes", () => {
+    assessments = [assessment({ id: "example-assessment-id", status: "running" })];
+    render("/assessments?expanded=example-assessment-id");
+    expect(container.querySelector("[data-detail-page]")).toBeNull();
+
+    assessments = [assessment({ id: "example-assessment-id", status: "completed" })];
+    render();
+
+    expect(path()).toBe("/assessments/example-assessment-id");
+  });
+
+  it("stays on the list when an assessment that is not open completes", () => {
+    assessments = [
+      assessment({ id: "a1", status: "running", application: application("app-a", "Apple App") }),
+      assessment({ id: "a2", status: "running", application: application("app-b", "Banana App") }),
+    ];
+    render("/assessments?expanded=a1");
+
+    assessments = [
+      assessment({ id: "a1", status: "running", application: application("app-a", "Apple App") }),
+      assessment({ id: "a2", status: "completed", application: application("app-b", "Banana App") }),
+    ];
+    render();
+
+    expect(path()).toBe("/assessments?expanded=a1");
+  });
+
+  it("does not leave the list for a row that was already complete when it was opened", () => {
+    assessments = [assessment({ id: "example-assessment-id", status: "completed" })];
+    render("/assessments?expanded=example-assessment-id");
+    render();
+
+    expect(path()).toBe("/assessments?expanded=example-assessment-id");
   });
 });
 

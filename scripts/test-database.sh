@@ -55,7 +55,7 @@ dump_schema() {
     | grep -v '^\\\(un\)\?restrict '
 }
 
-for database in optimus_baseline_test optimus_legacy_test optimus_upgrade_0024_test optimus_grants_compat_test; do
+for database in optimus_baseline_test optimus_baseline_only_test optimus_legacy_test optimus_upgrade_0024_test optimus_grants_compat_test; do
   docker exec "$container" createdb -U postgres "$database"
   docker exec "$container" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -c \
     "alter database ${database} set client_min_messages = warning" >/dev/null
@@ -119,6 +119,11 @@ apply_folder optimus_baseline_test fixes
 run_current_tests optimus_baseline_test
 run_sql optimus_baseline_test supabase/test-support/final_schema_assert.sql
 
+# A fresh installation needs no fix: the baseline alone already carries every one.
+apply_folder optimus_baseline_only_test migrations
+run_current_tests optimus_baseline_only_test
+run_sql optimus_baseline_only_test supabase/test-support/final_schema_assert.sql
+
 # Live projects: the historical chain with its version-specific suites, then every fix.
 apply_folder optimus_legacy_test legacy-migrations 0001 9999 true
 apply_folder optimus_legacy_test fixes
@@ -142,10 +147,15 @@ if ! diff -u <(dump_schema optimus_legacy_trimmed_test) <(dump_schema optimus_ba
   exit 1
 fi
 
+if ! diff -u <(dump_schema optimus_baseline_test) <(dump_schema optimus_baseline_only_test); then
+  echo "a fix in supabase/fixes/ is missing from the baseline in supabase/migrations/" >&2
+  exit 1
+fi
+
 before="$(docker exec "$container" psql -At -U postgres -d optimus_baseline_test -c 'select count(*) from schema_migrations')"
 apply_folder optimus_baseline_test migrations
 apply_folder optimus_baseline_test fixes
 after="$(docker exec "$container" psql -At -U postgres -d optimus_baseline_test -c 'select count(*) from schema_migrations')"
 [[ "$before" == "$after" ]] || { echo "second migration pass applied unexpected work" >&2; exit 1; }
 
-echo "Database checks passed: fresh baseline plus fixes, legacy chain plus fixes, upgrade from 0024, schema equivalence, degraded grant compatibility, RLS, preservation, and no pending migrations."
+echo "Database checks passed: fresh baseline plus fixes, baseline alone, legacy chain plus fixes, upgrade from 0024, schema equivalence, degraded grant compatibility, RLS, preservation, and no pending migrations."

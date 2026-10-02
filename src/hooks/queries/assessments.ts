@@ -12,8 +12,10 @@ import { createDebug } from "@/lib/debug";
 
 const debug = createDebug("hooks:queries:assessments");
 
-/** Fetches all assessments with their applications. */
-export function useAssessments() {
+const ASSESSMENT_LIST_POLL_INTERVAL_MS = 10_000;
+
+/** Fetches all assessments with their applications, optionally polling while any of them is still in progress. */
+export function useAssessments(opts: { pollWhileInProgress?: boolean } = {}) {
   return useQuery({
     queryKey: assessmentKeys.all(),
     queryFn: async () => {
@@ -22,6 +24,10 @@ export function useAssessments() {
       debug("fetched assessments", { count: rows.length });
       return rows;
     },
+    refetchInterval: (query) =>
+      opts.pollWhileInProgress && query.state.data?.some((row) => isTransitionalRunState(row, null))
+        ? ASSESSMENT_LIST_POLL_INTERVAL_MS
+        : false,
   });
 }
 

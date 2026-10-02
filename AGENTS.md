@@ -58,9 +58,9 @@ Stack: React 18, TypeScript, Vite, React Router, TanStack Query 5, Tailwind 3, R
 
 ## Database and fixtures
 
-- `supabase/migrations/` is the fresh-install baseline, `supabase/fixes/` holds numbered corrections applied to new and live projects, and `supabase/legacy-migrations/` is the historical chain live projects ran. Never cosmetically rewrite a file that may have been applied.
-- A fix is the next numbered file in `supabase/fixes/`, delivered together with its SQL test in `supabase/tests/` (ending in `rollback`), a matching check in `supabase/test-support/final_schema_assert.sql`, and the affected docs. Verify it with `npm run test:database`.
-- Finished fixes are moved from `supabase/fixes/` into `supabase/legacy-migrations/` by the maintainer; do not move them. Keep `supabase/fixes/.gitkeep`. When a fix moves, the baseline must absorb it or `npm run test:database` fails; point this out rather than leaving the suite red.
+- `supabase/migrations/` is the fresh-install baseline and always contains every fix, so a new project runs only the baseline. `supabase/fixes/` holds numbered corrections for live projects, and `supabase/legacy-migrations/` is the historical chain live projects ran. Never cosmetically rewrite a file that may have been applied.
+- A fix is the next numbered file in `supabase/fixes/`, written to be a no-op where its change already exists, plus the same change made as a final definition in the baseline, its SQL test in `supabase/tests/` (ending in `rollback`), a matching check in `supabase/test-support/final_schema_assert.sql`, and the affected docs. Verify it with `npm run test:database`, which fails if the baseline lacks a fix or disagrees with the legacy chain plus fixes.
+- Finished fixes are moved from `supabase/fixes/` into `supabase/legacy-migrations/` by the maintainer; do not move them. Keep `supabase/fixes/.gitkeep`.
 - Use only the disposable runner in [database maintenance](docs/database-maintenance.md). Never point SQL tests at a live project or reset an existing developer database.
 - Keep fixtures synthetic and isolated. Preserve fake constraints and meaningful regression assertions; avoid global mutable fixture state.
 - `src/test-fixtures/playbook-control-v1.json` is generated from the backend's sanitized parser fixture, which writes to that path. Regenerate it from both repositories, never by hand.
@@ -103,6 +103,15 @@ Use npm with the committed lockfile (`npm ci` when needed). CI runs every check 
 | Building or deploying | [deployment](docs/deployment.md) |
 
 Update the authoritative doc with the implementation rather than duplicating it. Keep examples portable and free of real credentials or application data.
+
+## Commit messages
+
+- Subject: `<type>: <summary>` or `<type>(<scope>): <summary>` in the imperative mood, lowercase, with no trailing period, and at most about 72 characters. Types are `feat`, `fix`, `refactor`, `docs`, `test` and `chore`. Use the `db` scope for Supabase schema, migration and fix work.
+- Body: wrap at about 72 characters and separate it from the subject with a blank line. Explain what changed and why in short prose paragraphs; use a bullet list when a change spans several files or independent parts.
+- For a database fix, say what was wrong, its impact, and whether rows, the frontend or the backend workers are affected.
+- State when behavior is deliberately unchanged, especially in refactors (for example, that tests pass unchanged apart from import paths).
+- End with any migration, deployment or configuration step the change requires.
+- Keep one logical change per commit. Do not add `Co-Authored-By` or other attribution trailers.
 
 ## Delivery
 

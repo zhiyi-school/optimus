@@ -108,7 +108,8 @@ afterEach(() => {
 });
 
 function Landed() {
-  return <p>{`landed:${useLocation().pathname}`}</p>;
+  const location = useLocation();
+  return <p>{`landed:${location.pathname}${location.search}`}</p>;
 }
 
 function render() {
@@ -530,10 +531,10 @@ describe("Review & Confirm", () => {
 });
 
 describe("where a created assessment leaves you", () => {
-  it("returns to the main Assessments page rather than the new assessment's own page", async () => {
+  it("returns to the main Assessments page with the new assessment's progress open", async () => {
     await submit();
 
-    expect(text()).toContain("landed:/assessments");
+    expect(text()).toContain("landed:/assessments?expanded=example-assessment-id");
     expect(text()).not.toContain("landed:/assessments/example-assessment-id");
   });
 

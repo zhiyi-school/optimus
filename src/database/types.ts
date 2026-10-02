@@ -37,6 +37,7 @@ export interface AssessmentRunRequest {
   updated_at: string;
   started_at: string | null;
   completed_at: string | null;
+  run_id: string | null;
 }
 
 export type FindingStatus = "at_risk" | "reduced_risk" | "inconclusive";

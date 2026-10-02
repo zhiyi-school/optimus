@@ -14,7 +14,7 @@ import {
 import { createDebug } from "@/lib/debug";
 import { cn, errorMessage, formatDate } from "@/lib/utils";
 import { useAssessmentRunRequest, useRequestAssessmentRun } from "@/hooks/queries/assessments";
-import { useAppProvisioning } from "@/hooks/queries/automation";
+import { useAppProvisioning, useRunStatus, useRunSyncStatus } from "@/hooks/queries/automation";
 import { useTickets } from "@/hooks/queries/tickets";
 import type { ProvisioningStage } from "@/automation-api/types";
 import type { Application, Assessment } from "@/database/types";
@@ -165,7 +165,7 @@ export function TestRunStages({
   return <StageList stages={stages} />;
 }
 
-/** Expanded status panel for an incomplete assessment with setup stages, retry and configuration links. */
+/** Expanded status panel for an incomplete assessment with setup stages, run progress, retry and configuration links. */
 export function AssessmentStatusPanel({
   assessment,
   canRetry,
@@ -177,7 +177,17 @@ export function AssessmentStatusPanel({
   const platform = application?.platform;
 
   const runRequest = useAssessmentRunRequest(assessment.id, assessment);
-  const runState = assessmentRunState(assessment, runRequest.data);
+  const startedRunId =
+    runRequest.data?.status === "completed" && assessment.status !== "completed"
+      ? (runRequest.data.run_id ?? undefined)
+      : undefined;
+  const { data: run } = useRunStatus(startedRunId, { poll: true });
+  // The sync record only appears once the run has finished.
+  const { data: sync } = useRunSyncStatus(startedRunId, { enabled: run?.status === "completed" });
+  const runState = assessmentRunState(assessment, runRequest.data, {
+    run: run?.status,
+    sync: sync?.status,
+  });
   const requestRun = useRequestAssessmentRun(assessment.id);
 
   const unsettled = isTransitionalRunState(assessment, runRequest.data);
@@ -236,6 +246,15 @@ export function AssessmentStatusPanel({
           >
             {requestRun.isPending ? "Retrying…" : "Retry now"}
           </Button>
+        )}
+        {startedRunId && (
+          <Link
+            to={`/runs/${encodeURIComponent(startedRunId)}`}
+            onClick={() => debug("opens started run", { assessmentId: assessment.id, runId: startedRunId })}
+            className="text-xs font-medium text-primary hover:underline"
+          >
+            Open the run →
+          </Link>
         )}
         {runState.needsConfiguration && application && (
           <Link

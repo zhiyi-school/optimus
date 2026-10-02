@@ -114,4 +114,9 @@ begin
       and p.prosrc like '%withdrawal details are recorded once%'
       and p.prosrc like '%only the security team can close or reopen a ticket%'
   ) then raise exception 'the ticket trigger has lost its ownership, closure or withdrawal guards'; end if;
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'assessment_run_requests'
+      and column_name = 'run_id' and data_type = 'text'
+  ) then raise exception 'assessment run requests cannot record their run'; end if;
 end $$;

@@ -240,8 +240,9 @@ and the backend worker in `mobile_playbook/assessment_worker.py` drains it.
   and retryable; no second assessment is created.
 - **The request's job ends when the run starts.** It is marked `completed` once
   the automation host accepts the run, so its lease cannot expire mid-test and
-  cause a duplicate. The sync worker then moves the assessment to `completed` or
-  `failed`.
+  cause a duplicate, and the same write records that run's `run_id` so the
+  dashboard can follow the run and its dashboard sync. The sync worker then
+  moves the assessment to `completed` or `failed`.
 - **Assessment transitions are enforced.** `enforce_assessment_status_transition`
   permits `queued → waiting → running → completed`, a retryable `failed → queued`,
   and a fresh `completed → queued` cycle, but refuses `completed → running`, so

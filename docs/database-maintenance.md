@@ -5,7 +5,7 @@
 | Folder | Purpose | Applied to |
 | --- | --- | --- |
 | `supabase/migrations/` | Fresh-install baseline: the final schema, built directly | New projects only |
-| `supabase/fixes/` | Numbered forward corrections not yet folded into the baseline | New projects after the baseline, and live projects |
+| `supabase/fixes/` | Numbered forward corrections for live projects, each already carried by the baseline | Live projects; harmless on new projects |
 | `supabase/legacy-migrations/` | The historical chain from `0001`, verbatim, including fixes already folded into the baseline | Nothing new; kept as the record of what live projects ran and for the equivalence test |
 
 The baseline equals the schema of a live project that has applied every file in
@@ -24,9 +24,11 @@ compatibility guards. Its files are:
 | `0005_grants.sql` | Execute privileges on workflow RPCs and worker functions |
 | `0006_storage.sql` | The private `ticket-attachments` and `evidence` buckets and their object policies |
 
-**New project:** run every file in `supabase/migrations/` in order, then every
-file in `supabase/fixes/` in order. **Live project:** run only the files in
-`supabase/fixes/` it has not applied yet; never run the baseline against it.
+**New project:** run every file in `supabase/migrations/` in order. The
+baseline already contains every fix, so no file in `supabase/fixes/` is needed;
+each is written to be a no-op there if it is run anyway. **Live project:** run
+only the files in `supabase/fixes/` it has not applied yet; never run the
+baseline against it.
 `npx supabase db push` reads only `supabase/migrations/`, so apply fixes with
 the SQL Editor or `psql`.
 
@@ -55,6 +57,7 @@ The script verifies these paths:
 | Path | Starting point | Coverage |
 | --- | --- | --- |
 | Fresh installation | Empty database | The baseline, then every fix, the current SQL suites in `supabase/tests/`, and the final-schema assertions |
+| Baseline alone | Empty database | The baseline with no fix, the current SQL suites and the final-schema assertions; its schema must match the fresh installation's, proving a new project needs no fix |
 | Legacy chain | Empty database | Every file in `legacy-migrations/`, with the version-specific suites in `supabase/tests/legacy/` and each top-level `supabase/tests/NNNN_*` suite run at the version their fixtures need, then every fix, the current suites and the final-schema assertions |
 | Supported upgrade | Schema through `0024` | Synthetic application/team/roles, findings, conversations/events/attachments, remediation tickets including `fix_submitted`, selected controls and completed/incomplete steps, and a historical reassessment; then `0025` onward, every fix, the `0032` move of `fix_submitted` to `in_progress`, and preservation/final-schema assertions |
 | Schema equivalence | Fresh and legacy results | `pg_dump --schema-only` of both must match once the archived objects are dropped from the legacy copy |
@@ -75,19 +78,27 @@ and formatted SQL are deliberately not compared.
 
 1. Add the next numbered file to `supabase/fixes/`, continuing after the
    highest number in `supabase/fixes/` or `supabase/legacy-migrations/`. Never
-   rewrite a fix that may have been applied.
-2. Make legacy-value handling and backfills explicit. Add an upgrade fixture
+   rewrite a fix that may have been applied. Write it so that it changes
+   nothing on a database that already has its result (`add column if not
+   exists`, `create or replace`, guarded backfills), because a new project's
+   baseline already carries it.
+2. Make the same change in the affected baseline file in
+   `supabase/migrations/`, as a final definition rather than an extra
+   statement: a new column goes at the end of its `create table`, after the
+   existing columns, so its position matches a live project that added it.
+3. Make legacy-value handling and backfills explicit. Add an upgrade fixture
    assertion when existing rows can be affected.
-3. Test the effective final function, trigger, grant, and policy definitions,
+4. Test the effective final function, trigger, grant, and policy definitions,
    not only the statements in the new file. PostgreSQL/Supabase default grants
    may grant roles directly, so `revoke ... from public` is not always enough.
-4. Add or extend an SQL role/workflow test in `supabase/tests/` with explicit
-   expected failures. If the fix changes behaviour an existing test asserts,
-   update that test.
-5. Run `npm run test:database`, the frontend tests, lint, and build.
-
-Do not edit the baseline to carry a fix: fresh installs already get it from
-`supabase/fixes/`, and the equivalence check fails if the two disagree.
+5. Add or extend an SQL role/workflow test in `supabase/tests/` with explicit
+   expected failures, and a matching check in
+   `supabase/test-support/final_schema_assert.sql`. If the fix changes
+   behaviour an existing test asserts, update that test.
+6. Run `npm run test:database`, the frontend tests, lint, and build. The
+   equivalence check fails when the baseline and the legacy chain plus fixes
+   disagree, and the baseline-alone check fails when a fix is missing from the
+   baseline.
 
 The repository's SQL-file runner is ordered and tracked, but it is not a
 universal rollback system. Files may contain multiple autocommitted statements,
@@ -97,18 +108,42 @@ fix can be run backward.
 
 ## Re-baselining
 
-Fold fixes into the baseline only when every live project has applied them.
+Retire fixes from `supabase/fixes/` only when every live project has applied
+them. The baseline already carries them, so retiring changes no schema.
 
-1. Move the folded files from `supabase/fixes/` to
+1. Move the retired files from `supabase/fixes/` to
    `supabase/legacy-migrations/`, keeping their numbers. Leave
    `supabase/fixes/.gitkeep` in place so the folder survives being emptied.
-2. Apply the same change to the affected baseline file in
-   `supabase/migrations/`, as a final definition rather than an extra
-   statement. For example, a revoked grant is removed from the baseline's
-   grant list.
-3. Move tests that no longer hold against the final schema to
+2. Move tests that no longer hold against the final schema to
    `supabase/tests/legacy/`.
-4. Run `npm run test:database`; the equivalence check proves the new baseline.
+3. Run `npm run test:database`; the equivalence check proves the baseline still
+   matches the legacy chain.
+
+## Current fixes
+
+The notes below describe the fixes in `supabase/fixes/`.
+
+### Run id on run requests (0036)
+
+Fix `0036_assessment_run_request_run_id.sql` adds a nullable
+`assessment_run_requests.run_id`. The assessment worker writes it in the same
+update that marks the request `completed`, which happens as soon as the
+automation host accepts the run. The dashboard reads it to follow that run with
+`GET /runs/{run_id}` and then its dashboard sync with
+`GET /runs/{run_id}/sync-status`, so the expanded assessment row shows testing,
+then analysis and reporting. Clients still only read the queue; the column
+needs no new policy or grant. Older requests keep a null `run_id`.
+
+The baseline's `0001_extensions_and_tables.sql` defines the same column, so a
+new project needs no fix. `supabase/tests/0036_assessment_run_request_run_id_rls.sql`
+and `final_schema_assert.sql` cover it.
+
+**Rollout order.** Apply `0036` to every live project before deploying the
+backend worker that writes `run_id` or the frontend that reads it. Against a
+database without the column, that worker's completion write is refused after
+the run has started, so the request keeps its lease until it expires and is
+then started again; the frontend's request read is unaffected, because it
+selects every column.
 
 ## Legacy migrations
 

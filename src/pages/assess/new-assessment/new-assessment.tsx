@@ -87,7 +87,7 @@ export default function NewAssessment() {
   const saving = createAssessment.isPending;
   const error = createAssessment.error ? errorMessage(createAssessment.error, "Unable to add app.") : null;
 
-  /** Creates the assessment from the form and returns to Assessments once it succeeds. */
+  /** Creates the assessment from the form and opens its progress on Assessments once it succeeds. */
   function confirm() {
     if (!name.trim()) {
       debug("rejects submission", { field: "name", rule: "required" });
@@ -103,9 +103,10 @@ export default function NewAssessment() {
         contactEmails: validEmails,
       },
       {
-        onSuccess: () => {
-          debug("navigates after create", { to: "/assessments" });
-          navigate("/assessments");
+        onSuccess: (assessment) => {
+          const to = `/assessments?expanded=${encodeURIComponent(assessment.id)}`;
+          debug("navigates after create", { to });
+          navigate(to);
         },
       },
     );

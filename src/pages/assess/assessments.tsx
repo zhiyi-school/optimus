@@ -2,7 +2,7 @@
  * Security Assessments list with filters, expandable status panels and app deletion.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { AlertTriangle, Plus, RefreshCw, SlidersHorizontal, Trash2 } from "lucide-react";
 import { PageHeader, FilterBar, LoadingState, ErrorState, EmptyState } from "@/components/layout/page-blocks";
@@ -49,7 +49,7 @@ export default function Assessments() {
   const { can } = useAuth();
   const [appToDelete, setAppToDelete] = useState<Application | null>(null);
 
-  const { data: assessments, isLoading, isFetching, isError, refetch } = useAssessments();
+  const { data: assessments, isLoading, isFetching, isError, refetch } = useAssessments({ pollWhileInProgress: true });
   const { data: applications } = useApplications();
   const sortedApplications = useMemo(
     () => [...(applications ?? [])].sort((a, b) => compareByName(a.name, b.name, a.id, b.id)),
@@ -108,6 +108,17 @@ export default function Assessments() {
       toggleExpand(expandedId);
     }
   }, [expandedId, isLoading, rows, toggleExpand]);
+
+  const expandedRow = rows.find((r) => r.id === expandedId);
+  const expandedStatus = useRef<{ id: string; status: string } | null>(null);
+  useEffect(() => {
+    const previous = expandedStatus.current;
+    expandedStatus.current = expandedRow ? { id: expandedRow.id, status: expandedRow.status } : null;
+    if (expandedRow?.status !== "completed" || previous?.id !== expandedRow.id) return;
+    if (previous.status === "completed") return;
+    debug("opens assessment that finished while expanded", { assessmentId: expandedRow.id, from: previous.status });
+    navigate(`/assessments/${expandedRow.id}`);
+  }, [expandedRow, navigate]);
 
   const awaitingSync = useMemo(
     () =>

@@ -2,6 +2,7 @@
  * Run state and stage sequencing for an assessment's execution request and provisioning workflow.
  */
 
+import type { DashboardSyncStatus, RunStatus } from "@/automation-api/types";
 import type { Assessment, AssessmentRunRequest } from "@/database/types";
 import { createDebug } from "@/lib/debug";
 import type { Tone } from "@/domain/status-labels";
@@ -41,12 +42,21 @@ export interface AssessmentRunState {
   nextAttemptAt: string | null;
   canRetry: boolean;
   needsConfiguration: boolean;
+  /** The run finished, so what remains is analysis and reporting. */
+  testingFinished: boolean;
 }
 
-/** Describes an unfinished assessment's run state from its status and its durable execution request. */
+/** What the automation host reports about the run a completed request started. */
+export interface StartedRunProgress {
+  run?: RunStatus | null;
+  sync?: DashboardSyncStatus | null;
+}
+
+/** Describes an unfinished assessment's run state from its status, its execution request and the run it started. */
 export function assessmentRunState(
   assessment: Pick<Assessment, "status"> | null | undefined,
   request: AssessmentRunRequest | null | undefined,
+  started: StartedRunProgress = {},
 ): AssessmentRunState {
   const idle: AssessmentRunState = {
     label: "",
@@ -56,6 +66,7 @@ export function assessmentRunState(
     nextAttemptAt: null,
     canRetry: false,
     needsConfiguration: false,
+    testingFinished: false,
   };
   if (!assessment) return idle;
 
@@ -74,8 +85,14 @@ export function assessmentRunState(
     blocker,
     nonRetryable,
     needsConfiguration,
+    run: started.run ?? null,
+    sync: started.sync ?? null,
   });
 
+  // A request completes when its run is accepted, so the run itself says how far testing has got.
+  if (request?.status === "completed" && assessment.status !== "failed") {
+    return startedRunState(idle, started);
+  }
   if (assessment.status === "running" || request?.status === "running") {
     return { ...idle, label: "Automated tests are running", tone: "info" };
   }
@@ -111,6 +128,32 @@ export function assessmentRunState(
     return { ...idle, label: "Waiting to start", tone: "warning", canRetry: true };
   }
   return { ...idle, label: "Queued for automated testing", tone: "neutral", canRetry: true };
+}
+
+/** Run state once a request has started a run: testing until the run ends, then analysis and reporting. */
+function startedRunState(idle: AssessmentRunState, started: StartedRunProgress): AssessmentRunState {
+  if (started.run === "failed") {
+    return { ...idle, label: "Automated testing stopped with an error", tone: "danger", canRetry: true };
+  }
+  if (started.run !== "completed") {
+    return { ...idle, label: "Automated tests are running", tone: "info" };
+  }
+  if (started.sync === "failed") {
+    return {
+      ...idle,
+      label: "Results could not be added to the dashboard",
+      tone: "danger",
+      detail: "Testing finished, but writing its results to the dashboard failed. Resync the run from its run page.",
+      testingFinished: true,
+    };
+  }
+  return {
+    ...idle,
+    label: "Analysis & reporting",
+    tone: "info",
+    detail: "Testing finished. The results are being analyzed and added to the dashboard.",
+    testingFinished: true,
+  };
 }
 
 /** True while the assessment or its run request is in a state a page should keep polling. */
@@ -209,7 +252,8 @@ export function normalizeAssessmentStages(ctx: AssessmentStageContext): Assessme
   const completedTests = ctx.assessment?.completed_tests ?? 0;
   const totalTests = ctx.assessment?.total_tests ?? 0;
   const progress = totalTests > 0 ? `${completedTests} of ${totalTests} security tests run.` : undefined;
-  const testingDone = ctx.assessment?.status === "completed";
+  const assessmentDone = ctx.assessment?.status === "completed";
+  const testingDone = assessmentDone || ctx.runState.testingFinished;
   const nonRetryableFailure = ctx.runState.tone === "danger" && !ctx.runState.canRetry;
 
   const testing: RawStageInput = {
@@ -227,7 +271,15 @@ export function normalizeAssessmentStages(ctx: AssessmentStageContext): Assessme
   const analysis: RawStageInput = {
     id: "analysis",
     label: "Analysis & reporting",
-    state: testingDone ? "done" : "pending",
+    description: !assessmentDone && testingDone ? (ctx.runState.detail ?? undefined) : undefined,
+    state: assessmentDone
+      ? "done"
+      : testingDone
+        ? ctx.runState.tone === "danger"
+          ? "failed"
+          : "in_progress"
+        : "pending",
+    tone: ctx.runState.tone,
   };
 
   return sequenceAssessmentStages([...setup, testing, analysis]);

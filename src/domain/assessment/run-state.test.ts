@@ -31,6 +31,7 @@ function request(
     updated_at: "2026-01-01T00:00:00Z",
     started_at: null,
     completed_at: null,
+    run_id: null,
     ...overrides,
   };
 }
@@ -83,6 +84,76 @@ describe("what to tell someone about an assessment", () => {
 
     expect(state.label).toBe("Automated tests are running");
     expect(state.canRetry).toBe(false);
+  });
+
+  it("says tests are running once the request has started a run, never that it is queued", () => {
+    for (const status of ["queued", "running"] as const) {
+      const state = assessmentRunState({ status }, request("completed", { run_id: "example-run" }));
+
+      expect(state.label, status).toBe("Automated tests are running");
+      expect(state.tone, status).toBe("info");
+      expect(state.canRetry, status).toBe(false);
+      expect(state.testingFinished, status).toBe(false);
+    }
+  });
+
+  it("follows the started run while it is still running", () => {
+    const state = assessmentRunState(
+      { status: "running" },
+      request("completed", { run_id: "example-run" }),
+      { run: "running" },
+    );
+
+    expect(state.label).toBe("Automated tests are running");
+    expect(state.testingFinished).toBe(false);
+  });
+
+  it("moves on to analysis and reporting once the run has finished", () => {
+    for (const sync of [undefined, null, "queued", "running", "completed"] as const) {
+      const state = assessmentRunState(
+        { status: "running" },
+        request("completed", { run_id: "example-run" }),
+        { run: "completed", sync },
+      );
+
+      expect(state.label, String(sync)).toBe("Analysis & reporting");
+      expect(state.tone, String(sync)).toBe("info");
+      expect(state.testingFinished, String(sync)).toBe(true);
+      expect(state.detail, String(sync)).toContain("Testing finished");
+    }
+  });
+
+  it("says the results could not be added when the dashboard sync failed", () => {
+    const state = assessmentRunState(
+      { status: "running" },
+      request("completed", { run_id: "example-run" }),
+      { run: "completed", sync: "failed" },
+    );
+
+    expect(state.label).toBe("Results could not be added to the dashboard");
+    expect(state.tone).toBe("danger");
+    expect(state.testingFinished).toBe(true);
+    expect(state.canRetry).toBe(false);
+  });
+
+  it("offers a retry when the started run itself failed", () => {
+    const state = assessmentRunState(
+      { status: "running" },
+      request("completed", { run_id: "example-run" }),
+      { run: "failed" },
+    );
+
+    expect(state.label).toBe("Automated testing stopped with an error");
+    expect(state.tone).toBe("danger");
+    expect(state.canRetry).toBe(true);
+    expect(state.testingFinished).toBe(false);
+  });
+
+  it("reports a failed assessment as failed even though its last request started a run", () => {
+    const state = assessmentRunState({ status: "failed" }, request("completed", { run_id: "example-run" }));
+
+    expect(state.label).toBe("Test execution could not start");
+    expect(state.canRetry).toBe(true);
   });
 
   it("offers no retry once the assessment has completed", () => {
@@ -184,7 +255,15 @@ function countCurrent(stages: ReturnType<typeof sequenceAssessmentStages>) {
 }
 
 function runState(overrides: Partial<AssessmentRunState> & { label: string; tone: AssessmentRunState["tone"] }): AssessmentRunState {
-  return { detail: null, autoRetry: false, nextAttemptAt: null, canRetry: false, needsConfiguration: false, ...overrides };
+  return {
+    detail: null,
+    autoRetry: false,
+    nextAttemptAt: null,
+    canRetry: false,
+    needsConfiguration: false,
+    testingFinished: false,
+    ...overrides,
+  };
 }
 
 describe("sequencing a set of stages into one stepper", () => {
@@ -296,6 +375,38 @@ describe("normalizing the full assessment workflow", () => {
     const testing = stages.find((s) => s.id === "testing")!;
     expect(testing.lifecycle).toBe("failed");
     expect(stages.find((s) => s.id === "analysis")!.lifecycle).toBe("future");
+  });
+
+  it("completes testing and makes analysis current once the run has finished", () => {
+    const stages = normalizeAssessmentStages({
+      configurationReady: true,
+      runState: runState({
+        label: "Analysis & reporting",
+        tone: "info",
+        detail: "Testing finished. The results are being analyzed and added to the dashboard.",
+        testingFinished: true,
+      }),
+      assessment: { status: "running", completed_tests: 0, total_tests: 4 },
+    });
+    const analysis = stages.find((s) => s.id === "analysis")!;
+    expect(stages.find((s) => s.id === "testing")!.lifecycle).toBe("complete");
+    expect(analysis.lifecycle).toBe("current");
+    expect(analysis.description).toContain("Testing finished");
+    expect(countCurrent(stages)).toBe(1);
+  });
+
+  it("fails analysis, not testing, when the dashboard sync failed", () => {
+    const stages = normalizeAssessmentStages({
+      configurationReady: true,
+      runState: runState({
+        label: "Results could not be added to the dashboard",
+        tone: "danger",
+        testingFinished: true,
+      }),
+      assessment: { status: "running", completed_tests: 0, total_tests: 4 },
+    });
+    expect(stages.find((s) => s.id === "testing")!.lifecycle).toBe("complete");
+    expect(stages.find((s) => s.id === "analysis")!.lifecycle).toBe("failed");
   });
 
   it("completes both testing and analysis, with no current stage, once the assessment is done", () => {

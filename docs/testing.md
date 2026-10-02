@@ -127,7 +127,7 @@ It is intentionally separate from the fast checks.
 
 SQL files in `supabase/tests/` check the rules the developer workflow depends
 on at the table level, where they are actually enforced. Files at the top level
-assert the final schema and run on both the fresh baseline and the legacy chain.
+assert the final schema and run on the fresh baseline with and without the fixes, and on the legacy chain.
 Files in `supabase/tests/legacy/` assert behaviour a later migration replaced,
 so they run only along the legacy chain at the version their fixtures need:
 
@@ -149,6 +149,7 @@ so they run only along the legacy chain at the version their fixtures need:
 | `0033_dashboard_metrics_without_fix_submitted_rls.sql` | `dashboard_metrics()` listing every current ticket status and no `fix_submitted` count, the rest of its response unchanged, and its signed-in-only grants surviving |
 | `0034_reconcile_reassessment_internal_only_rls.sql` | signed-in clients refused permission to call `reconcile_reassessment_ticket_state()` directly, the worker role keeping its grant, and the reassessment RPCs that reconcile internally staying callable |
 | `0035_restore_ticket_ownership_guards_rls.sql` | a developer refused when changing a ticket's type, finding, application, creator or assignment, setting `closed_at`, or editing withdrawal details after withdrawing; withdrawing, resuming, choosing an approach and the reassessment RPCs still working; and security still able to reassign and close |
+| `0036_assessment_run_request_run_id_rls.sql` | run requests carrying an optional `run_id` that a new request leaves empty, a developer with access reading the run the worker recorded, a developer outside the application seeing nothing, and neither a developer nor security able to rewrite it |
 
 None is part of `npm test` — they need a disposable database. The supported
 runner creates its own isolated PostgreSQL container. Each suite creates its own placeholder fixtures,

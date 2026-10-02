@@ -112,6 +112,11 @@ backend-side lock.
 
 ## Live progress elsewhere
 
+- **Assessment list**: `useAssessments({ pollWhileInProgress: true })`
+  (`src/hooks/queries/assessments.ts`), used by the Assessments page, re-reads
+  every assessment every 10 seconds (`ASSESSMENT_LIST_POLL_INTERVAL_MS`) while
+  any is `queued`, `waiting` or `running`, and stops once all have completed or
+  failed. Other callers do not poll.
 - **Assessment run request**: `useAssessmentRunRequest`
   (`src/hooks/queries/assessments.ts`) re-reads the assessment's queued run
   request every 10 seconds (`RUN_REQUEST_POLL_INTERVAL_MS = 10_000`) while it or

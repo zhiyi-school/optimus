@@ -74,4 +74,3 @@ backend configuration and generated reports, neither of which lives here.
 ## License
 
 Internal project — no license specified.
-
