@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useNavigate, type NavigateFunction } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { roleCan, type Capability } from "@/auth/permissions";
@@ -33,6 +33,11 @@ let stepStatus = "completed";
 let retestStatus: string | null = null;
 let createRequested: boolean | undefined;
 let conversationOwner: { applicationId?: string; originAssessmentId?: string | null } = {};
+let activeRuns: Record<string, { run_id: string; status: string }> = {};
+let watchedRunStatus = "running";
+const runEventCalls: unknown[] = [];
+const syncStatusCalls: { runId: unknown; enabled: unknown }[] = [];
+let navigateTo: NavigateFunction | undefined;
 
 function entry(
   kind: RiskConversationEntry["kind"],
@@ -190,9 +195,22 @@ vi.mock("@/test-support/query-hooks", () => {
     useFindingEvidenceItems: () => ({ ...idle, data: [] }),
     useTestRunHistory: () => ({ ...idle, isError: historyFailed, data: history }),
     useIpaAnalysis: () => ({ ...idle, data: analysisDocument }),
-    useActiveRun: () => ({ run: undefined, platformRun: undefined }),
-    useRunEvents: () => ({ events: [], streamState: "idle" }),
-    useRunSyncStatus: () => idle,
+    useActiveRun: (filter: { riskId?: string }) => ({
+      run: filter.riskId ? activeRuns[filter.riskId] : undefined,
+      platformRun: undefined,
+    }),
+    useRunEvents: (runId: unknown) => {
+      runEventCalls.push(runId);
+      return { events: [], streamState: "idle" };
+    },
+    useRunStatus: (runId: string | undefined) => ({
+      ...idle,
+      data: runId ? { run_id: runId, status: watchedRunStatus } : undefined,
+    }),
+    useRunSyncStatus: (runId: unknown, opts?: { enabled?: boolean }) => {
+      syncStatusCalls.push({ runId, enabled: opts?.enabled });
+      return idle;
+    },
     useResyncRun: () => mutation,
     useClassifyRisk: () => mutation,
     useRequestReassessment: () => mutation,
@@ -287,6 +305,11 @@ beforeEach(() => {
   retestStatus = null;
   createRequested = undefined;
   conversationOwner = {};
+  activeRuns = {};
+  watchedRunStatus = "running";
+  runEventCalls.length = 0;
+  syncStatusCalls.length = 0;
+  navigateTo = undefined;
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -297,6 +320,11 @@ afterEach(() => {
   container.remove();
 });
 
+function NavigateProbe() {
+  navigateTo = useNavigate();
+  return null;
+}
+
 function render() {
   act(() =>
     root.render(
@@ -305,6 +333,7 @@ function render() {
           <Routes>
             <Route path="/assessments/:assessmentId/tests/:testId" element={<TestDetail />} />
           </Routes>
+          <NavigateProbe />
         </MemoryRouter>
       </QueryClientProvider>,
     ),
@@ -776,5 +805,42 @@ describe("the automated history the backend serves", () => {
 
     expect(text()).toContain("Still readable.");
     expect(text()).toContain("Unable to load the automated test history.");
+  });
+});
+
+describe("following a run across test pages", () => {
+  const OTHER_RISK = "example-feature-02-risk-01";
+
+  function switchTo(riskId: string) {
+    act(() => navigateTo!(`/assessments/${ASSESSMENT}/tests/${riskId}`));
+  }
+
+  it("waits for the run to finish before following its dashboard sync", () => {
+    activeRuns = { [RISK]: { run_id: "example-run-id", status: "running" } };
+    render();
+
+    expect(syncStatusCalls.at(-1)).toEqual({ runId: "example-run-id", enabled: false });
+  });
+
+  it("keeps following the run's sync after switching to another test", () => {
+    activeRuns = { [RISK]: { run_id: "example-run-id", status: "running" } };
+    render();
+    switchTo(OTHER_RISK);
+    watchedRunStatus = "completed";
+    activeRuns = {};
+    switchTo(RISK);
+    switchTo(OTHER_RISK);
+
+    expect(syncStatusCalls.at(-1)).toEqual({ runId: "example-run-id", enabled: true });
+  });
+
+  it("starts the next test's page fresh rather than carrying the run's progress over", () => {
+    activeRuns = { [RISK]: { run_id: "example-run-id", status: "running" } };
+    render();
+    expect(runEventCalls.at(-1)).toBe("example-run-id");
+
+    switchTo(OTHER_RISK);
+
+    expect(runEventCalls.at(-1)).toBeUndefined();
   });
 });

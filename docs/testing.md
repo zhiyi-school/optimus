@@ -71,7 +71,7 @@ real browser.
 | Conversation persistence, attachment metadata recovery, and entry idempotency | `src/database/conversations.test.ts` |
 | Message/action submission, attachment-only retry and conversation scoping | `src/hooks/conversation/composer.test.tsx` |
 | Metrics RPC fallback | `src/database/metrics.test.ts` |
-| Test page keying (state must not leak between tests) | `src/pages/assess/test-detail.test.tsx` |
+| Test page keying (state must not leak between tests) and following a run's sync across test pages | `src/pages/assess/test-detail.render.test.tsx` |
 | Capability model, `/resolve` access states, post-login routing | `src/auth/permissions.test.ts` |
 | Remediation progress formulas, live-control pairing, developer labels | `src/domain/remediation/resolve-rules.test.ts` |
 | Reassessment withdrawal eligibility | `src/domain/remediation/reassessments.test.ts` |

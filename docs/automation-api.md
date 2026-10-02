@@ -404,6 +404,14 @@ history (`dashboardSyncInvalidationPrefixes` in
 the browser still never writes a report to Supabase, and nothing here reads the
 service-role key, which exists only in the worker's own process environment.
 
+On the test page, the run being followed is held by `TestDetail`, above the
+per-test page that is remounted for each `:testId`. A run started on one test,
+or picked up from `GET /runs`, is followed until its sync completes even after
+switching to another test of the same assessment, so the risk sidebar refreshes
+wherever the user is. `TestDetail` starts polling the sync status once
+`GET /runs/{run_id}` no longer reports the run as `running`, or cannot report it
+at all. Leaving the assessment's test pages stops following the run.
+
 `DashboardSyncNotice` renders the five states as "Dashboard sync queued", "…in
 progress", "Dashboard updated", "Dashboard sync failed" and "Dashboard sync not
 required". A failed sync says explicitly that the run itself is intact, because

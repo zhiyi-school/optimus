@@ -29,12 +29,14 @@ import {
   useActiveRun,
   useResyncRun,
   useRunEvents,
+  useRunStatus,
   useRunSyncStatus,
 } from "@/hooks/queries/automation";
 import { useFindingRetests, useFindingTickets } from "@/hooks/queries/tickets";
 import { useRiskWorkspaceData } from "@/hooks/risk-workspace-data";
 import { DashboardSyncNotice } from "@/components/assessment/dashboard-sync-notice";
 import { assessmentApi, defaultConfigPath } from "@/automation-api/endpoints";
+import type { RunSyncStatus } from "@/automation-api/types";
 import {
   riskProgressInRun,
   runAndWait,
@@ -57,14 +59,29 @@ import { retestData } from "@/database/retests";
 
 const debug = createDebug("pages:assess:test-detail");
 
-/** Keys the test page on :testId so the routes sharing this element remount it per test. */
+/** Keys the test page on :testId, and follows the watched run's dashboard sync across those remounts. */
 export default function TestDetail() {
   const { testId } = useParams<{ testId: string }>();
-  return <TestPage key={testId} />;
+  // Latched here, above the per-test page: the run outlives its /runs "running" entry, and its sync outlives the run.
+  const [watchedRunId, setWatchedRunId] = useState<string | undefined>();
+  const watchedRun = useRunStatus(watchedRunId, { poll: true });
+  const runSettled = watchedRun.isError || (!!watchedRun.data && watchedRun.data.status !== "running");
+  const { data: sync } = useRunSyncStatus(watchedRunId, { enabled: runSettled });
+  const resync = useResyncRun(watchedRunId);
+  return (
+    <TestPage key={testId} watchedRunId={watchedRunId} onWatchRun={setWatchedRunId} sync={sync} resync={resync} />
+  );
+}
+
+interface TestPageProps {
+  watchedRunId: string | undefined;
+  onWatchRun: (runId: string) => void;
+  sync: RunSyncStatus | null | undefined;
+  resync: ReturnType<typeof useResyncRun>;
 }
 
 /** Shows a risk's test controls, run progress, evidence and conversation within its assessment. */
-function TestPage() {
+function TestPage({ watchedRunId, onWatchRun, sync, resync }: TestPageProps) {
   const { assessmentId, testId, runId } = useParams<{
     assessmentId: string;
     testId: string;
@@ -132,16 +149,12 @@ function TestPage() {
   const activeRunId = startedRunId ?? adoptedRun?.run_id;
   const { events: runEvents, streamState } = useRunEvents(activeRunId, !!activeRunId);
 
-  // Latched: the run outlives its /runs "running" entry, and its sync outlives the run.
-  const [watchedRunId, setWatchedRunId] = useState<string | undefined>();
   useEffect(() => {
     if (activeRunId) {
       debug("watches run", { runId: activeRunId });
-      setWatchedRunId(activeRunId);
+      onWatchRun(activeRunId);
     }
-  }, [activeRunId]);
-  const { data: sync } = useRunSyncStatus(watchedRunId, { enabled: !watching && !adoptedRun });
-  const resync = useResyncRun(watchedRunId);
+  }, [activeRunId, onWatchRun]);
 
   const progress = riskProgressInRun(runEvents, adoptedRun, appExternalId, testId);
   const executing = watching || progress?.phase === "running";
