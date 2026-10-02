@@ -24,6 +24,7 @@ export const dashboardSyncInvalidationPrefixes = [
   conversationKeys.byRiskPrefix(),
   conversationKeys.entriesPrefix(),
   automationKeys.testHistoryPrefix(),
+  automationKeys.reportsPrefix(),
 ] as const;
 
 /** Keys to refresh after a conversation changes: its entries and all attachments. */

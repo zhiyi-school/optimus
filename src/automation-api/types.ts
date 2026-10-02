@@ -26,6 +26,12 @@ export interface RunRecord {
 /** The dashboard sync workflow, which runs after — and separately from — the automation run. */
 export type DashboardSyncStatus = "queued" | "running" | "completed" | "failed" | "not_required";
 
+/** Filters for `GET /reports`: a run manifest status, and dashboard sync statuses any of which may match. */
+export interface ReportFilters {
+  status?: string;
+  syncStatus?: DashboardSyncStatus[];
+}
+
 export interface RunSyncCounts {
   applications: number;
   assessments: number;

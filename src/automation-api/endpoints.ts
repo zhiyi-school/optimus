@@ -9,6 +9,7 @@ import type {
   AutomationPlatform,
   AutomationResultRow,
   RegisterAppRequest,
+  ReportFilters,
   RiskDefinition,
   RunRecord,
   RunSyncStatus,
@@ -163,13 +164,17 @@ export const assessmentApi = {
   },
 
 
-  /** Lists report timestamps, optionally filtered by status. */
-  async listReports(status?: string): Promise<string[]> {
-    debug("listing reports", { status: status ?? null });
+  /** Lists report timestamps, optionally filtered by manifest status and by dashboard sync statuses. */
+  async listReports(filters: ReportFilters = {}): Promise<string[]> {
+    const params = {
+      ...(filters.status ? { status: filters.status } : {}),
+      ...(filters.syncStatus?.length ? { sync_status: filters.syncStatus.join(",") } : {}),
+    };
+    debug("listing reports", params);
     const { data } = await automationClient.get("/reports", {
-      params: status ? { status } : undefined,
+      params: Object.keys(params).length ? params : undefined,
     });
-    debug("listed reports", { status: status ?? null, count: data?.length });
+    debug("listed reports", { ...params, count: data?.length });
     return data;
   },
 

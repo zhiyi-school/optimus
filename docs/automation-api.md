@@ -423,6 +423,16 @@ backend marks it non-retryable and no button is offered. Retrying calls
 so a report that already landed is skipped by the ledger instead of written
 twice.
 
+The Assessments page asks the backend which runs are not on the dashboard yet,
+with `GET /reports?sync_status=queued,running` and
+`GET /reports?sync_status=failed`. The backend answers from the same per-run
+sync status as `GET /runs/{run_id}/sync-status`, so a synced run whose
+application was later deleted, a run with nothing to publish and an incomplete
+report folder are never counted. Runs still syncing show as "being added to the
+dashboard", and that list is re-read every 15 seconds while it is not empty.
+Failed runs are counted separately, with links to the first three run pages,
+where the sync can be retried. A completed sync refreshes both lists.
+
 Giving up locally is still not a failure. `runAndWait`'s `cancelledWaiting` and
 `timedOutWaiting` outcomes report `dashboardSyncPending: false` and write no
 terminal state anywhere; the run and its sync both continue on the automation

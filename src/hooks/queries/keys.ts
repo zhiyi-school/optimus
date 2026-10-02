@@ -2,6 +2,8 @@
  * Query key factories for each dashboard data domain.
  */
 
+import type { ReportFilters } from "@/automation-api/types";
+
 export const referenceKeys = {
   /** Key for all user profiles. */
   profiles: () => ["profiles"] as const,
@@ -27,8 +29,11 @@ export const assessmentKeys = {
 export const automationKeys = {
   /** Key for automation runs. */
   runs: () => ["automationRuns"] as const,
-  /** Key for automation reports, optionally filtered by status. */
-  reports: (status?: string | null) => ["automationReports", status ?? null] as const,
+  /** Key for automation reports matching the filters. */
+  reports: (filters: ReportFilters = {}) =>
+    ["automationReports", filters.status ?? null, filters.syncStatus?.join(",") ?? null] as const,
+  /** Prefix matching every automation reports key. */
+  reportsPrefix: () => ["automationReports"] as const,
   /** Key for one run's execution status. */
   runStatus: (id: string | undefined) => ["runStatus", id] as const,
   /** Key for one run's dashboard sync status. */

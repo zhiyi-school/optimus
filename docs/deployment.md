@@ -62,8 +62,8 @@ docker run -p 3000:80 mobile-security-dashboard
   or a single risk can be run from its test page (Security Team only).
   Findings appear only once the dashboard-sync worker
   (`python -m mobile_playbook.dashboard_sync`) has written the completed
-  reports; the Assessments page warns when completed runs have not appeared
-  there yet.
+  reports; the Assessments page says how many completed runs are still being
+  added and warns about runs whose sync failed.
 - **RLS errors ("new row violates row-level security policy")** — check
   the user's `profiles.roles` and, for developers, `applications.developer_team_id`
   / `profiles.team_id` — developer access is scoped to their own team's

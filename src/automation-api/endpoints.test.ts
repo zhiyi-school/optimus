@@ -124,3 +124,30 @@ describe("iconApi", () => {
   });
 
 });
+
+describe("listReports", () => {
+  it("sends no filters when none are given", async () => {
+    get.mockResolvedValue({ data: [] });
+
+    await assessmentApi.listReports();
+
+    expect(get).toHaveBeenCalledWith("/reports", { params: undefined });
+  });
+
+  it("joins the sync statuses into one comma-separated parameter", async () => {
+    get.mockResolvedValue({ data: ["2026-01-01_00-00-00"] });
+
+    await expect(assessmentApi.listReports({ syncStatus: ["queued", "running"] })).resolves.toEqual([
+      "2026-01-01_00-00-00",
+    ]);
+    expect(get).toHaveBeenCalledWith("/reports", { params: { sync_status: "queued,running" } });
+  });
+
+  it("sends the manifest status alongside the sync statuses", async () => {
+    get.mockResolvedValue({ data: [] });
+
+    await assessmentApi.listReports({ status: "completed", syncStatus: ["failed"] });
+
+    expect(get).toHaveBeenCalledWith("/reports", { params: { status: "completed", sync_status: "failed" } });
+  });
+});

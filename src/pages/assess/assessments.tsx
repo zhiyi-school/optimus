@@ -37,6 +37,9 @@ import type { Assessment, Application } from "@/database/types";
 
 const debug = createDebug("pages:assess:assessments");
 
+/** How many failed runs the sync warning links to before summarising the rest. */
+const UNSYNCED_RUN_LINKS = 3;
+
 /** Statuses whose row expands to a status panel instead of opening the assessment. */
 const INCOMPLETE_STATUSES = ["queued", "waiting", "running", "failed"];
 
@@ -70,10 +73,11 @@ export default function Assessments() {
   );
 
   const {
-    data: reports,
+    data: syncingRuns,
     isError: reportsError,
     error: reportsErrorDetail,
-  } = useAutomationReports("completed");
+  } = useAutomationReports({ syncStatus: ["queued", "running"] }, { pollWhileAny: true });
+  const { data: unsyncedRuns } = useAutomationReports({ syncStatus: ["failed"] });
   const deleteApp = useDeleteApplication();
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const canRunTest = can("run_test");
@@ -119,15 +123,6 @@ export default function Assessments() {
     debug("opens assessment that finished while expanded", { assessmentId: expandedRow.id, from: previous.status });
     navigate(`/assessments/${expandedRow.id}`);
   }, [expandedRow, navigate]);
-
-  const awaitingSync = useMemo(
-    () =>
-      (reports ?? []).filter(
-        (runTimestamp) =>
-          !(assessments ?? []).some((a) => a.external_id.startsWith(`${runTimestamp}::`)),
-      ),
-    [reports, assessments],
-  );
 
   /** Deletes the selected application, closing the dialog or showing the error. */
   const confirmDelete = useCallback(async () => {
@@ -257,13 +252,36 @@ export default function Assessments() {
           </span>
         </p>
       )}
-      {!reportsError && awaitingSync.length > 0 && (
+      {!reportsError && (syncingRuns?.length ?? 0) > 0 && (
+        <p className="mb-3 flex items-start gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-foreground">
+          <RefreshCw className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+          <span>
+            {`${syncingRuns!.length} completed run${syncingRuns!.length > 1 ? "s are" : " is"} being added to the dashboard.`}
+          </span>
+        </p>
+      )}
+      {!reportsError && (unsyncedRuns?.length ?? 0) > 0 && (
         <p className="mb-3 flex items-start gap-2 rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-xs text-foreground">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
           <span>
-            {`${awaitingSync.length} completed run${
-              awaitingSync.length > 1 ? "s have" : " has"
-            } not appeared here yet. The automation host syncs them on its own schedule.`}
+            {`${unsyncedRuns!.length} completed run${
+              unsyncedRuns!.length > 1 ? "s" : ""
+            } could not be added to the dashboard. Open `}
+            {unsyncedRuns!.slice(0, UNSYNCED_RUN_LINKS).map((runTimestamp, index) => (
+              <span key={runTimestamp}>
+                {index > 0 && ", "}
+                <Link
+                  to={`/runs/${encodeURIComponent(runTimestamp)}`}
+                  className="font-medium text-primary hover:underline"
+                >
+                  {runTimestamp}
+                </Link>
+              </span>
+            ))}
+            {unsyncedRuns!.length > UNSYNCED_RUN_LINKS
+              ? ` and ${unsyncedRuns!.length - UNSYNCED_RUN_LINKS} more`
+              : ""}
+            {" to resync."}
           </span>
         </p>
       )}

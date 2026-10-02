@@ -20,6 +20,7 @@ let detailFetch: () => Promise<unknown> = () => Promise.resolve(null);
 let runRequestCalls = 0;
 let runRequest: unknown = null;
 let assessmentList: { status: string }[] = [];
+let reportList: string[] = [];
 let attachmentWrites = 0;
 
 function entry(id: string): RiskConversationEntry {
@@ -100,7 +101,7 @@ vi.mock("@/database/conversation-attachments", () => ({
 }));
 
 vi.mock("@/automation-api/endpoints", () => ({
-  assessmentApi: {},
+  assessmentApi: { listReports: () => Promise.resolve(reportList) },
   configApi: {},
   provisioningApi: {},
   syncApi: {},
@@ -110,6 +111,7 @@ vi.mock("@/automation-api/endpoints", () => ({
 vi.mock("@/automation-api/playbook-endpoints", () => ({ playbookApi: {} }));
 
 const { useAssessment, useAssessmentRunRequest, useAssessments } = await import("@/hooks/queries/assessments");
+const { useAutomationReports } = await import("@/hooks/queries/automation");
 const { useRiskConversation, useRiskConversationEntries, useSaveConversationAttachment } =
   await import("@/hooks/queries/conversations");
 
@@ -324,6 +326,45 @@ describe("useAssessments polling while assessments are in progress", () => {
   it("does not poll for a caller that did not ask to", async () => {
     assessmentList = [{ status: "running" }];
     expect(await mountList()).toBe(false);
+  });
+});
+
+describe("useAutomationReports polling while runs match", () => {
+  function ReportsProbe({ poll }: { poll?: boolean }) {
+    const { data } = useAutomationReports({ syncStatus: ["queued", "running"] }, { pollWhileAny: poll });
+    return <p>{data ? `runs:${data.length}` : "none"}</p>;
+  }
+
+  async function mountReports(poll?: boolean) {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
+    });
+    await act(async () =>
+      root.render(
+        <QueryClientProvider client={client}>
+          <ReportsProbe poll={poll} />
+        </QueryClientProvider>,
+      ),
+    );
+    await settle();
+    const query = client.getQueryCache().find({ queryKey: ["automationReports"], exact: false })!;
+    const { refetchInterval } = query.observers[0].options;
+    return typeof refetchInterval === "function" ? refetchInterval(query) : refetchInterval;
+  }
+
+  it("re-reads while any run matches", async () => {
+    reportList = ["2026-01-01_00-00-00"];
+    expect(await mountReports(true)).toBe(15_000);
+  });
+
+  it("stops once no run matches", async () => {
+    reportList = [];
+    expect(await mountReports(true)).toBe(false);
+  });
+
+  it("does not poll for a caller that did not ask to", async () => {
+    reportList = ["2026-01-01_00-00-00"];
+    expect(await mountReports()).toBe(false);
   });
 });
 

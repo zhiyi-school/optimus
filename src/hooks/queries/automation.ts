@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { assessmentApi, provisioningApi, syncApi, testApi } from "@/automation-api/endpoints";
-import type { AutomationPlatform, DashboardSyncStatus, RunProgressEvent } from "@/automation-api/types";
+import type { AutomationPlatform, DashboardSyncStatus, ReportFilters, RunProgressEvent } from "@/automation-api/types";
 import { findActiveRun, findPlatformRun, type ActiveRunFilter } from "@/workflows/automation-run";
 import { syncPollInterval } from "@/domain/run/dashboard-sync";
 import { dashboardSyncInvalidationPrefixes } from "./invalidation-rules";
@@ -78,16 +78,20 @@ export function useActiveRun(filter: ActiveRunFilter) {
   };
 }
 
-/** Fetches automation report timestamps, optionally filtered by status. */
-export function useAutomationReports(status?: string) {
+const REPORTS_POLL_INTERVAL_MS = 15_000;
+
+/** Fetches automation report timestamps matching the filters, optionally re-reading them while any match. */
+export function useAutomationReports(filters: ReportFilters = {}, opts: { pollWhileAny?: boolean } = {}) {
   return useQuery({
-    queryKey: automationKeys.reports(status),
+    queryKey: automationKeys.reports(filters),
     queryFn: async () => {
-      debug("fetches automation reports", { status });
-      const reports = await assessmentApi.listReports(status);
-      debug("fetched automation reports", { status, count: reports.length });
+      debug("fetches automation reports", filters);
+      const reports = await assessmentApi.listReports(filters);
+      debug("fetched automation reports", { ...filters, count: reports.length });
       return reports;
     },
+    refetchInterval: (query) =>
+      opts.pollWhileAny && (query.state.data?.length ?? 0) > 0 ? REPORTS_POLL_INTERVAL_MS : false,
   });
 }
 
