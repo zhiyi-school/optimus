@@ -4,6 +4,7 @@
 
 revoke all on function
   dashboard_metrics(),
+  risk_conversation_activity(),
   accept_risk_entry(uuid, uuid, text, uuid),
   retract_risk_acceptance(uuid, text),
   classify_risk(uuid, uuid, text, text),
@@ -16,6 +17,7 @@ from public, anon;
 
 grant execute on function
   dashboard_metrics(),
+  risk_conversation_activity(),
   accept_risk_entry(uuid, uuid, text, uuid),
   retract_risk_acceptance(uuid, text),
   classify_risk(uuid, uuid, text, text),

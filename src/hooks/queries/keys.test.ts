@@ -58,6 +58,7 @@ describe("domain invalidation rules", () => {
     expect(conversationInvalidationKeys("conversation-1")).toEqual([
       ["riskConversationEntries", "conversation-1"],
       ["riskConversationAttachments"],
+      ["riskConversationActivity"],
     ]);
     expect(controlProgressInvalidationKeys("ticket-1")).toEqual([
       ["ticketControls", "ticket-1"],
@@ -66,6 +67,7 @@ describe("domain invalidation rules", () => {
     ]);
     expect(conversationEntryInvalidationKeys("conversation-1")).toEqual([
       ["riskConversationEntries", "conversation-1"],
+      ["riskConversationActivity"],
     ]);
     expect(conversationAttachmentInvalidationKeys()).toEqual([
       ["riskConversationAttachments"],

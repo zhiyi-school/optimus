@@ -24,6 +24,7 @@ import {
 import {
   useAutomationReports,
 } from "@/hooks/queries/automation";
+import { useConversationActivity } from "@/hooks/queries/conversations";
 import {
   useApplications,
   useDeleteApplication,
@@ -53,6 +54,7 @@ export default function Assessments() {
   const [appToDelete, setAppToDelete] = useState<Application | null>(null);
 
   const { data: assessments, isLoading, isFetching, isError, refetch } = useAssessments({ pollWhileInProgress: true });
+  const { data: conversationActivity } = useConversationActivity();
   const { data: applications } = useApplications();
   const sortedApplications = useMemo(
     () => [...(applications ?? [])].sort((a, b) => compareByName(a.name, b.name, a.id, b.id)),
@@ -184,7 +186,11 @@ export default function Assessments() {
         ),
       },
       { key: "status", header: "Status", render: (r) => <AssessmentStatusBadge status={r.status} /> },
-      { key: "created", header: "Created At", render: (r) => formatDate(r.created_at) },
+      {
+        key: "updated",
+        header: "Last Updated",
+        render: (r) => formatDate(conversationActivity?.get(r.application_id)),
+      },
       ...(canRunTest
         ? [
             {
@@ -209,7 +215,7 @@ export default function Assessments() {
           ]
         : []),
     ],
-    [canRunTest],
+    [canRunTest, conversationActivity],
   );
 
   return (

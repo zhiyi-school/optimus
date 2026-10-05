@@ -205,6 +205,19 @@ export const riskConversationData = {
     }
   },
 
+  /** Maps each visible application to its latest conversation activity: an entry or a synced test run. */
+  async activityByApplication(): Promise<Map<string, string>> {
+    debug("rpc risk_conversation_activity");
+    const { data, error } = await supabase.rpc("risk_conversation_activity");
+    if (error) {
+      debug("rpc risk_conversation_activity failed", { code: error.code, message: error.message });
+      throw error;
+    }
+    const rows = (data ?? []) as { application_id: string; last_entry_at: string }[];
+    debug("fetched conversation activity", { count: rows.length });
+    return new Map(rows.map((row) => [row.application_id, row.last_entry_at]));
+  },
+
   /** Calls `onChange` on each new entry in the conversation; returns the unsubscribe function. */
   subscribeToConversation(conversationId: string, onChange: () => void) {
     debug("subscribing to conversation", { conversationId });

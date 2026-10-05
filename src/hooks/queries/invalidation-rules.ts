@@ -24,19 +24,24 @@ export const dashboardSyncInvalidationPrefixes = [
   ticketKeys.metrics(),
   conversationKeys.byRiskPrefix(),
   conversationKeys.entriesPrefix(),
+  conversationKeys.activity(),
   automationKeys.testHistoryPrefix(),
   automationKeys.reportsPrefix(),
   riskAcceptanceKeys.prefix(),
 ] as const;
 
-/** Keys to refresh after a conversation changes: its entries and all attachments. */
+/** Keys to refresh after a conversation changes: its entries, all attachments and the activity times. */
 export function conversationInvalidationKeys(conversationId: string) {
-  return [conversationKeys.entries(conversationId), conversationKeys.attachments()] as const;
+  return [
+    conversationKeys.entries(conversationId),
+    conversationKeys.attachments(),
+    conversationKeys.activity(),
+  ] as const;
 }
 
-/** Keys to refresh after a conversation entry is recorded. */
+/** Keys to refresh after a conversation entry is recorded, including the activity times. */
 export function conversationEntryInvalidationKeys(conversationId: string) {
-  return [conversationKeys.entries(conversationId)] as const;
+  return [conversationKeys.entries(conversationId), conversationKeys.activity()] as const;
 }
 
 /** Keys to refresh after conversation attachments are uploaded. */

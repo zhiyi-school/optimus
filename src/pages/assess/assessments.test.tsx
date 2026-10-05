@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { roleCan, type Capability } from "@/auth/permissions";
+import { formatDate } from "@/lib/utils";
 import type { Application, Assessment, UserRole } from "@/database/types";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -63,6 +64,8 @@ function assessment(overrides: Partial<Row>): Row {
   } as Row;
 }
 
+let conversationActivity = new Map<string, string>();
+
 vi.mock("@/database/client", () => ({
   ATTACHMENTS_BUCKET: "ticket-attachments",
   EVIDENCE_BUCKET: "evidence",
@@ -89,6 +92,7 @@ vi.mock("@/hooks/queries/risk-acceptance", async () => await import("@/test-supp
 vi.mock("@/test-support/query-hooks", () => {
   const idle = { data: undefined, isLoading: false, isError: false, refetch: () => {} };
   return {
+    useConversationActivity: () => ({ ...idle, data: conversationActivity }),
     useAssessments: (opts?: unknown) => {
       assessmentListOptions.push(opts);
       return { ...idle, data: assessments, isFetching };
@@ -134,6 +138,7 @@ beforeEach(() => {
   runRequest = null;
   runEvents = [];
   runEventStreams.length = 0;
+  conversationActivity = new Map();
   assessments = [assessment({})];
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -528,5 +533,30 @@ describe("the automation-backend notices", () => {
     expect((container.textContent ?? "")).not.toContain("being added to the dashboard");
     expect((container.textContent ?? "")).not.toContain("could not be added");
     expect((container.textContent ?? "")).not.toContain("Can't reach the automation backend");
+  });
+});
+
+describe("the Last Updated column", () => {
+  function headers() {
+    return [...container.querySelectorAll("th")].map((th) => th.textContent?.trim());
+  }
+
+  it("replaces Created At", () => {
+    render();
+    expect(headers()).toContain("Last Updated");
+    expect(headers()).not.toContain("Created At");
+  });
+
+  it("shows when the application's conversations were last updated, not when the assessment was created", () => {
+    conversationActivity = new Map([["example-app-id", "2026-03-05T09:00:00Z"]]);
+    render();
+
+    expect(rows()[0].textContent).toContain(formatDate("2026-03-05T09:00:00Z"));
+    expect(rows()[0].textContent).not.toContain(formatDate("2026-01-01T00:00:00Z"));
+  });
+
+  it("shows no time when the application's conversations have no entries", () => {
+    render();
+    expect(rows()[0].textContent).not.toContain(formatDate("2026-01-01T00:00:00Z"));
   });
 });

@@ -433,17 +433,6 @@ describe("summarizeApplication", () => {
       expect(summary.status).toBe("action_required");
     });
   });
-
-  it("reports the most recent update across findings and tickets", () => {
-    const summary = summarizeApplication(
-      APP,
-      [finding({ updated_at: "2026-01-02T00:00:00Z" })],
-      [ticket({ updated_at: "2026-01-05T00:00:00Z" })],
-      [],
-      [],
-    );
-    expect(summary.lastUpdatedAt).toBe("2026-01-05T00:00:00Z");
-  });
 });
 
 describe("dashboard totals against the live playbook", () => {

@@ -245,7 +245,6 @@ export interface ApplicationRemediation {
   tested: Progress;
   controls: Progress;
   status: RemediationStatus;
-  lastUpdatedAt: string | null;
 }
 
 /** Absent when the backend is unreachable, so the dashboard counts every row rather than reporting zero. */
@@ -292,11 +291,6 @@ export function summarizeApplication(
   const completedSteps = ownSteps.filter((step) => step.status === "completed").length;
 
   const openTickets = ownTickets.filter((ticket) => !TERMINAL.includes(ticket.status));
-  const lastUpdatedAt = [...own, ...ownTickets]
-    .map((row) => row.updated_at)
-    .sort()
-    .at(-1) ?? null;
-
   debug("summarizes application", {
     applicationId,
     findingCount: own.length,
@@ -322,7 +316,6 @@ export function summarizeApplication(
     tested: testingProgress(own, catalogueSize ?? 0),
     controls: progress(completedSteps, ownSteps.length),
     status: remediationStatus(own, openTickets, accepted),
-    lastUpdatedAt,
   };
 }
 

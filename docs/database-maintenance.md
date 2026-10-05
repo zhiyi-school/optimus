@@ -123,6 +123,58 @@ them. The baseline already carries them, so retiring changes no schema.
 
 The notes below describe the fixes in `supabase/fixes/`.
 
+### Test runs in conversation activity (0040)
+
+Fix `0040_test_runs_in_conversation_activity.sql` redefines
+`risk_conversation_activity()` so the Last Updated column also moves when a test
+runs. A risk conversation shows two kinds of activity, and the function now
+counts both:
+
+- a stored entry, a message or a workflow event, including events the sync
+  worker writes, by its `created_at`;
+- a synced test run. Runs are not stored as entries: the conversation reads them
+  from the automation backend. The sync worker stamps each run's result on its
+  finding, so a finding with a `latest_test_run_id` contributes its
+  `updated_at`, which is when that result arrived rather than when the run
+  started. The backend's run ids are local times without a time zone, so they
+  are not used.
+
+The result column keeps the name `last_entry_at` that `0039` gave it. A fresh
+install runs the baseline and then every fix, so `0039`'s `create or replace`
+runs after the final definition; a renamed column would make it fail. Keeping
+the name lets `0039` apply and `0040` restore the final body. Grants are kept.
+It changes no rows. The baseline carries the same definition.
+`supabase/tests/0040_test_runs_in_conversation_activity_rls.sql` and
+`final_schema_assert.sql` cover it.
+
+**Rollout order.** Apply `0040` after `0039`. The frontend needs no change for
+it; until it is applied, Last Updated reflects conversation entries only.
+
+### Conversation activity (0039)
+
+Fix `0039_conversation_activity.sql` adds `risk_conversation_activity()`, which
+returns, for each application, the time of the newest entry in any of its risk
+conversations (`last_entry_at`). The Assess and Resolve lists show it as **Last
+Updated**, replacing **Created At**; an application with no activity shows a
+dash. It does not use `risk_conversations.updated_at`, because opening a risk
+page creates or links its conversation and moves that timestamp without any
+activity. `0040` extends it to synced test runs.
+
+The function runs as the caller, so RLS limits it to the applications the caller
+may see. It is granted to `authenticated` and `service_role`, not `anon`. It
+changes no rows. The baseline carries the final definition, so a new project
+needs no fix. `supabase/tests/0039_conversation_activity_rls.sql` and
+`final_schema_assert.sql` cover it.
+
+**Rollout order.** Apply `0039` before deploying the frontend that reads it;
+without it, the activity request fails and both lists show a dash in Last
+Updated.
+
+## Legacy migrations
+
+The notes below describe the rollout of migrations in
+`supabase/legacy-migrations/`. Every live project has applied them.
+
 ### Remediation withdrawn on acceptance (0038)
 
 Fix `0038_withdraw_remediation_on_acceptance.sql` redefines
@@ -201,11 +253,6 @@ database without the column, that worker's completion write is refused after
 the run has started, so the request keeps its lease until it expires and is
 then started again; the frontend's request read is unaffected, because it
 selects every column.
-
-## Legacy migrations
-
-The notes below describe the rollout of migrations in
-`supabase/legacy-migrations/`. Every live project has applied them.
 
 ### Restoring ticket guards (0035)
 

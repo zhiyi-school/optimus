@@ -13,6 +13,7 @@ import { useApplications, useTeams } from "@/hooks/queries/reference";
 import { useFindings } from "@/hooks/queries/evidence";
 import { useControlProgressForTickets } from "@/hooks/queries/control-progress";
 import { useTickets } from "@/hooks/queries/tickets";
+import { useConversationActivity } from "@/hooks/queries/conversations";
 import { useRiskCatalogue } from "@/hooks/queries/automation";
 import { useLiveControlKeys } from "@/hooks/queries/playbook";
 import { useAuth } from "@/auth/auth-context";
@@ -32,6 +33,8 @@ interface Row {
   id: string;
   application: Application;
   summary: ApplicationRemediation;
+  /** When the application's risk conversations last recorded an entry. */
+  lastUpdatedAt: string | undefined;
 }
 
 /** Lists the team's applications with remediation progress and status, opening one on click. */
@@ -46,6 +49,7 @@ export default function Resolve() {
   const tickets = useTickets({ type: "remediation" });
   const acceptanceTickets = useTickets({ type: "risk_acceptance", status: "accepted" });
   const accepted = useMemo(() => acceptedFindingIds(acceptanceTickets.data), [acceptanceTickets.data]);
+  const activity = useConversationActivity();
 
   const ticketIds = useMemo(() => (tickets.data ?? []).map((ticket) => ticket.id), [tickets.data]);
   const controls = useControlProgressForTickets(ticketIds);
@@ -81,9 +85,10 @@ export default function Resolve() {
           catalogueSize(application.platform),
           accepted,
         ),
+        lastUpdatedAt: activity.data?.get(application.id),
       }))
       .sort((a, b) => compareByName(a.application.name, b.application.name, a.application.id, b.application.id));
-  }, [applications.data, findings.data, tickets.data, controls.controls, controls.steps, liveKeys, catalogueSize, accepted]);
+  }, [applications.data, findings.data, tickets.data, controls.controls, controls.steps, liveKeys, catalogueSize, accepted, activity.data]);
 
   const columns: DataTableColumn<Row>[] = useMemo(
     () => [
@@ -117,8 +122,8 @@ export default function Resolve() {
       },
       {
         key: "updated",
-        header: "Created At",
-        render: (row) => formatDate(row.summary.lastUpdatedAt),
+        header: "Last Updated",
+        render: (row) => formatDate(row.lastUpdatedAt),
       },
     ],
     [],

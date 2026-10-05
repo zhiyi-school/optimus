@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { roleCan, type Capability } from "@/auth/permissions";
+import { formatDate } from "@/lib/utils";
 import type { Finding, Ticket, TicketControl, TicketControlStep, UserRole } from "@/database/types";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -95,6 +96,8 @@ function stepRow(controlRowId: string, key: string, status: string): TicketContr
   } as TicketControlStep;
 }
 
+let conversationActivity = new Map<string, string>();
+
 vi.mock("@/database/client", () => ({
   ATTACHMENTS_BUCKET: "ticket-attachments",
   EVIDENCE_BUCKET: "evidence",
@@ -121,6 +124,7 @@ vi.mock("@/hooks/queries/risk-acceptance", async () => await import("@/test-supp
 vi.mock("@/test-support/query-hooks", () => {
   const idle = { data: undefined, isLoading: false, isError: false, refetch: () => {} };
   return {
+    useConversationActivity: () => ({ ...idle, data: conversationActivity }),
     useApplications: () => ({ ...idle, data: applications, isFetching }),
     useFindings: ({ applicationId }: { applicationId?: string } = {}) => ({
       ...idle,
@@ -162,6 +166,7 @@ beforeEach(() => {
   controls = [];
   steps = [];
   isFetching = false;
+  conversationActivity = new Map();
   iosCatalogue = [{ risk_id: RISK }, { risk_id: "example-feature-02-risk-01" }];
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -223,7 +228,22 @@ function headers() {
 describe("the Resolve list", () => {
   it("presents the reference columns", () => {
     renderList();
-    expect(headers()).toEqual(["App", "Version", "Progress", "Status", "Created At", ""]);
+    expect(headers()).toEqual(["App", "Version", "Progress", "Status", "Last Updated", ""]);
+  });
+
+  it("shows when the application's conversations were last updated", () => {
+    conversationActivity = new Map([[APP, "2026-03-05T09:00:00Z"]]);
+    renderList();
+
+    expect(text()).toContain(formatDate("2026-03-05T09:00:00Z"));
+  });
+
+  it("shows no time when the application's conversations have no entries", () => {
+    findings = [finding({ updated_at: "2026-02-01T00:00:00Z" })];
+    renderList();
+
+    expect(text()).not.toContain(formatDate("2026-02-01T00:00:00Z"));
+    expect(text()).toContain("—");
   });
 
   it("reports risk coverage against the catalogue, not remediation steps", () => {

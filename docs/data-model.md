@@ -131,6 +131,13 @@ events in one feed.
   Every authenticated insert must set `author_id = auth.uid()`, so nobody can
   post under another name. Entries with no author come from the sync worker,
   which holds the service-role key and is not subject to these policies.
+- **Last Updated is the latest activity, not the conversation row's timestamp.**
+  `risk_conversation_activity()` returns, per application, the newest of its
+  conversation entries and of its synced test runs (a finding's `updated_at`
+  once it has a `latest_test_run_id`), for the Assess and Resolve lists.
+  `risk_conversations.updated_at` is not used: opening a risk page can create or
+  link a conversation, which moves it without any activity. The function runs as
+  the caller, so RLS decides which applications appear.
 - **`metadata` carries only what an event summary needs.** A classification
   change stores its previous and new status; a retest event stores the run
   timestamp. No copy of a finding, ticket, evidence or playbook content lives

@@ -51,6 +51,19 @@ export function useRiskConversation(
   });
 }
 
+/** Fetches, per application, when its risk conversations last showed activity, including synced test runs. */
+export function useConversationActivity() {
+  return useQuery({
+    queryKey: conversationKeys.activity(),
+    queryFn: async () => {
+      debug("fetches conversation activity");
+      const activity = await riskConversationData.activityByApplication();
+      debug("fetched conversation activity", { count: activity.size });
+      return activity;
+    },
+  });
+}
+
 /** Fetches a conversation's entries and refetches them on realtime changes, unsubscribing on cleanup. */
 export function useRiskConversationEntries(conversationId: string | undefined) {
   const queryClient = useQueryClient();

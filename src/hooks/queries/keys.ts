@@ -88,6 +88,8 @@ export const conversationKeys = {
   entries: (id?: string) => ["riskConversationEntries", id] as const,
   /** Prefix matching every conversation entries key. */
   entriesPrefix: () => ["riskConversationEntries"] as const,
+  /** Key for the newest conversation entry time of every visible application. */
+  activity: () => ["riskConversationActivity"] as const,
   /** Key for attachments of the given entries, or the prefix for all attachments. */
   attachments: (entryIds?: string[]) =>
     entryIds ? (["riskConversationAttachments", entryIds] as const) : (["riskConversationAttachments"] as const),

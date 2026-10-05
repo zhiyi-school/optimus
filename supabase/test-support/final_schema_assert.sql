@@ -161,4 +161,16 @@ begin
     where n.nspname = 'public' and p.proname = 'accept_risk_entry'
       and p.prosrc like '%withdrawal_reason = withdrawal%'
   ) then raise exception 'accepting a risk no longer withdraws its remediation'; end if;
+  if to_regprocedure('public.risk_conversation_activity()') is null
+     or has_function_privilege('anon', 'public.risk_conversation_activity()', 'EXECUTE')
+     or not has_function_privilege('authenticated', 'public.risk_conversation_activity()', 'EXECUTE') then
+    raise exception 'risk_conversation_activity is missing or wrongly granted';
+  end if;
+  if exists (
+    select 1 from pg_proc where proname = 'risk_conversation_activity' and prosecdef
+  ) then raise exception 'risk_conversation_activity must run as the caller, under RLS'; end if;
+  if not exists (
+    select 1 from pg_proc where proname = 'risk_conversation_activity'
+      and prosrc like '%from findings f%'
+  ) then raise exception 'conversation activity no longer counts synced test runs'; end if;
 end $$;
