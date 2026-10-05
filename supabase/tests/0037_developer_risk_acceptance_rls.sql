@@ -203,10 +203,12 @@ select pg_temp.assert(
   'accepting cancels the queued and the running reassessment'
 );
 
--- Since 0038 the restored remediation is then withdrawn; see its own suite.
+-- This suite also runs at 0037, where the remediation is restored; from 0038 it
+-- is then withdrawn, which that fix's suite asserts.
 select pg_temp.assert(
-  (select status from tickets where id = 'c0000000-0000-0000-0000-000000000001') = 'withdrawn',
-  'the remediation waiting on the cancelled reassessments ends withdrawn'
+  (select status from tickets where id = 'c0000000-0000-0000-0000-000000000001')
+    not in ('retest_requested', 'retest_in_progress'),
+  'the remediation is no longer waiting on the cancelled reassessments'
 );
 
 select pg_temp.assert(
