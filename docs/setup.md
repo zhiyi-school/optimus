@@ -58,6 +58,17 @@ credentials (tokens, passwords, API keys, authorization headers, signed URLs) ar
 masked before logging. Ids, statuses and request paths are not, so treat captured
 output as internal. Leave `VITE_DEBUG` unset in production builds.
 
+Under `npm run dev`, the same redacted lines are also appended to
+`logs/dashboard-debug.log` in the checkout, one line per entry with an ISO timestamp,
+the `[scope]`, the message and its details as JSON. The browser batches them about once
+a second, and once more when the page is closed, to the dev server's `/__debug-log`
+endpoint, which `vite-plugins/debug-log.ts` adds only to the dev server. A production
+build, `vite preview` and the Docker image have no such endpoint, so they never write
+the file. The server keeps each entry on one line and caps it at 4,000 characters, and
+moves the file to `dashboard-debug.log.1` once it reaches 5 MB. At most 500 lines wait
+in the browser; any beyond that are dropped and the next batch says how many. The file
+is ignored by git.
+
 ## 2. Supabase project
 
 Use hosted Supabase because multiple users need shared, persistent data.

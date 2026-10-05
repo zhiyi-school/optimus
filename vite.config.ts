@@ -1,13 +1,14 @@
 /**
- * Vite build and dev-server config: React plugin, vendor chunking and the `@` alias.
+ * Vite build and dev-server config: React plugin, the dev-only debug log file, vendor chunking and the `@` alias.
  */
 
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "node:path";
+import { debugLogPlugin } from "./vite-plugins/debug-log";
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), debugLogPlugin()],
   build: {
     rollupOptions: {
       output: {

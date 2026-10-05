@@ -190,6 +190,9 @@ src/
 ├── app.tsx
 └── main.tsx
 
+vite-plugins/
+└── debug-log.ts           # Dev-server endpoint appending browser debug lines to logs/
+
 supabase/
 ├── migrations/            # Fresh-install baseline, applied to new projects only
 │   ├── 0001_extensions_and_tables.sql

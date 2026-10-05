@@ -25,6 +25,7 @@ Stack: React 18, TypeScript, Vite, React Router, TanStack Query 5, Tailwind 3, R
 | `src/database/` | Supabase client, row types and one module per table group | Query a table another module owns |
 | `src/routing/` | Route guards and URL builders | |
 | `src/auth/` | Session state and capability decisions for the UI | Act as authorization; Supabase RLS is the authority |
+| `vite-plugins/` | Dev-server-only Vite plugins, such as the debug log file endpoint | Run in production builds or be imported by `src/` |
 
 ## Ownership rules
 
