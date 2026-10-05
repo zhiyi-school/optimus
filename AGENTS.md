@@ -55,7 +55,7 @@ Stack: React 18, TypeScript, Vite, React Router, TanStack Query 5, Tailwind 3, R
 - Automation evidence uses the backend's `ref` download contract. Server-backed conversation attachments stay an explicit unsupported state while that provider is unavailable. Generate signed storage URLs on demand.
 - Playbook content is authored externally. Preserve step IDs and revisions through transport and rendering; never equate title similarity with identity or carry completion onto changed steps.
 - Never put service-role credentials in browser code or build-time variables. The browser does not publish automation reports into dashboard tables; the backend worker owns that synchronization.
-- Risk acceptance and reassessment withdrawal are work in progress. Their components, hooks and services are intentionally unused; do not remove them as dead code.
+- Developer risk acceptance from the conversation is live. The request-and-review risk acceptance flow (`AcceptRiskButton`, `ReviewRiskAcceptanceDialog`) and reassessment withdrawal are work in progress; their components, hooks and services are intentionally unused, so do not remove them as dead code.
 
 ## Database and fixtures
 

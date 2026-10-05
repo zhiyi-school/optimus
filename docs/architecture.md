@@ -146,7 +146,7 @@ src/
 │   ├── conversation-attachments.ts # attachment rows, bucket, signing
 │   ├── tickets.ts                  # tickets
 │   ├── retests.ts                  # reassessment requests (retest_runs)
-│   ├── risk-acceptance.ts          # risk acceptance requests and reviews
+│   ├── risk-acceptance.ts          # risk acceptance, retraction, requests and reviews
 │   └── …                           # activity, applications, controls, evidence, findings, metrics, teams, users
 ├── workflows/            # Browser-side operations spanning both backends
 │   ├── app-registration.ts   # addApp: register, create rows, roll back

@@ -18,7 +18,7 @@ the real authorization boundary** (`supabase/migrations/0004_rls_policies.sql`,
 | view_assessments | | ✅ | ✅ | |
 | view_risk_conversation | ✅ | ✅ | ✅ | |
 | view_resolve | ✅ | | | |
-| create_ticket / request_retest | ✅ | | | |
+| create_ticket / request_retest / accept_risk | ✅ | | | |
 | update_control_progress / withdraw_ticket | ✅ | | | |
 | comment_risk_conversation | ✅ | ✅ | | |
 | run_test / update_finding / close_ticket / review_risk_acceptance / request_changes | | ✅ | | |
@@ -320,25 +320,26 @@ options, then the message box with Attach and Send, then the chosen file and any
 submission feedback. That is the real DOM order, so keyboard focus follows what
 the reader sees, and the row disappears entirely — leaving no gap — when a reader
 is offered nothing. The message box, its placeholder, the attachment control and
-the Send button never change; a permitted user adds **Change classification** or
-**Request reassessment** as a removable chip, and Send then records that workflow
-step as well. Adding, swapping or removing a chip leaves the draft and any chosen
+the Send button never change; a permitted user adds **Change classification**,
+**Request Reassessment**, **Accept Risk** or **Retract Acceptance** as a removable
+chip, and Send then records that workflow step as well. Adding, swapping or removing a chip leaves the draft and any chosen
 file untouched.
 
 Classification uses the message as its required reason and refuses the
-classification the risk already has. A reassessment needs no text, and anything
-typed is carried as context on the request event rather than posted a second
-time.
+classification the risk already has. Accepting a risk and retracting an
+acceptance also take the message as their required reason. A reassessment needs
+no text, and anything typed is carried as context on the request event rather
+than posted a second time.
 
-A file can be attached in all three cases. It is stored against the entry the
-action created — the `classification_changed` event, the `retest_requested`
-event, or the message itself — so a decision and its evidence are one timeline
-item. `classify_risk_entry()` returns the entry id it wrote rather than leaving
+A file can be attached in every case. It is stored against the entry the action
+created — the `classification_changed`, `retest_requested`, `risk_accepted` or
+`risk_acceptance_retracted` event, or the message itself — so a decision and its
+evidence are one timeline item. `classify_risk_entry()` returns the entry id it wrote rather than leaving
 the browser to search for it, which would race a concurrent classification of
 the same risk.
 
-Submission has one coordinator for messages, classifications and reassessment
-requests. Its state is `idle → recording → attaching → complete`, and
+Submission has one coordinator for messages, classifications, reassessment
+requests, risk acceptance and its retraction. Its state is `idle → recording → attaching → complete`, and
 `attaching` moves to `attachment_failed` when the file cannot be stored. A
 failure in `recording` returns to `idle`, preserves the draft and may retry the
 workflow operation. Once
@@ -430,7 +431,7 @@ Developer opens an At Risk / Inconclusive finding
      creates a remediation ticket (never edits the finding directly)
    → only the selected approach and its steps are initialised from the playbook
    → Developer works through the approach's steps, marking them complete
-   → in the conversation composer, Developer adds "Request reassessment"
+   → in the conversation composer, Developer adds "Request Reassessment"
      (offered once the risk has a result; no ticket, approach or progress needed)
      → a linked remediation ticket → retest_requested
    → on the risk's Assess test page, Security Team clicks "Run Automated Test"
@@ -463,7 +464,11 @@ for permissions and persisted transitions.
 | Finding needs work; no active remediation | developer assigned to the application's team | Start remediation | ticket `open`, `remediation_started` event, selected approach and progress rows | capability, application scope, live approach selection | ticket/application RLS and insert policies; the database does not know which controls the playbook currently offers |
 | `open`, `in_progress`, `rejected` | owning developer | Select or replace approach | `selected_control_id` changes; old progress remains history | live active/required candidates, permission and state | `enforce_ticket_update_permissions`; it validates lifecycle and ownership, not playbook membership |
 | editable remediation with a live selected approach | owning developer | Record step progress | step row status changes | live definition matched by stable control/step keys; missing/new steps are incomplete | progress RLS and ticket access |
-| the risk has a result; no ticket, approach or progress needed; earlier requests may be outstanding | developer with `request_retest` on the owning team | Request reassessment in the conversation | retest `queued`, one `retest_requested` event; a linked remediation ticket reconciles to `retest_requested` | conversation and result loaded, and the capability — neither a ticket, an approach, progress nor an outstanding request is consulted | `enforce_retest_request_permissions` requires a linked ticket to be a remediation ticket opened against this risk; a unique index permits one *running* run per risk, and another deduplicates a retried submission |
+| the risk has a result; no ticket, approach or progress needed; earlier requests may be outstanding | developer with `request_retest` on the owning team | Request Reassessment in the conversation | retest `queued`, one `retest_requested` event; a linked remediation ticket reconciles to `retest_requested` | conversation and result loaded, and the capability — neither a ticket, an approach, progress nor an outstanding request is consulted | `enforce_retest_request_permissions` requires a linked ticket to be a remediation ticket opened against this risk; a unique index permits one *running* run per risk, and another deduplicates a retried submission |
+| the risk has an At Risk or Inconclusive result and no acceptance in force | developer with `accept_risk` on the owning team | **Accept Risk** in the conversation, with a reason | acceptance in force, `risk_acceptance` ticket `accepted`, `risk_accepted` event; every queued or running reassessment `cancelled` with a `retest_withdrawn` event; the open remediation `withdrawn` ("Risk accepted") with a `remediation_withdrawn` event | capability, result loaded and not Reduced Risk, acceptance state known | `accept_risk_entry()` verifies role, access, reason and result; one acceptance in force per risk; a retried submission resolves to the acceptance it made |
+| acceptance in force | developer with `accept_risk` on the owning team | **Retract Acceptance** in the conversation, with a reason | acceptance ended as `retracted`, its ticket `withdrawn`, `risk_acceptance_retracted` event; reassessment and acceptance offered again | capability and an acceptance in force | `retract_risk_acceptance()` verifies role, access and reason; a retry resolves to the retraction already recorded |
+| acceptance in force; a later result or reclassification makes the risk Reduced Risk | sync worker or security | none; it follows from the result | acceptance ended as `resolved`, its ticket `closed`, `risk_acceptance_ended` event | refreshes after sync and on new conversation entries | `trg_end_risk_acceptance_on_reduced_risk` on `finding_history`, at commit |
+| acceptance in force | anyone | no reassessment request | refused | Request Reassessment is not offered | `enforce_retest_request_permissions` refuses a request on an accepted risk |
 | queued reassessment | requester (work in progress, not wired into the UI) | no dashboard withdrawal; `withdraw_reassessment()` and `retestData.withdraw()` are intentionally unused | run `cancelled`, ticket restored to its recorded prior state once nothing else is outstanding, `retest_withdrawn` event | none | `withdraw_reassessment()` locks and verifies requester, reason, access, run and ticket state |
 | queued reassessment | security | **Run Automated Test** / **Run Again** on the Assess test page | oldest queued request claimed: run `running`, ticket `retest_in_progress`, `retest_started` event | security capability; the page claims the oldest queued request only when none is running | `start_reassessment()` atomically claims only the oldest queued request, one running per risk |
 | automation result arrives | sync worker / security-owned processing | Reconcile result | run completes or fails; finding/ticket/events follow the result | progress display and polling only | sync idempotency keys and server-side writes |
@@ -557,12 +562,13 @@ The Resolve workspace renames every ticket status for a developer audience:
 | Update control-step progress | ✅ | |
 | Submit a fix | Historical state only; no current action | |
 | Request a reassessment | ✅ | |
+| Accept a risk, or retract its acceptance | ✅ | |
 | Withdraw or resume a remediation | ✅ | |
 | Run a reassessment or retest | | ✅ |
 | Request changes | | ✅ (database only; no dashboard control) |
 | Change a risk's classification | | ✅ |
 | Close a ticket | | ✅ (database only; no dashboard control) |
-| Approve risk acceptance | | ✅ (work in progress; not wired into the UI) |
+| Approve a requested risk acceptance | | ✅ (work in progress; not wired into the UI) |
 
 Hiding a button is not authorization. The developer-only rows are UI capability
 rules: RLS in `0004_rls_policies.sql` also lets security create remediation
@@ -616,19 +622,64 @@ the developers have got, not how far security has got through running tests.
 
 ## Risk Acceptance Workflow
 
-**Work in progress, not wired into the UI.** The schema, RLS policies, data
-module, hooks and components exist, but
-`src/components/remediation/risk-acceptance.tsx` is not imported anywhere, so
-the dashboard offers no way to request or review a risk acceptance. The rest of
-this section describes the intended behavior.
+A developer on the application's team (`accept_risk`) can accept a risk from
+its conversation. **Accept Risk** sits beside **Request Reassessment** in the
+composer and records the acceptance immediately; there is no security review.
+The message is the required reason. Acceptance is a business decision recorded
+beside the result: it never changes the finding's status, so an accepted risk
+still reads **At Risk** or **Inconclusive**.
 
-"Accept Risk" creates a **risk_acceptance** ticket + a `risk_acceptance`
-row — it never sets the finding to Reduced Risk directly. The Security
-Team reviews and accepts/rejects the *business* record
-(`risk_acceptance.decision`); the finding's technical `status` is a
-separate field that only changes via an actual retest result or an
-explicit Security Team override. A finding can legitimately still read
-**At Risk** while an accepted-risk record exists — both stay visible.
+`accept_risk_entry()` does the whole step in one transaction:
+
+- records the acceptance (`risk_acceptance`, `decision = 'accepted'`) with the
+  result it accepted (`accepted_run_id`, `accepted_status`) and a
+  `risk_acceptance` ticket in `accepted`;
+- posts a **Risk accepted** event carrying the reason;
+- cancels every queued or running reassessment of the risk, posting a
+  **Reassessment withdrawn** event for each ("Cancelled because the risk was
+  accepted."). A running automation run still finishes and its result still
+  syncs; only the request is cancelled;
+- withdraws the risk's open remediation (`open`, `in_progress` or `rejected`,
+  including one just released from a cancelled reassessment) with the reason
+  "Risk accepted", posting a **Remediation withdrawn** event. A remediation
+  under security review is left to security.
+
+While the acceptance is in force, **Request Reassessment** and **Accept Risk**
+are not offered and **Retract Acceptance** is. The risk header and its sidebar
+entry read **Risk accepted** instead of the remediation's status, and the
+Resolve applications list no longer counts the risk as needing action; an app
+whose remaining risks are all accepted reads **Risk accepted**.
+
+Remediation is paused, not hidden. The remediation section still shows the
+selected approach, its steps and the progress recorded, with the note "This risk
+is accepted, so remediation is paused. Retract the acceptance in the
+conversation to resume remediation." Steps open read-only, the approach cannot
+be changed, opening a control does not start a remediation, and **Resume
+remediation** and **Withdraw remediation** are not offered. These are interface
+rules; the database still allows step progress on a withdrawn remediation, as it
+did before. The database refuses any new
+reassessment request for the risk, whoever sends it. Accept Risk is blocked,
+with its reason shown, when the risk has no result yet, when its result is
+already Reduced Risk, or when the dashboard cannot tell whether an acceptance is
+already in force.
+
+An acceptance ends in one of two ways, and stays on the record either way:
+
+| Ending | Trigger | Ticket | Conversation |
+| --- | --- | --- | --- |
+| `retracted` | any developer on the team uses **Retract Acceptance**, with a reason | `withdrawn` | **Risk acceptance retracted**, with the reason |
+| `resolved` | a later automation result, or a security reclassification, makes the risk Reduced Risk | `closed` | **Risk acceptance ended: the risk is now Reduced Risk** |
+
+Retracting leaves the remediation withdrawn; the developer chooses whether to
+use **Resume remediation**, which carries on with its progress intact. A later
+result that is still At Risk or Inconclusive leaves the acceptance in force. Once ended, an acceptance never comes back: if the risk later reads At
+Risk again, a developer accepts it again. Acceptances have no expiry.
+
+The earlier request-and-review design is **work in progress and not wired into
+the UI**: `AcceptRiskButton` and `ReviewRiskAcceptanceDialog` in
+`src/components/remediation/risk-acceptance.tsx` and the `createTicket` and
+`review` data functions are intentionally unused. Clients can still insert only
+a `pending` request; an accepted row is written only by `accept_risk_entry()`.
 
 ## Assessment execution
 

@@ -23,6 +23,8 @@ let uploadFailureHasBytes = false;
 let attachmentInputs: { bytesUploaded: boolean; fileName: string }[] = [];
 let recordFails = false;
 let reassessmentFails = false;
+let activeAcceptance: { id: string } | null = null;
+let acceptanceLookupFailed = false;
 let holdRecord = false;
 let finishRecord: (() => void) | null = null;
 let definitions: unknown[] = [];
@@ -109,6 +111,29 @@ vi.mock("@/test-support/query-hooks", () => ({
     error: null,
     reset: vi.fn(),
   }),
+  useActiveRiskAcceptance: () => ({
+    data: acceptanceLookupFailed ? undefined : activeAcceptance,
+    isLoading: false,
+    isError: acceptanceLookupFailed,
+  }),
+  useAcceptRisk: () => ({
+    mutateAsync: (input: unknown) => {
+      calls.push({ name: "acceptance", input });
+      return Promise.resolve({ acceptance: { id: "acceptance-1" }, entryId: "entry-acceptance" });
+    },
+    isPending: false,
+    error: null,
+    reset: vi.fn(),
+  }),
+  useRetractRiskAcceptance: () => ({
+    mutateAsync: (input: unknown) => {
+      calls.push({ name: "retraction", input });
+      return Promise.resolve({ acceptance: { id: "acceptance-1" }, entryId: "entry-retraction" });
+    },
+    isPending: false,
+    error: null,
+    reset: vi.fn(),
+  }),
   ConversationAttachmentFailure: class ConversationAttachmentFailure extends Error {},
   useSaveConversationAttachment: () => ({
     mutateAsync: ({ pending, bytesUploaded }: { pending: { conversationId: string; entryId: string; file: File }; bytesUploaded: boolean }) => {
@@ -134,6 +159,7 @@ vi.mock("@/test-support/query-hooks", () => ({
 const { useRiskComposer, AttachmentError } = await import("@/hooks/conversation/composer");
 
 const finding = { id: FINDING, status: "at_risk" } as Finding;
+let findingStatus: Finding["status"] = "at_risk";
 let ticketStatus = "in_progress";
 let selectedControlId: string | null = CONTROL;
 const ticket = () =>
@@ -159,7 +185,7 @@ function Probe({
 }) {
   composer = useRiskComposer({
     conversation: { id: conversationId } as never,
-    finding,
+    finding: { ...finding, status: findingStatus },
     ticket: withTicket ? ticket() : null,
     can: can as never,
   });
@@ -198,6 +224,9 @@ beforeEach(() => {
   attachmentInputs = [];
   recordFails = false;
   reassessmentFails = false;
+  activeAcceptance = null;
+  acceptanceLookupFailed = false;
+  findingStatus = "at_risk";
   holdRecord = false;
   finishRecord = null;
   definitions = [approach()];
@@ -555,5 +584,78 @@ describe("what each reader is offered", () => {
     render({ can: (capability) => capability === "update_finding" });
     const offer = composer.offers[0];
     expect(offer.kind === "classification" && offer.currentStatus).toBe("at_risk");
+  });
+});
+
+describe("accepting a risk and retracting the acceptance", () => {
+  const developer = (capability: string) =>
+    capability === "request_retest" || capability === "accept_risk";
+
+  it("offers a developer the acceptance beside the reassessment", () => {
+    render({ can: developer });
+    expect(composer.offers.map((offer) => offer.kind)).toEqual(["reassessment", "acceptance"]);
+    expect(composer.offers.every((offer) => !offer.blockedReason)).toBe(true);
+  });
+
+  it("offers only the retraction while the risk is accepted", () => {
+    activeAcceptance = { id: "acceptance-1" };
+    render({ can: developer });
+    expect(composer.offers.map((offer) => offer.kind)).toEqual(["retraction"]);
+  });
+
+  it("offers a security reader neither acceptance nor retraction", () => {
+    render({ can: (capability) => capability === "update_finding" });
+    expect(composer.offers.map((offer) => offer.kind)).toEqual(["classification"]);
+  });
+
+  it("blocks acceptance of a Reduced Risk result, saying why", () => {
+    findingStatus = "reduced_risk";
+    render({ can: developer });
+    expect(composer.offers.find((offer) => offer.kind === "acceptance")?.blockedReason).toBe(
+      "This risk is already Reduced Risk, so there is nothing to accept.",
+    );
+  });
+
+  it("blocks acceptance when it cannot tell whether the risk is already accepted", () => {
+    acceptanceLookupFailed = true;
+    render({ can: developer });
+    expect(composer.offers.find((offer) => offer.kind === "acceptance")?.blockedReason).toBe(
+      "Could not check whether this risk is already accepted. Reload to try again.",
+    );
+  });
+
+  it("records the acceptance with the message as its reason and a submission identity", async () => {
+    render({ can: developer });
+    await submit({ message: "Compensated by server-side checks.", action: { kind: "acceptance" } });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
+      name: "acceptance",
+      input: { findingId: FINDING, reason: "Compensated by server-side checks." },
+    });
+    expect((calls[0].input as { submissionId: string }).submissionId).toEqual(expect.any(String));
+  });
+
+  it("retracts the acceptance in force", async () => {
+    activeAcceptance = { id: "acceptance-1" };
+    render({ can: developer });
+    await submit({ message: "The check was removed.", action: { kind: "retraction" } });
+
+    expect(calls).toEqual([
+      {
+        name: "retraction",
+        input: { acceptanceId: "acceptance-1", findingId: FINDING, reason: "The check was removed." },
+      },
+    ]);
+  });
+
+  it("attaches a file to the acceptance entry, not to a new message", async () => {
+    render({ can: developer });
+    await submit({ message: "See the review.", file: file(), action: { kind: "acceptance" } });
+
+    expect(calls.map((call) => call.name)).toEqual(["acceptance"]);
+    expect(uploads).toEqual([
+      { conversationId: CONVERSATION, entryId: "entry-acceptance", fileName: "example-evidence.png" },
+    ]);
   });
 });

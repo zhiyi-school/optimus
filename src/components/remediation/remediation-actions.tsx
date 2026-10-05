@@ -1,5 +1,5 @@
 /**
- * Remediation ticket actions: start, resume, withdraw and the withdrawal notice.
+ * Remediation ticket actions: start, resume, withdraw, and the withdrawal and risk-accepted notices.
  */
 
 import { useState, type FormEvent } from "react";
@@ -14,6 +14,8 @@ import {
   useWithdrawTicket,
 } from "@/hooks/queries/tickets";
 import { useRiskControls } from "@/hooks/queries/playbook";
+import { useActiveRiskAcceptance } from "@/hooks/queries/risk-acceptance";
+import { RISK_ACCEPTED_REMEDIATION_PAUSED } from "@/domain/remediation/workflow-messages";
 import { activeRemediationTicket, effectiveSelectedControlId, resumableRemediationTicket, selectableControls, selectedControl, selectedControlReconciliationPlan } from "@/domain/remediation/resolve-rules";
 import { createDebug } from "@/lib/debug";
 import { resolveRiskPath } from "@/routing/risk-routes";
@@ -22,7 +24,7 @@ import type { Application, Finding, Ticket } from "@/database/types";
 
 const debug = createDebug("components:remediation:remediation-actions");
 
-/** Starts, continues or resumes remediation of a finding depending on its existing tickets. */
+/** Starts, continues or resumes remediation of a finding depending on its existing tickets; paused while the risk is accepted. */
 export function WorkOnRiskButton({
   finding,
   application,
@@ -41,6 +43,7 @@ export function WorkOnRiskButton({
   const start = useStartRemediation();
   const { data: tickets } = useFindingTickets(finding.id);
   const definitions = useRiskControls(finding.platform, finding.test_id);
+  const acceptance = useActiveRiskAcceptance(finding.id);
 
   const active = activeRemediationTicket(finding.id, tickets);
   const withdrawn = resumableRemediationTicket(finding.id, tickets);
@@ -85,6 +88,8 @@ export function WorkOnRiskButton({
     setOpen(false);
     navigate(riskPath);
   }
+
+  if (acceptance.data && !active) return <RiskAcceptedNotice />;
 
   if (active) {
     return (
@@ -332,5 +337,15 @@ export function WithdrawalNotice({
   );
 }
 
+
+/** Says that remediation is paused while the risk's acceptance is in force. */
+export function RiskAcceptedNotice() {
+  return (
+    <div className="rounded-md border border-border bg-muted/40 p-3">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Risk accepted</p>
+      <p className="mt-1 text-sm text-foreground">{RISK_ACCEPTED_REMEDIATION_PAUSED}</p>
+    </div>
+  );
+}
 
 /** Dialog for security to send a ticket back with a comment. */

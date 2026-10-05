@@ -19,6 +19,7 @@ export function useRemediationReadiness({
   retests,
   mayEdit,
   mayRequest,
+  riskAccepted = false,
 }: {
   ticketId: string | undefined;
   ticket: Ticket | null | undefined;
@@ -26,6 +27,7 @@ export function useRemediationReadiness({
   retests: RetestRun[] | undefined;
   mayEdit: boolean;
   mayRequest: boolean;
+  riskAccepted?: boolean;
 }) {
   const definitions = useRiskControls(finding?.platform, finding?.test_id);
   // Keyed by ticketId, not ticket.id, so progress loads in parallel with the ticket.
@@ -45,6 +47,7 @@ export function useRemediationReadiness({
       retests,
       mayEdit,
       mayRequest,
+      riskAccepted,
     });
     debug("computes readiness", {
       ticketId,
@@ -58,6 +61,7 @@ export function useRemediationReadiness({
       retestCount: retests?.length,
       mayEdit,
       mayRequest,
+      riskAccepted,
     });
     return result;
   }, [
@@ -67,6 +71,7 @@ export function useRemediationReadiness({
     retests,
     mayEdit,
     mayRequest,
+    riskAccepted,
     definitions.data,
     definitions.isLoading,
     definitions.isError,

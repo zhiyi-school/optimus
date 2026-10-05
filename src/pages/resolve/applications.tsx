@@ -18,6 +18,7 @@ import { useLiveControlKeys } from "@/hooks/queries/playbook";
 import { useAuth } from "@/auth/auth-context";
 import { createDebug } from "@/lib/debug";
 import {
+  acceptedFindingIds,
   remediationStatusLabels,
   summarizeApplication,
   type ApplicationRemediation,
@@ -43,6 +44,8 @@ export default function Resolve() {
   const applications = useApplications();
   const findings = useFindings();
   const tickets = useTickets({ type: "remediation" });
+  const acceptanceTickets = useTickets({ type: "risk_acceptance", status: "accepted" });
+  const accepted = useMemo(() => acceptedFindingIds(acceptanceTickets.data), [acceptanceTickets.data]);
 
   const ticketIds = useMemo(() => (tickets.data ?? []).map((ticket) => ticket.id), [tickets.data]);
   const controls = useControlProgressForTickets(ticketIds);
@@ -76,10 +79,11 @@ export default function Resolve() {
           controls.steps,
           liveKeys,
           catalogueSize(application.platform),
+          accepted,
         ),
       }))
       .sort((a, b) => compareByName(a.application.name, b.application.name, a.application.id, b.application.id));
-  }, [applications.data, findings.data, tickets.data, controls.controls, controls.steps, liveKeys, catalogueSize]);
+  }, [applications.data, findings.data, tickets.data, controls.controls, controls.steps, liveKeys, catalogueSize, accepted]);
 
   const columns: DataTableColumn<Row>[] = useMemo(
     () => [

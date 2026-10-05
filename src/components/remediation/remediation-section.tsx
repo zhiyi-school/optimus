@@ -19,6 +19,7 @@ import {
 import { ControlChecklist } from "@/components/remediation/control-checklist";
 import {
   ResumeRemediationButton,
+  RiskAcceptedNotice,
   WithdrawRemediationDialog,
   WithdrawalNotice,
 } from "@/components/remediation/remediation-actions";
@@ -29,6 +30,7 @@ import {
 } from "@/hooks/queries/control-progress";
 import { usePlaybookRevisionWatch } from "@/hooks/queries/playbook";
 import { useTicket } from "@/hooks/queries/tickets";
+import { useActiveRiskAcceptance } from "@/hooks/queries/risk-acceptance";
 import { useProfiles } from "@/hooks/queries/reference";
 import { createDebug } from "@/lib/debug";
 import {
@@ -61,6 +63,7 @@ export function RemediationSection({ ticketId, finding: fallback }: { ticketId?:
   );
 
   const selectControl = useSelectRemediationControl(ticketId, finding?.id);
+  const riskAccepted = !!useActiveRiskAcceptance(finding?.id).data;
 
   const mayEdit = can("update_control_progress");
   const { workflow, definitions, controls, steps } = useRemediationReadiness({
@@ -70,6 +73,7 @@ export function RemediationSection({ ticketId, finding: fallback }: { ticketId?:
     retests: undefined,
     mayEdit,
     mayRequest: false,
+    riskAccepted,
   });
   const {
     candidates,
@@ -114,8 +118,9 @@ export function RemediationSection({ ticketId, finding: fallback }: { ticketId?:
   }
 
   const progress = controlProgress(live);
-  const showWithdraw = can("withdraw_ticket") && canWithdrawTicket(ticket.data);
-  const showResume = can("withdraw_ticket") && canResumeTicket(ticket.data);
+  // Remediation is paused while the risk is accepted; retracting the acceptance comes first.
+  const showWithdraw = !riskAccepted && can("withdraw_ticket") && canWithdrawTicket(ticket.data);
+  const showResume = !riskAccepted && can("withdraw_ticket") && canResumeTicket(ticket.data);
 
   return (
     <div>
@@ -165,7 +170,7 @@ export function RemediationSection({ ticketId, finding: fallback }: { ticketId?:
                     : `/resolve/findings/${finding?.id}/controls/${controlId}`
                 }
                 onOpen={
-                  ticketId
+                  ticketId || riskAccepted
                     ? undefined
                     : async (controlId) => {
                         debug("opens control before remediation exists", { findingId: finding?.id, controlId });
@@ -187,7 +192,9 @@ export function RemediationSection({ ticketId, finding: fallback }: { ticketId?:
                   hasProgress={progress.completed > 0}
                   findingId={finding?.id}
                   blockedReason={
-                    ticketId ? remediationBlockMessage(workflow.approachChangeBlock) : null
+                    ticketId || riskAccepted
+                      ? remediationBlockMessage(workflow.approachChangeBlock)
+                      : null
                   }
                   onSelect={(controlId) => {
                     debug("selects remediation approach", { ticketId, findingId: finding?.id, controlId });
@@ -199,6 +206,7 @@ export function RemediationSection({ ticketId, finding: fallback }: { ticketId?:
           )}
 
           <div className="mt-4 space-y-2 border-t border-border pt-4">
+            {riskAccepted && <RiskAcceptedNotice />}
             {ticketId && ticket.data && (
               <>
                 <WithdrawalNotice

@@ -17,7 +17,7 @@ import {
   conversationEntryInvalidationKeys,
   conversationInvalidationKeys,
 } from "./invalidation-rules";
-import { assessmentKeys, conversationKeys, ticketKeys } from "@/hooks/queries/keys";
+import { assessmentKeys, conversationKeys, riskAcceptanceKeys, ticketKeys } from "@/hooks/queries/keys";
 import { createDebug } from "@/lib/debug";
 
 const debug = createDebug("hooks:queries:conversations");
@@ -69,10 +69,12 @@ export function useRiskConversationEntries(conversationId: string | undefined) {
     if (!conversationId) return;
     debug("subscribes to conversation", { conversationId });
     const unsubscribe = riskConversationData.subscribeToConversation(conversationId, () => {
-      debug("conversation changed, invalidates entries", { conversationId });
+      debug("conversation changed, invalidates entries and risk acceptance", { conversationId });
       void queryClient.invalidateQueries({
         queryKey: conversationKeys.entries(conversationId),
       });
+      // Every acceptance change records an entry, including one ended by a synced result.
+      void queryClient.invalidateQueries({ queryKey: riskAcceptanceKeys.prefix() });
     });
     return () => {
       debug("unsubscribes from conversation", { conversationId });

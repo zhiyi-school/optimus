@@ -163,7 +163,8 @@ create table risk_conversation_entries (
   kind text not null check (kind in (
     'message', 'classification_changed', 'retest_requested', 'retest_started',
     'retest_completed', 'retest_failed', 'retest_withdrawn', 'remediation_started',
-    'remediation_withdrawn', 'fix_submitted'
+    'remediation_withdrawn', 'fix_submitted', 'risk_accepted', 'risk_acceptance_retracted',
+    'risk_acceptance_ended'
   )),
   author_id uuid references profiles (id) on delete set null,
   message text,
@@ -315,10 +316,32 @@ create table risk_acceptance (
   decision text check (decision in ('pending', 'accepted', 'rejected')),
   review_comment text,
   created_at timestamptz not null default now(),
-  reviewed_at timestamptz
+  reviewed_at timestamptz,
+  conversation_id uuid references risk_conversations (id) on delete set null,
+  accepted_run_id text,
+  accepted_status text check (accepted_status in ('at_risk', 'reduced_risk', 'inconclusive')),
+  submission_id uuid,
+  ended_at timestamptz,
+  ended_by uuid references profiles (id) on delete set null,
+  end_reason text check (end_reason in ('retracted', 'resolved')),
+  end_note text,
+  constraint risk_acceptance_end_fields check (
+    (ended_at is null) = (end_reason is null)
+    and (end_reason is distinct from 'retracted' or coalesce(btrim(end_note), '') <> '')
+  )
 );
 
 create index idx_risk_acceptance_finding_id on risk_acceptance (finding_id);
+-- One acceptance is in force per risk at a time.
+create unique index risk_acceptance_one_active_per_finding
+  on risk_acceptance (finding_id) where decision = 'accepted' and ended_at is null;
+-- A retried acceptance resolves to the acceptance it already made.
+create unique index risk_acceptance_submission_identity
+  on risk_acceptance (conversation_id, requested_by, submission_id)
+  where conversation_id is not null and submission_id is not null;
+
+comment on column risk_acceptance.end_reason is
+  'Why an accepted risk stopped being accepted: retracted by a developer, or resolved when its result became Reduced Risk. Null while the acceptance is in force.';
 
 create table activity_log (
   id uuid primary key default gen_random_uuid(),

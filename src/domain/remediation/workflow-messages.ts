@@ -4,6 +4,9 @@
 
 import type { RemediationBlock } from "@/domain/remediation/workflow";
 
+export const RISK_ACCEPTED_REMEDIATION_PAUSED =
+  "This risk is accepted, so remediation is paused. Retract the acceptance in the conversation to resume remediation.";
+
 /** The message explaining why a remediation action is blocked, or null when it is not. */
 export function remediationBlockMessage(block: RemediationBlock | null): string | null {
   if (!block) return null;
@@ -12,6 +15,8 @@ export function remediationBlockMessage(block: RemediationBlock | null): string 
       return "Only the developers assigned to this application can change the remediation approach.";
     case "approach_not_remediation":
       return "This is not a remediation ticket.";
+    case "approach_risk_accepted":
+      return RISK_ACCEPTED_REMEDIATION_PAUSED;
     case "approach_withdrawn":
       return "This remediation was withdrawn. Resume it to change the approach.";
     case "approach_security_finalised":

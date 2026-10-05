@@ -34,6 +34,15 @@ export const developerTicketLabels: Record<TicketStatus, { label: string; tone: 
   withdrawn: { label: "Withdrawn by developer", tone: "neutral" },
 };
 
+/** The finding ids whose risk acceptance is in force, from accepted risk-acceptance tickets. */
+export function acceptedFindingIds(tickets: Ticket[] | undefined): Set<string> {
+  return new Set(
+    (tickets ?? [])
+      .filter((ticket) => ticket.type === "risk_acceptance" && ticket.status === "accepted")
+      .flatMap((ticket) => (ticket.finding_id ? [ticket.finding_id] : [])),
+  );
+}
+
 /** The developer-facing label and tone for a ticket status. */
 export function developerTicketLabel(status: TicketStatus | undefined) {
   return status ? developerTicketLabels[status] : undefined;
@@ -212,6 +221,7 @@ export type RemediationStatus =
   | "changes_requested"
   | "awaiting_security"
   | "in_progress"
+  | "risk_accepted"
   | "action_required";
 
 export const remediationStatusLabels: Record<RemediationStatus, { label: string; tone: Tone }> = {
@@ -220,6 +230,7 @@ export const remediationStatusLabels: Record<RemediationStatus, { label: string;
   changes_requested: { label: "Changes requested", tone: "danger" },
   awaiting_security: { label: "Awaiting security", tone: "warning" },
   in_progress: { label: "In progress", tone: "info" },
+  risk_accepted: { label: "Risk accepted", tone: "success" },
   action_required: { label: "Action required", tone: "danger" },
 };
 
@@ -243,7 +254,7 @@ export interface LivePlaybookKeys {
   stepKeys: Set<string>;
 }
 
-/** Summarises an app's findings, remediation tickets and selected-approach step progress. */
+/** Summarises an app's findings, remediation tickets and selected-approach step progress; accepted risks need no action. */
 export function summarizeApplication(
   applicationId: string,
   findings: Finding[],
@@ -252,6 +263,7 @@ export function summarizeApplication(
   steps: TicketControlStep[],
   liveKeys?: LivePlaybookKeys,
   catalogueSize?: number,
+  accepted: Set<string> = new Set(),
 ): ApplicationRemediation {
   const own = findings.filter((finding) => finding.application_id === applicationId);
   const ownTickets = tickets.filter(
@@ -299,7 +311,9 @@ export function summarizeApplication(
     affectedFindings: own.filter(
       (finding) => finding.status === "at_risk" || finding.status === "reduced_risk",
     ).length,
-    findingsRequiringAction: own.filter((finding) => finding.status === "at_risk").length,
+    findingsRequiringAction: own.filter(
+      (finding) => finding.status === "at_risk" && !accepted.has(finding.id),
+    ).length,
     resolvedFindings: own.filter((finding) => finding.status === "reduced_risk").length,
     awaitingReassessment: ownTickets.filter((ticket) => AWAITING_SECURITY.includes(ticket.status))
       .length,
@@ -307,18 +321,24 @@ export function summarizeApplication(
     findings: findingProgress(own),
     tested: testingProgress(own, catalogueSize ?? 0),
     controls: progress(completedSteps, ownSteps.length),
-    status: remediationStatus(own, openTickets),
+    status: remediationStatus(own, openTickets, accepted),
     lastUpdatedAt,
   };
 }
 
-/** The app's overall remediation status from its findings and open tickets. */
-function remediationStatus(findings: Finding[], openTickets: Ticket[]): RemediationStatus {
+/** The app's overall remediation status from its findings, open tickets and accepted risks. */
+function remediationStatus(
+  findings: Finding[],
+  openTickets: Ticket[],
+  accepted: Set<string>,
+): RemediationStatus {
   const actionable = findings.filter(
     (finding) => finding.status === "at_risk" || finding.status === "reduced_risk",
   );
   if (actionable.length === 0) return "no_findings";
   if (actionable.every((finding) => finding.status === "reduced_risk")) return "resolved";
+  if (actionable.every((finding) => finding.status === "reduced_risk" || accepted.has(finding.id)))
+    return "risk_accepted";
   if (openTickets.some((ticket) => ticket.status === "rejected")) return "changes_requested";
   if (openTickets.some((ticket) => AWAITING_SECURITY.includes(ticket.status)))
     return "awaiting_security";
@@ -436,10 +456,14 @@ export function developerRiskOrder(
 export function preferredDeveloperRisk(
   findings: Finding[] | undefined,
   tickets: Ticket[] | undefined,
+  accepted: Set<string> = new Set(),
 ): string | null {
   const linked = (findings ?? []).filter((finding) => finding.test_id);
   const needsAction = linked.find(
-    (finding) => finding.status === "at_risk" && !activeRemediationTicket(finding.id, tickets),
+    (finding) =>
+      finding.status === "at_risk" &&
+      !accepted.has(finding.id) &&
+      !activeRemediationTicket(finding.id, tickets),
   );
   const inProgress = linked.find((finding) => activeRemediationTicket(finding.id, tickets));
   const riskId = (needsAction ?? inProgress ?? linked[0])?.test_id ?? null;

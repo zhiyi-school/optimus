@@ -240,6 +240,9 @@ vi.mock("@/test-support/query-hooks", () => {
     useWithdrawTicket: () => mutation,
     useCreateRiskAcceptanceTicket: () => mutation,
     useReviewRiskAcceptance: () => mutation,
+    useActiveRiskAcceptance: () => ({ ...idle, data: null }),
+    useAcceptRisk: () => mutation,
+    useRetractRiskAcceptance: () => mutation,
   };
 });
 
@@ -672,7 +675,7 @@ describe("security", () => {
 
   it("does not offer to request a reassessment of its own work", () => {
     render();
-    expect(buttonLabels()).not.toContain("Request reassessment");
+    expect(buttonLabels()).not.toContain("Request Reassessment");
   });
 });
 
@@ -707,14 +710,14 @@ describe("a developer", () => {
 
   it("can request a reassessment once every step of the approach is done", () => {
     render();
-    expect(usableButtonLabels()).toContain("Request reassessment");
+    expect(usableButtonLabels()).toContain("Request Reassessment");
   });
 
   it("can ask for a reassessment with steps still outstanding", () => {
     stepStatus = "not_started";
     render();
 
-    expect(usableButtonLabels()).toContain("Request reassessment");
+    expect(usableButtonLabels()).toContain("Request Reassessment");
     expect(text()).not.toContain("Complete all");
   });
 
@@ -722,7 +725,7 @@ describe("a developer", () => {
     ticketStatus = null;
     render();
 
-    expect(usableButtonLabels()).toContain("Request reassessment");
+    expect(usableButtonLabels()).toContain("Request Reassessment");
     expect(text()).not.toContain("Start a remediation for this risk");
     expect(container.querySelectorAll("textarea")).toHaveLength(1);
   });
@@ -732,7 +735,7 @@ describe("a developer", () => {
     ticketStatus = "retest_requested";
     render();
 
-    expect(usableButtonLabels()).toContain("Request reassessment");
+    expect(usableButtonLabels()).toContain("Request Reassessment");
   });
 
   it("is refused an assessment outside their application scope", () => {

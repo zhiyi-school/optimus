@@ -600,7 +600,7 @@ describe("the optional composer actions", () => {
   it("offers none at all when the caller supplies none", () => {
     render();
     expect(buttonNamed("Change classification")).toBeUndefined();
-    expect(buttonNamed("Request reassessment")).toBeUndefined();
+    expect(buttonNamed("Request Reassessment")).toBeUndefined();
   });
 
   it("puts every offered action above the message box, in the tab order", () => {
@@ -609,7 +609,7 @@ describe("the optional composer actions", () => {
     });
 
     expect(precedesComposer(buttonNamed("Change classification")!)).toBe(true);
-    expect(precedesComposer(buttonNamed("Request reassessment")!)).toBe(true);
+    expect(precedesComposer(buttonNamed("Request Reassessment")!)).toBe(true);
   });
 
   it("keeps the selected action's chip above the message box too", () => {
@@ -634,10 +634,10 @@ describe("the optional composer actions", () => {
 
   it("does not submit the form when an action is chosen", () => {
     render({ composerOffers: [{ kind: "reassessment" }] });
-    act(() => buttonNamed("Request reassessment")!.click());
+    act(() => buttonNamed("Request Reassessment")!.click());
 
     expect(sent).toEqual([]);
-    expect(buttonNamed("Request reassessment")).toBeUndefined();
+    expect(buttonNamed("Request Reassessment")).toBeUndefined();
   });
 
   it("keeps every action button a plain button, never a submit", () => {
@@ -645,7 +645,7 @@ describe("the optional composer actions", () => {
       composerOffers: [{ kind: "classification", currentStatus: "at_risk" }, { kind: "reassessment" }],
     });
 
-    for (const label of ["Change classification", "Request reassessment"]) {
+    for (const label of ["Change classification", "Request Reassessment"]) {
       expect(buttonNamed(label)!.getAttribute("type")).toBe("button");
     }
   });
@@ -656,7 +656,7 @@ describe("the optional composer actions", () => {
         { kind: "reassessment", blockedReason: "Finish every step of the approach first." },
       ],
     });
-    const button = buttonNamed("Request reassessment")!;
+    const button = buttonNamed("Request Reassessment")!;
 
     expect(button.disabled).toBe(true);
     const noteId = button.getAttribute("aria-describedby")!;
@@ -664,6 +664,35 @@ describe("the optional composer actions", () => {
       "Finish every step of the approach first.",
     );
     expect(precedesComposer(button)).toBe(true);
+  });
+
+  it("adds Accept Risk as a chip whose reason is the required message", async () => {
+    render({ composerOffers: [{ kind: "reassessment" }, { kind: "acceptance" }] });
+    const send = () => container.querySelector<HTMLButtonElement>("button[type='submit']")!;
+    act(() => buttonNamed("Accept Risk")!.click());
+
+    expect(text()).toContain("Your message is the reason.");
+    expect(send().disabled).toBe(true);
+    await act(async () => type(composer()!, "Compensated by server-side checks."));
+    await submit();
+
+    expect(sent).toEqual([
+      { message: "Compensated by server-side checks.", file: undefined, action: { kind: "acceptance" } },
+    ]);
+  });
+
+  it("adds Retract Acceptance as a chip whose reason is the required message", async () => {
+    render({ composerOffers: [{ kind: "retraction" }] });
+    const send = () => container.querySelector<HTMLButtonElement>("button[type='submit']")!;
+    act(() => buttonNamed("Retract Acceptance")!.click());
+
+    expect(send().disabled).toBe(true);
+    await act(async () => type(composer()!, "The check was removed."));
+    await submit();
+
+    expect(sent).toEqual([
+      { message: "The check was removed.", file: undefined, action: { kind: "retraction" } },
+    ]);
   });
 
   it("sends an ordinary message with no action attached", async () => {
@@ -679,7 +708,7 @@ describe("the optional composer actions", () => {
     const send = () => container.querySelector<HTMLButtonElement>("button[type='submit']")!;
     expect(send().textContent).toContain("Send");
 
-    act(() => buttonNamed("Request reassessment")!.click());
+    act(() => buttonNamed("Request Reassessment")!.click());
     expect(send().textContent).toContain("Send");
     expect(composer()!.getAttribute("aria-label")).toBe("Write a message");
     expect(composer()!.getAttribute("placeholder")).toBe("Write a message...");
@@ -712,7 +741,7 @@ describe("the optional composer actions", () => {
     await act(async () => type(composer()!, "Context."));
     attach();
     act(() => buttonNamed("Change classification")!.click());
-    act(() => buttonNamed("Request reassessment")!.click());
+    act(() => buttonNamed("Request Reassessment")!.click());
 
     expect(statusSelect()).toBeNull();
     expect(composer()!.value).toBe("Context.");
@@ -761,7 +790,7 @@ describe("the optional composer actions", () => {
 
   it("requests a reassessment with no message at all", async () => {
     render({ composerOffers: [{ kind: "reassessment" }] });
-    act(() => buttonNamed("Request reassessment")!.click());
+    act(() => buttonNamed("Request Reassessment")!.click());
     expect(container.querySelector<HTMLButtonElement>("button[type='submit']")!.disabled).toBe(false);
     await submit();
 
@@ -770,7 +799,7 @@ describe("the optional composer actions", () => {
 
   it("carries typed context on the request rather than as a second message", async () => {
     render({ composerOffers: [{ kind: "reassessment" }] });
-    act(() => buttonNamed("Request reassessment")!.click());
+    act(() => buttonNamed("Request Reassessment")!.click());
     await act(async () => type(composer()!, "Fixed in build 2.1."));
     await submit();
 
@@ -797,7 +826,7 @@ describe("the optional composer actions", () => {
 
   it("attaches a file to a reassessment request", async () => {
     render({ composerOffers: [{ kind: "reassessment" }] });
-    act(() => buttonNamed("Request reassessment")!.click());
+    act(() => buttonNamed("Request Reassessment")!.click());
     const file = attach();
     await submit();
 
@@ -818,7 +847,7 @@ describe("the optional composer actions", () => {
         .querySelector<HTMLButtonElement>("button[aria-label='Remove change classification']")!
         .click(),
     );
-    act(() => buttonNamed("Request reassessment")!.click());
+    act(() => buttonNamed("Request Reassessment")!.click());
     expect(fileInput()).not.toBeNull();
   });
 
@@ -857,7 +886,7 @@ describe("the optional composer actions", () => {
       composerOffers: [{ kind: "reassessment" }],
       onSubmit: () => Promise.reject(new Error("Example transport failure.")),
     });
-    act(() => buttonNamed("Request reassessment")!.click());
+    act(() => buttonNamed("Request Reassessment")!.click());
     await act(async () => type(composer()!, "Fixed in build 2.1."));
     await submit();
 
@@ -874,7 +903,7 @@ describe("the optional composer actions", () => {
       ],
     });
 
-    const trigger = buttonNamed("Request reassessment")!;
+    const trigger = buttonNamed("Request Reassessment")!;
     expect(trigger.disabled).toBe(true);
     const note = document.getElementById(trigger.getAttribute("aria-describedby") as string);
     expect(note?.textContent).toBe("Submit your fix on the remediation ticket first.");
@@ -887,12 +916,12 @@ describe("the optional composer actions", () => {
     });
 
     expect(buttonNamed("Change classification")).toBeUndefined();
-    expect(buttonNamed("Request reassessment")).toBeUndefined();
+    expect(buttonNamed("Request Reassessment")).toBeUndefined();
   });
 
   it("keeps them outside the scrolling feed", () => {
     render({ composerOffers: [{ kind: "reassessment" }] });
-    expect(feed().contains(buttonNamed("Request reassessment")!)).toBe(false);
+    expect(feed().contains(buttonNamed("Request Reassessment")!)).toBe(false);
   });
 });
 
@@ -1023,7 +1052,7 @@ describe("sending with the keyboard", () => {
   it("carries a reassessment request, with or without a message", async () => {
     render({ composerOffers: [{ kind: "reassessment" }] });
     const offer = [...container.querySelectorAll("button")].find(
-      (button) => button.textContent?.trim() === "Request reassessment",
+      (button) => button.textContent?.trim() === "Request Reassessment",
     );
     await act(async () => offer?.click());
     await press(composer()!);
@@ -1065,6 +1094,26 @@ describe("attachments on workflow events", () => {
     });
 
     expect(feedItems()[0].textContent).toContain("example-evidence.png");
+  });
+
+  it("shows risk acceptance, its retraction and its ending as workflow events", () => {
+    render({
+      entries: [
+        entry("risk_accepted", { message: "Compensated by server-side checks." }),
+        entry("risk_acceptance_retracted", { message: "The check was removed." }),
+        entry("risk_acceptance_ended", {
+          author_id: null,
+          metadata: { previous_status: "at_risk", new_status: "reduced_risk" },
+        }),
+      ],
+    });
+
+    const [accepted, retracted, ended] = feedItems();
+    expect(accepted.textContent).toContain("Risk accepted");
+    expect(accepted.textContent).toContain("Compensated by server-side checks.");
+    expect(retracted.textContent).toContain("Risk acceptance retracted");
+    expect(retracted.textContent).toContain("The check was removed.");
+    expect(ended.textContent).toContain("Risk acceptance ended: the risk is now Reduced Risk");
   });
 
   it("offers a download wherever a file is listed, message or workflow event", () => {

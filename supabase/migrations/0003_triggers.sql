@@ -40,3 +40,10 @@ create trigger trg_touch_risk_conversation after insert on risk_conversation_ent
 
 create trigger trg_enforce_retest_request_permissions before insert on retest_runs
   for each row execute function enforce_retest_request_permissions();
+
+-- Deferred to commit so the ending is recorded after the change that caused it.
+create constraint trigger trg_end_risk_acceptance_on_reduced_risk
+  after insert on finding_history
+  deferrable initially deferred
+  for each row when (new.new_status = 'reduced_risk')
+  execute function end_risk_acceptance_on_reduced_risk();

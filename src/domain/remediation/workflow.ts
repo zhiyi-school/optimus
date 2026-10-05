@@ -26,6 +26,7 @@ export type RemediationReasonCode =
   | "approach_permission"
   | "approach_not_remediation"
   | "approach_withdrawn"
+  | "approach_risk_accepted"
   | "approach_security_finalised"
   | "approach_security_owned"
   | "reassessment_permission";
@@ -47,6 +48,8 @@ export interface RemediationWorkflowInput {
   retests: RetestRun[] | undefined;
   mayEdit: boolean;
   mayRequest: boolean;
+  /** Remediation is paused while the risk's acceptance is in force. */
+  riskAccepted?: boolean;
 }
 
 export interface RemediationWorkflow {
@@ -82,7 +85,7 @@ export function remediationWorkflow(input: RemediationWorkflowInput): Remediatio
     ? liveControls([selected], input.controls ?? [], input.steps ?? [])[0]
     : undefined;
 
-  const approachChangeBlock = approachBlock(input.ticket, input.mayEdit);
+  const approachChangeBlock = approachBlock(input.ticket, input.mayEdit, input.riskAccepted ?? false);
   const reassessmentBlock = reassessmentBlockFor(input);
 
   const workflow = {
@@ -97,7 +100,7 @@ export function remediationWorkflow(input: RemediationWorkflowInput): Remediatio
     complete:
       input.definitionsState === "ready" && !replaced && reconciled &&
       selectedApproachComplete(liveControl),
-    editable: input.mayEdit && canEditRemediation(input.ticket),
+    editable: input.mayEdit && !input.riskAccepted && canEditRemediation(input.ticket),
     approachChangeBlock,
     reassessmentBlock,
   };
@@ -124,8 +127,10 @@ export function remediationWorkflow(input: RemediationWorkflowInput): Remediatio
 function approachBlock(
   ticket: Ticket | null | undefined,
   mayEdit: boolean,
+  riskAccepted: boolean,
 ): RemediationBlock | null {
   if (!mayEdit) return { code: "approach_permission" };
+  if (riskAccepted) return { code: "approach_risk_accepted" };
   if (!ticket || ticket.type !== "remediation") return { code: "approach_not_remediation" };
   if (canSelectApproach(ticket)) return null;
   if (ticket.status === "withdrawn") return { code: "approach_withdrawn" };

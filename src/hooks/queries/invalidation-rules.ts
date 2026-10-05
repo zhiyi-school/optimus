@@ -7,6 +7,7 @@ import {
   automationKeys,
   conversationKeys,
   evidenceKeys,
+  riskAcceptanceKeys,
   ticketKeys,
 } from "@/hooks/queries/keys";
 
@@ -25,6 +26,7 @@ export const dashboardSyncInvalidationPrefixes = [
   conversationKeys.entriesPrefix(),
   automationKeys.testHistoryPrefix(),
   automationKeys.reportsPrefix(),
+  riskAcceptanceKeys.prefix(),
 ] as const;
 
 /** Keys to refresh after a conversation changes: its entries and all attachments. */
@@ -40,6 +42,22 @@ export function conversationEntryInvalidationKeys(conversationId: string) {
 /** Keys to refresh after conversation attachments are uploaded. */
 export function conversationAttachmentInvalidationKeys() {
   return [conversationKeys.attachments()] as const;
+}
+
+/** Keys to refresh after a risk is accepted or its acceptance retracted. */
+export function riskAcceptanceInvalidationKeys(conversationId: string, findingId: string | undefined) {
+  return [
+    ...conversationInvalidationKeys(conversationId),
+    riskAcceptanceKeys.prefix(),
+    ticketKeys.findingRetests(findingId),
+    ticketKeys.byFinding(findingId),
+    ticketKeys.withRelations(),
+    ticketKeys.listPrefix(),
+    ticketKeys.detailPrefix(),
+    assessmentKeys.detailPrefix(),
+    assessmentKeys.all(),
+    ticketKeys.metrics(),
+  ] as const;
 }
 
 /** Keys to refresh after a ticket lifecycle change, plus the linked finding. */

@@ -10,7 +10,7 @@ import { useApplications } from "@/hooks/queries/reference";
 import { useFindings } from "@/hooks/queries/evidence";
 import { useTickets } from "@/hooks/queries/tickets";
 import { createDebug } from "@/lib/debug";
-import { preferredDeveloperRisk } from "@/domain/remediation/resolve-rules";
+import { acceptedFindingIds, preferredDeveloperRisk } from "@/domain/remediation/resolve-rules";
 
 const debug = createDebug("pages:resolve:application");
 
@@ -20,6 +20,7 @@ export default function ResolveApplication() {
   const applications = useApplications();
   const findings = useFindings({ applicationId });
   const tickets = useTickets({ type: "remediation", applicationId });
+  const acceptanceTickets = useTickets({ type: "risk_acceptance", status: "accepted", applicationId });
 
   const application = applications.data?.find((candidate) => candidate.id === applicationId);
 
@@ -39,7 +40,11 @@ export default function ResolveApplication() {
     );
   }
 
-  const riskId = preferredDeveloperRisk(findings.data, tickets.data);
+  const riskId = preferredDeveloperRisk(
+    findings.data,
+    tickets.data,
+    acceptedFindingIds(acceptanceTickets.data),
+  );
   if (riskId) {
     return (
       <Navigate

@@ -191,11 +191,15 @@ create policy retest_runs_update on retest_runs for update to authenticated
 
 create policy risk_acceptance_select on risk_acceptance for select to authenticated
   using (can_access_ticket(ticket_id));
+-- Clients may only open a pending request; accept_risk_entry records acceptances.
 create policy risk_acceptance_insert on risk_acceptance for insert to authenticated
   with check (
     requested_by = auth.uid()
     and (has_role('developer') or has_role('security'))
     and can_access_ticket(ticket_id)
+    and coalesce(decision, 'pending') = 'pending'
+    and ended_at is null
+    and end_reason is null
   );
 create policy risk_acceptance_update on risk_acceptance for update to authenticated
   using (has_role('security')) with check (has_role('security'));

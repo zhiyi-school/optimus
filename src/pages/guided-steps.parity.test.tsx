@@ -127,6 +127,7 @@ vi.mock("@/test-support/query-hooks", () => {
     error: undefined,
   };
   return {
+    useActiveRiskAcceptance: () => ({ ...idle, data: null }),
     useAssessment: () => ({ ...idle, data: { application: { platform: "ios" } } }),
     useRiskCatalogue: () => ({
       ...idle,

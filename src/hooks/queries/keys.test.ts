@@ -4,9 +4,12 @@ import {
   automationKeys,
   conversationKeys,
   evidenceKeys,
+  riskAcceptanceKeys,
   ticketKeys,
 } from "@/hooks/queries/keys";
 import {
+  dashboardSyncInvalidationPrefixes,
+  riskAcceptanceInvalidationKeys,
   conversationAttachmentInvalidationKeys,
   conversationEntryInvalidationKeys,
   controlProgressInvalidationKeys,
@@ -78,5 +81,14 @@ describe("domain invalidation rules", () => {
       "finding",
       "finding-1",
     ]);
+  });
+
+  it("refreshes a risk's acceptance after a sync or an acceptance change", () => {
+    expect(riskAcceptanceKeys.activeForFinding("finding-1")).toEqual(["riskAcceptance", "finding-1"]);
+    expect(dashboardSyncInvalidationPrefixes).toContainEqual(["riskAcceptance"]);
+    const keys = riskAcceptanceInvalidationKeys("conversation-1", "finding-1");
+    expect(keys).toContainEqual(["riskAcceptance"]);
+    expect(keys).toContainEqual(["riskConversationEntries", "conversation-1"]);
+    expect(keys).toContainEqual(["findingRetests", "finding-1"]);
   });
 });

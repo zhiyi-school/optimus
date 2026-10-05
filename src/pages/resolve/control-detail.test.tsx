@@ -111,6 +111,8 @@ const controlRow = {
   updated_at: "2026-01-01T00:00:00Z",
 } as TicketControl;
 
+let activeAcceptance: { id: string } | null = null;
+
 vi.mock("@/database/client", () => ({
   ATTACHMENTS_BUCKET: "ticket-attachments",
   EVIDENCE_BUCKET: "evidence",
@@ -137,6 +139,7 @@ vi.mock("@/hooks/queries/risk-acceptance", async () => await import("@/test-supp
 vi.mock("@/test-support/query-hooks", () => {
   const idle = { data: undefined, isLoading: false, isError: false, refetch: () => {} };
   return {
+    useActiveRiskAcceptance: () => ({ ...idle, data: activeAcceptance }),
     useTicket: () => ({
       ...idle,
       data: ticketRow,
@@ -161,6 +164,7 @@ let container: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
+  activeAcceptance = null;
   roles = ["developer"];
   ticketRow = ticket();
   definition = control([
@@ -519,5 +523,23 @@ describe("remediation metadata inside the guided card", () => {
 
     expect(text()).toContain("marked deprecated");
     expect(text()).toContain("Only the developers assigned to this application can record progress");
+  });
+});
+
+describe("the steps while the risk is accepted", () => {
+  it("keeps the steps readable but read-only, and says how to resume", () => {
+    activeAcceptance = { id: "acceptance-1" };
+    render();
+
+    expect(buttonLabelled("Mark complete")?.disabled).toBe(true);
+    expect(text()).not.toContain("Add a note");
+    expect(text()).toContain(
+      "This risk is accepted, so remediation is paused. Retract the acceptance in the conversation to resume remediation.",
+    );
+  });
+
+  it("lets the developer record progress again once the acceptance is retracted", () => {
+    render();
+    expect(buttonLabelled("Mark complete")?.disabled).toBe(false);
   });
 });

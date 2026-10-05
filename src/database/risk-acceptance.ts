@@ -1,5 +1,5 @@
 /**
- * Supabase operations on risk acceptance requests and their review decisions.
+ * Supabase operations on risk acceptance: developer acceptance and retraction, and the request-and-review records.
  */
 
 import { supabase } from "@/database/client";
@@ -87,6 +87,75 @@ export const riskAcceptanceData = {
     }
     debug("fetched risk acceptance", { ticketId, found: !!data, decision: data?.decision });
     return data;
+  },
+
+  /** Fetches the acceptance in force for a finding, or null. */
+  async getActiveForFinding(findingId: string): Promise<RiskAcceptance | null> {
+    debug("fetching active risk acceptance", { findingId });
+    const { data, error } = await supabase
+      .from("risk_acceptance")
+      .select("*")
+      .eq("finding_id", findingId)
+      .eq("decision", "accepted")
+      .is("ended_at", null)
+      .maybeSingle();
+    if (error) {
+      debug("fetching active risk acceptance failed", { findingId, code: error.code, message: error.message });
+      throw error;
+    }
+    debug("fetched active risk acceptance", { findingId, acceptanceId: data?.id ?? null });
+    return data;
+  },
+
+  /** Accepts a risk once per submission, cancelling its outstanding reassessments; a retry returns the same acceptance. */
+  async accept(input: {
+    conversationId: string;
+    findingId: string;
+    reason: string;
+    /** One intentional Send. A retry of it resolves to the acceptance it already made. */
+    submissionId: string;
+  }): Promise<{ acceptance: RiskAcceptance; entryId: string }> {
+    debug("rpc accept_risk_entry", {
+      conversationId: input.conversationId,
+      findingId: input.findingId,
+      submissionId: input.submissionId,
+      reasonLength: input.reason.trim().length,
+    });
+    const { data, error } = await supabase.rpc("accept_risk_entry", {
+      p_conversation_id: input.conversationId,
+      p_finding_id: input.findingId,
+      p_reason: input.reason.trim(),
+      p_submission_id: input.submissionId,
+    });
+    if (error) {
+      debug("rpc accept_risk_entry failed", { code: error.code, message: error.message });
+      throw error;
+    }
+    const payload = data as { acceptance: RiskAcceptance; entry_id: string };
+    debug("risk accepted", { acceptanceId: payload.acceptance?.id, entryId: payload.entry_id });
+    return { acceptance: payload.acceptance, entryId: payload.entry_id };
+  },
+
+  /** Retracts a risk acceptance with a required reason; a retry returns the retraction already recorded. */
+  async retract(input: {
+    acceptanceId: string;
+    reason: string;
+  }): Promise<{ acceptance: RiskAcceptance; entryId: string }> {
+    debug("rpc retract_risk_acceptance", {
+      acceptanceId: input.acceptanceId,
+      reasonLength: input.reason.trim().length,
+    });
+    const { data, error } = await supabase.rpc("retract_risk_acceptance", {
+      p_acceptance_id: input.acceptanceId,
+      p_reason: input.reason.trim(),
+    });
+    if (error) {
+      debug("rpc retract_risk_acceptance failed", { acceptanceId: input.acceptanceId, code: error.code, message: error.message });
+      throw error;
+    }
+    const payload = data as { acceptance: RiskAcceptance; entry_id: string };
+    debug("risk acceptance retracted", { acceptanceId: input.acceptanceId, entryId: payload.entry_id });
+    return { acceptance: payload.acceptance, entryId: payload.entry_id };
   },
 
   /** Lists risk acceptance requests awaiting a decision, newest first. */

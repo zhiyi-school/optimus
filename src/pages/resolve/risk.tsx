@@ -24,6 +24,7 @@ import { assessmentApi } from "@/automation-api/endpoints";
 import { createDebug } from "@/lib/debug";
 import { PlaintextLiteralsCard } from "@/components/evidence/plaintext-literals";
 import {
+  acceptedFindingIds,
   activeRemediationTicket,
   developerRiskOrder,
   developerTicketLabel,
@@ -49,6 +50,8 @@ function RiskPage() {
   const application = applications.data?.find((candidate) => candidate.id === applicationId);
   const findings = useFindings({ applicationId });
   const tickets = useTickets({ type: "remediation", applicationId });
+  const acceptanceTickets = useTickets({ type: "risk_acceptance", status: "accepted", applicationId });
+  const accepted = useMemo(() => acceptedFindingIds(acceptanceTickets.data), [acceptanceTickets.data]);
   const { data: risks } = useRiskCatalogue(application?.platform);
 
   const finding = useMemo(
@@ -99,7 +102,8 @@ function RiskPage() {
         const related =
           activeRemediationTicket(finding.id, tickets.data) ??
           resumableRemediationTicket(finding.id, tickets.data);
-        const label = developerTicketLabel(related?.status);
+        // An acceptance in force is the risk's state, whatever its remediation ticket says.
+        const label = developerTicketLabel(accepted.has(finding.id) ? "accepted" : related?.status);
         return {
           riskId: finding.test_id as string,
           name: risks?.find((entry) => entry.risk_id === finding.test_id)?.name ?? finding.title,
@@ -107,7 +111,7 @@ function RiskPage() {
           note: label ? { label: label.label, tone: label.tone } : undefined,
         };
       }),
-    [findings.data, risks, tickets.data],
+    [findings.data, risks, tickets.data, accepted],
   );
 
   const tested = useMemo(
@@ -130,7 +134,9 @@ function RiskPage() {
   }
 
   const RiskIcon = riskIcon(risk?.name ?? finding?.title ?? "");
-  const ticketLabel = developerTicketLabel(ticket?.status);
+  const ticketLabel = developerTicketLabel(
+    finding && accepted.has(finding.id) ? "accepted" : ticket?.status,
+  );
 
   return (
     <RiskWorkspace

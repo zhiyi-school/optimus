@@ -23,6 +23,9 @@ let runHistory: unknown[] = [];
 let analysisDocument: unknown = undefined;
 let riskDescription = "Example risk description.";
 const reassessmentInputs: { ticketId: string | null }[] = [];
+let activeAcceptance: { id: string } | null = null;
+const acceptanceInputs: { findingId: string; reason: string; submissionId: string }[] = [];
+const retractionInputs: { acceptanceId: string; findingId: string; reason: string }[] = [];
 
 const CONTROL = "example-feature-01-risk-01-control-01";
 let definitions: unknown[] = [];
@@ -180,6 +183,21 @@ vi.mock("@/test-support/query-hooks", () => {
         return Promise.resolve({ run: { id: "retest-1" }, entryId: "entry-1" });
       },
     }),
+    useActiveRiskAcceptance: () => ({ ...idle, data: activeAcceptance }),
+    useAcceptRisk: () => ({
+      ...mutation,
+      mutateAsync: (input: { findingId: string; reason: string; submissionId: string }) => {
+        acceptanceInputs.push(input);
+        return Promise.resolve({ acceptance: { id: "acceptance-1" }, entryId: "entry-accepted" });
+      },
+    }),
+    useRetractRiskAcceptance: () => ({
+      ...mutation,
+      mutateAsync: (input: { acceptanceId: string; findingId: string; reason: string }) => {
+        retractionInputs.push(input);
+        return Promise.resolve({ acceptance: { id: input.acceptanceId }, entryId: "entry-retracted" });
+      },
+    }),
     useProfiles: () => ({ ...idle, data: [] }),
     useTestRunHistory: () => ({ ...idle, data: runHistory }),
     useIpaAnalysis: () => ({ ...idle, data: analysisDocument }),
@@ -220,6 +238,9 @@ beforeEach(() => {
   analysisDocument = undefined;
   riskDescription = "Example risk description.";
   reassessmentInputs.length = 0;
+  activeAcceptance = null;
+  acceptanceInputs.length = 0;
+  retractionInputs.length = 0;
   completedApproach();
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -634,7 +655,7 @@ describe("the reassessment actions in the developer's conversation", () => {
     tickets = [ticket({ status: "in_progress" })];
     render();
 
-    const request = buttonLabelled("Request reassessment")!;
+    const request = buttonLabelled("Request Reassessment")!;
     expect(request.disabled).toBe(false);
     expect(container.querySelector("form")?.contains(request)).toBe(true);
   });
@@ -659,7 +680,7 @@ describe("the reassessment actions in the developer's conversation", () => {
     ];
     render();
 
-    const request = buttonLabelled("Request reassessment")!;
+    const request = buttonLabelled("Request Reassessment")!;
     expect(request.disabled).toBe(false);
     expect(request.getAttribute("aria-describedby")).toBeNull();
   });
@@ -669,14 +690,14 @@ describe("the reassessment actions in the developer's conversation", () => {
     stepRows = [];
     render();
 
-    expect(buttonLabelled("Request reassessment")!.disabled).toBe(false);
+    expect(buttonLabelled("Request Reassessment")!.disabled).toBe(false);
   });
 
   it("offers the request straight from an in-progress remediation once its steps are done", () => {
     tickets = [ticket({ status: "in_progress" })];
     render();
 
-    const request = buttonLabelled("Request reassessment")!;
+    const request = buttonLabelled("Request Reassessment")!;
     expect(request.disabled).toBe(false);
     expect(text()).not.toContain("Submit");
   });
@@ -688,7 +709,7 @@ describe("the reassessment actions in the developer's conversation", () => {
     const composer = container.querySelector("textarea") as HTMLTextAreaElement;
     composer.value = "Please look again.";
     composer.dispatchEvent(new Event("input", { bubbles: true }));
-    act(() => buttonLabelled("Request reassessment")!.click());
+    act(() => buttonLabelled("Request Reassessment")!.click());
     await act(async () => buttonLabelled("Send")!.click());
 
     expect(reassessmentInputs).toHaveLength(1);
@@ -702,7 +723,7 @@ describe("the reassessment actions in the developer's conversation", () => {
     const composer = container.querySelector("textarea") as HTMLTextAreaElement;
     composer.value = "Fixed in build 2.1.";
     composer.dispatchEvent(new Event("input", { bubbles: true }));
-    act(() => buttonLabelled("Request reassessment")!.click());
+    act(() => buttonLabelled("Request Reassessment")!.click());
     await act(async () => buttonLabelled("Send")!.click());
 
     expect(reassessmentInputs).toHaveLength(1);
@@ -724,7 +745,7 @@ describe("the reassessment actions in the developer's conversation", () => {
     render();
 
     expect(buttonLabelled("Withdraw reassessment")).toBeUndefined();
-    expect(buttonLabelled("Request reassessment")?.disabled).toBe(false);
+    expect(buttonLabelled("Request Reassessment")?.disabled).toBe(false);
   });
 
   it("offers no withdrawal to a reader who also holds the security role", () => {
@@ -742,7 +763,7 @@ describe("the reassessment actions in the developer's conversation", () => {
     render();
 
     expect(buttonLabelled("Withdraw reassessment")).toBeUndefined();
-    expect(buttonLabelled("Request reassessment")?.disabled).toBe(false);
+    expect(buttonLabelled("Request Reassessment")?.disabled).toBe(false);
   });
 
   it("offers another request even while security is running one", () => {
@@ -751,7 +772,7 @@ describe("the reassessment actions in the developer's conversation", () => {
     render();
 
     expect(buttonLabelled("Withdraw reassessment")).toBeUndefined();
-    expect(buttonLabelled("Request reassessment")?.disabled).toBe(false);
+    expect(buttonLabelled("Request Reassessment")?.disabled).toBe(false);
   });
 
   it("treats a cancelled request as history, offering the reassessment again", () => {
@@ -767,7 +788,7 @@ describe("the reassessment actions in the developer's conversation", () => {
     render();
 
     expect(buttonLabelled("Withdraw reassessment")).toBeUndefined();
-    const request = buttonLabelled("Request reassessment");
+    const request = buttonLabelled("Request Reassessment");
     expect(request).toBeDefined();
     expect(request?.disabled).toBe(false);
   });
@@ -787,6 +808,123 @@ describe("the reassessment actions in the developer's conversation", () => {
     render();
 
     expect(buttonLabelled("Withdraw reassessment")).toBeUndefined();
-    expect(buttonLabelled("Request reassessment")).toBeUndefined();
+    expect(buttonLabelled("Request Reassessment")).toBeUndefined();
+  });
+});
+
+describe("accepting the risk from the developer's conversation", () => {
+  function buttonLabelled(label: string) {
+    return [...container.querySelectorAll("button")].find((b) =>
+      (b.textContent ?? "").includes(label),
+    );
+  }
+
+  function type(message: string) {
+    const composer = container.querySelector("textarea") as HTMLTextAreaElement;
+    // React only sees a change made through the native setter.
+    const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+    act(() => {
+      setValue.call(composer, message);
+      composer.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
+
+  it("offers Accept Risk beside Request Reassessment inside the composer", () => {
+    render();
+
+    const accept = buttonLabelled("Accept Risk")!;
+    const request = buttonLabelled("Request Reassessment")!;
+    expect(accept.disabled).toBe(false);
+    expect(container.querySelector("form")?.contains(accept)).toBe(true);
+    expect(accept.parentElement?.parentElement).toBe(request.parentElement?.parentElement);
+  });
+
+  it("records the acceptance with the message as its reason", async () => {
+    render();
+
+    act(() => buttonLabelled("Accept Risk")!.click());
+    expect(buttonLabelled("Send")!.disabled).toBe(true);
+    type("Compensated by server-side checks.");
+    await act(async () => buttonLabelled("Send")!.click());
+
+    expect(acceptanceInputs).toHaveLength(1);
+    expect(acceptanceInputs[0]).toMatchObject({
+      findingId: "example-finding-id",
+      reason: "Compensated by server-side checks.",
+    });
+    expect(reassessmentInputs).toHaveLength(0);
+  });
+
+  it("replaces Request Reassessment and Accept Risk with a retraction once accepted", () => {
+    activeAcceptance = { id: "acceptance-1" };
+    render();
+
+    expect(buttonLabelled("Request Reassessment")).toBeUndefined();
+    expect(buttonLabelled("Accept Risk")).toBeUndefined();
+    expect(buttonLabelled("Retract Acceptance")!.disabled).toBe(false);
+  });
+
+  it("retracts the acceptance in force with the message as its reason", async () => {
+    activeAcceptance = { id: "acceptance-1" };
+    render();
+
+    act(() => buttonLabelled("Retract Acceptance")!.click());
+    type("The server-side check was removed.");
+    await act(async () => buttonLabelled("Send")!.click());
+
+    expect(retractionInputs).toEqual([
+      { acceptanceId: "acceptance-1", findingId: "example-finding-id", reason: "The server-side check was removed." },
+    ]);
+  });
+
+  it("explains why a Reduced Risk result cannot be accepted", () => {
+    findings = [finding({ status: "reduced_risk" })];
+    render();
+
+    const accept = buttonLabelled("Accept Risk")!;
+    expect(accept.disabled).toBe(true);
+    expect(text()).toContain("This risk is already Reduced Risk, so there is nothing to accept.");
+  });
+
+  it("offers a read-only viewer neither acceptance nor retraction", () => {
+    roles = ["cio"];
+    render();
+    expect(buttonLabelled("Accept Risk")).toBeUndefined();
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    activeAcceptance = { id: "acceptance-1" };
+    render();
+    expect(buttonLabelled("Retract Acceptance")).toBeUndefined();
+  });
+});
+
+describe("the accepted risk's status on the risk page", () => {
+  function acceptanceTicket() {
+    return ticket({
+      id: "example-acceptance-ticket-id",
+      type: "risk_acceptance",
+      status: "accepted",
+    });
+  }
+
+  it("shows Risk accepted, not the remediation's status, once the risk is accepted", () => {
+    tickets = [ticket({ status: "withdrawn", withdrawn_at: "2026-01-02T00:00:00Z" }), acceptanceTicket()];
+    render();
+
+    expect(text()).toContain("Risk accepted");
+    expect(text()).not.toContain("Withdrawn by developer");
+    expect(text()).not.toContain("In progress");
+  });
+
+  it("shows the remediation's status again once the acceptance is no longer in force", () => {
+    tickets = [
+      ticket({ status: "in_progress" }),
+      { ...acceptanceTicket(), status: "withdrawn" } as Ticket,
+    ];
+    render();
+
+    expect(text()).toContain("In progress");
+    expect(text()).not.toContain("Risk accepted");
   });
 });

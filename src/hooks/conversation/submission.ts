@@ -1,5 +1,5 @@
 /**
- * Record-then-attach submission for conversation messages, classifications and reassessments.
+ * Record-then-attach submission for conversation messages, classifications, reassessments and risk acceptance.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -10,6 +10,7 @@ import {
   useSendRiskMessage,
 } from "@/hooks/queries/conversations";
 import { useClassifyRisk } from "@/hooks/queries/tickets";
+import { useAcceptRisk, useRetractRiskAcceptance } from "@/hooks/queries/risk-acceptance";
 import {
   conversationAttachmentData,
   createPendingConversationAttachment,
@@ -23,7 +24,9 @@ const debug = createDebug("hooks:conversation:submission");
 
 export type ComposerAction =
   | { kind: "classification"; status: FindingStatus }
-  | { kind: "reassessment" };
+  | { kind: "reassessment" }
+  | { kind: "acceptance" }
+  | { kind: "retraction" };
 
 export type ComposerActionKind = ComposerAction["kind"];
 
@@ -57,10 +60,14 @@ export function useConversationSubmission(input: {
   conversationId: string | undefined;
   findingId: string | undefined;
   ticketId: string | null | undefined;
+  /** The acceptance in force, which a retraction ends. */
+  acceptanceId?: string | null;
 }) {
   const sendMessage = useSendRiskMessage(input.conversationId);
   const classify = useClassifyRisk(input.findingId, input.conversationId);
   const request = useRequestReassessment(input.conversationId);
+  const accept = useAcceptRisk(input.conversationId);
+  const retract = useRetractRiskAcceptance(input.conversationId);
   const saveAttachment = useSaveConversationAttachment();
   const [state, setState] = useState<SubmissionState>({ phase: "idle" });
   const [failure, setFailure] = useState<unknown>(null);
@@ -186,6 +193,8 @@ export function useConversationSubmission(input: {
     sendMessage.reset();
     classify.reset();
     request.reset();
+    accept.reset();
+    retract.reset();
     try {
       let entryId: string;
       if (submission.action?.kind === "classification") {
@@ -200,6 +209,20 @@ export function useConversationSubmission(input: {
           ticketId: input.ticketId ?? null,
           message: submission.message,
           submissionId,
+        });
+        entryId = result.entryId;
+      } else if (submission.action?.kind === "acceptance") {
+        const result = await accept.mutateAsync({
+          findingId: input.findingId as string,
+          reason: submission.message,
+          submissionId,
+        });
+        entryId = result.entryId;
+      } else if (submission.action?.kind === "retraction") {
+        const result = await retract.mutateAsync({
+          acceptanceId: input.acceptanceId as string,
+          findingId: input.findingId as string,
+          reason: submission.message,
         });
         entryId = result.entryId;
       } else {
@@ -262,7 +285,14 @@ export function useConversationSubmission(input: {
     abandonAttachment,
     phase: state.phase,
     pending: state.phase === "recording" || state.phase === "attaching",
-    error: failure ?? sendMessage.error ?? classify.error ?? request.error ?? saveAttachment.error,
+    error:
+      failure ??
+      sendMessage.error ??
+      classify.error ??
+      request.error ??
+      accept.error ??
+      retract.error ??
+      saveAttachment.error,
     attachmentRetry: retry
       ? {
           entryId: retry.pending.entryId,

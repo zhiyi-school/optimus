@@ -2,8 +2,8 @@
 
 A role-aware dashboard for triaging mobile application security findings and
 running the remediation → reassessment workflow between Developer Teams, the
-Security Team, and the CIO. Risk acceptance is designed and in the schema, but
-not yet wired into the UI.
+Security Team, and the CIO. Developers can accept a risk, and retract that
+acceptance, from its conversation.
 
 This is a standalone frontend. It drives the automation backend
 (`mobile_playbook_automation`) for test execution, and uses

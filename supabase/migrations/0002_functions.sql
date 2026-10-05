@@ -206,6 +206,28 @@ begin
     return new;
   end if;
 
+  if coalesce(current_setting('app.accepting_risk', true), '') = old.id::text
+    and old.status = any(reconciled_to)
+    and new.status = any(restorable_to)
+    and new.type is not distinct from old.type
+    and new.finding_id is not distinct from old.finding_id
+    and new.application_id is not distinct from old.application_id
+    and new.withdrawn_at is not distinct from old.withdrawn_at
+    and new.closed_at is not distinct from old.closed_at then
+    return new;
+  end if;
+
+  if coalesce(current_setting('app.ending_risk_acceptance', true), '') = old.id::text
+    and old.type = 'risk_acceptance'
+    and old.status = 'accepted'
+    and new.status in ('withdrawn', 'closed')
+    and new.type is not distinct from old.type
+    and new.finding_id is not distinct from old.finding_id
+    and new.application_id is not distinct from old.application_id
+    and new.withdrawn_at is not distinct from old.withdrawn_at then
+    return new;
+  end if;
+
   if has_role('security') or has_role('admin') then
     return new;
   end if;
@@ -332,6 +354,14 @@ begin
   if auth.role() is distinct from 'authenticated' then
     return new;
   end if;
+  -- Shares the lock accept_risk_entry takes, so a request and an acceptance never interleave.
+  perform 1 from findings where id = new.finding_id for share;
+  if exists (
+    select 1 from risk_acceptance
+    where finding_id = new.finding_id and decision = 'accepted' and ended_at is null
+  ) then
+    raise exception 'this risk has been accepted, so it cannot be reassessed until the acceptance is retracted';
+  end if;
   if has_role('security') then
     return new;
   end if;
@@ -351,7 +381,7 @@ end;
 $$;
 
 comment on function enforce_retest_request_permissions() is
-  'Gates a reassessment request on role and application access. A developer may ask from the risk conversation alone; a request that does name a ticket must name a remediation ticket opened against this risk. Neither remediation state, a selected approach, nor progress is a condition, and several requests may be outstanding at once. previous_ticket_status records only a pre-queue state, so withdrawing the last outstanding request restores something meaningful.';
+  'Gates a reassessment request on role and application access. A developer may ask from the risk conversation alone; a request that does name a ticket must name a remediation ticket opened against this risk. Neither remediation state, a selected approach, nor progress is a condition, and several requests may be outstanding at once, but none while the risk is accepted. previous_ticket_status records only a pre-queue state, so withdrawing the last outstanding request restores something meaningful.';
 
 -- Derives a remediation ticket's status from its outstanding reassessment requests.
 create function reconcile_reassessment_ticket_state(p_ticket_id uuid) returns text
@@ -601,6 +631,285 @@ begin
   return r;
 end;
 $$;
+
+-- Accepts a risk for the developer's team, cancels its reassessments and withdraws its remediation, recording each in the conversation.
+create function accept_risk_entry(p_conversation_id uuid, p_finding_id uuid, p_reason text, p_submission_id uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  cancellation constant text := 'Cancelled because the risk was accepted.';
+  c risk_conversations;
+  f findings;
+  a risk_acceptance;
+  t tickets;
+  run retest_runs;
+  cancelled_ids uuid[] := array[]::uuid[];
+  withdrawal constant text := 'Risk accepted';
+  remediation_id uuid;
+  restore_to text;
+  withdrawn_count integer := 0;
+  entry_id uuid;
+  note text := btrim(coalesce(p_reason, ''));
+begin
+  if auth.uid() is null then
+    raise exception 'you must be signed in to accept a risk';
+  end if;
+  if not has_role('developer') then
+    raise exception 'only a developer on this application''s team can accept its risk';
+  end if;
+  if not exists (select 1 from profiles where id = auth.uid() and is_active) then
+    raise exception 'this account is not active';
+  end if;
+  if note = '' then
+    raise exception 'accepting a risk needs a reason';
+  end if;
+  if p_conversation_id is null or p_submission_id is null then
+    raise exception 'accepting a risk needs a conversation and a submission id';
+  end if;
+
+  select * into c from risk_conversations where id = p_conversation_id;
+  if not found then
+    raise exception 'this conversation no longer exists';
+  end if;
+  if not can_access_risk_conversation(c.id) then
+    raise exception 'this risk conversation is outside your access';
+  end if;
+
+  -- The finding lock orders this against another acceptance or a reassessment request.
+  select * into f from findings where id = p_finding_id for update;
+  if not found then
+    raise exception 'this finding no longer exists';
+  end if;
+  if f.application_id is distinct from c.application_id
+    or f.test_id is distinct from c.risk_id then
+    raise exception 'that finding belongs to a different application risk';
+  end if;
+
+  -- A retry of the same submission resolves to the acceptance it already made.
+  select * into a
+  from risk_acceptance
+  where conversation_id = c.id
+    and requested_by = auth.uid()
+    and submission_id = p_submission_id;
+
+  if not found then
+    if f.status = 'reduced_risk' then
+      raise exception 'this risk is already Reduced Risk, so there is nothing to accept';
+    end if;
+    if exists (
+      select 1 from risk_acceptance
+      where finding_id = f.id and decision = 'accepted' and ended_at is null
+    ) then
+      raise exception 'this risk has already been accepted';
+    end if;
+
+    insert into tickets
+      (finding_id, application_id, type, status, title, created_by, risk_conversation_id)
+    values (f.id, f.application_id, 'risk_acceptance', 'accepted', 'Risk accepted: ' || f.title,
+            auth.uid(), c.id)
+    returning * into t;
+
+    insert into risk_acceptance
+      (ticket_id, finding_id, requested_by, reason, decision, conversation_id,
+       accepted_run_id, accepted_status, submission_id)
+    values (t.id, f.id, auth.uid(), note, 'accepted', c.id,
+            f.latest_test_run_id, f.status, p_submission_id)
+    returning * into a;
+
+    insert into risk_conversation_entries
+      (conversation_id, kind, author_id, message, metadata, source_ticket_id, sync_key)
+    values (
+      c.id, 'risk_accepted', auth.uid(), note,
+      jsonb_build_object('acceptance_id', a.id, 'finding_status', f.status,
+                         'run_id', f.latest_test_run_id),
+      t.id, 'risk-accepted::' || a.id::text
+    );
+
+    for run in
+      update retest_runs
+      set status = 'cancelled',
+          cancelled_at = now(),
+          cancelled_by = auth.uid(),
+          cancellation_reason = cancellation
+      where (conversation_id = c.id or finding_id = f.id)
+        and status in ('queued', 'running')
+      returning *
+    loop
+      cancelled_ids := cancelled_ids || run.id;
+      if run.conversation_id is not null then
+        insert into risk_conversation_entries
+          (conversation_id, kind, author_id, message, source_ticket_id, sync_key)
+        values (run.conversation_id, 'retest_withdrawn', auth.uid(), cancellation, run.ticket_id,
+                'retest-withdrawn::' || run.id::text)
+        on conflict (sync_key) where sync_key is not null do nothing;
+      end if;
+    end loop;
+
+    -- Every outstanding request was cancelled, so each linked remediation returns to
+    -- the state its earliest request recorded.
+    for remediation_id, restore_to in
+      select r.ticket_id,
+             coalesce(
+               (array_agg(r.previous_ticket_status order by r.created_at, r.id)
+                  filter (where r.previous_ticket_status is not null))[1],
+               'in_progress')
+      from retest_runs r
+      where r.id = any(cancelled_ids) and r.ticket_id is not null
+      group by r.ticket_id
+    loop
+      perform set_config('app.accepting_risk', remediation_id::text, true);
+      update tickets set status = restore_to, updated_at = now()
+      where id = remediation_id
+        and type = 'remediation'
+        and status in ('retest_requested', 'retest_in_progress');
+      perform set_config('app.accepting_risk', '', true);
+    end loop;
+
+    -- Remediation stops while the risk is accepted; its steps and progress stay as history.
+    for remediation_id in
+      update tickets
+      set status = 'withdrawn',
+          withdrawn_at = now(),
+          withdrawn_by = auth.uid(),
+          withdrawal_reason = withdrawal,
+          updated_at = now()
+      where finding_id = f.id
+        and type = 'remediation'
+        and status in ('open', 'in_progress', 'rejected')
+      returning id
+    loop
+      withdrawn_count := withdrawn_count + 1;
+      insert into risk_conversation_entries
+        (conversation_id, kind, author_id, message, source_ticket_id, sync_key)
+      values (c.id, 'remediation_withdrawn', auth.uid(), withdrawal, remediation_id,
+              'remediation-withdrawn::' || a.id::text || '::' || remediation_id::text)
+      on conflict (sync_key) where sync_key is not null do nothing;
+      insert into activity_log (actor_id, entity_type, entity_id, action, metadata)
+      values (auth.uid(), 'ticket', remediation_id, 'remediation_withdrawn',
+              jsonb_build_object('reason', withdrawal));
+    end loop;
+
+    insert into activity_log (actor_id, entity_type, entity_id, action, metadata)
+    values (
+      auth.uid(), 'ticket', t.id, 'risk_accepted',
+      jsonb_build_object('finding_id', f.id, 'cancelled_reassessments',
+                         coalesce(array_length(cancelled_ids, 1), 0),
+                         'withdrawn_remediations', withdrawn_count)
+    );
+  end if;
+
+  select id into entry_id
+  from risk_conversation_entries
+  where sync_key = 'risk-accepted::' || a.id::text;
+
+  return jsonb_build_object('acceptance', to_jsonb(a), 'entry_id', entry_id);
+end;
+$$;
+
+-- Retracts a risk acceptance for the developer's team and records the reason in the conversation.
+create function retract_risk_acceptance(p_acceptance_id uuid, p_reason text) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  a risk_acceptance;
+  entry_id uuid;
+  note text := btrim(coalesce(p_reason, ''));
+begin
+  if auth.uid() is null then
+    raise exception 'you must be signed in to retract a risk acceptance';
+  end if;
+  if not has_role('developer') then
+    raise exception 'only a developer on this application''s team can retract its risk acceptance';
+  end if;
+  if not exists (select 1 from profiles where id = auth.uid() and is_active) then
+    raise exception 'this account is not active';
+  end if;
+  if note = '' then
+    raise exception 'retracting a risk acceptance needs a reason';
+  end if;
+
+  select * into a from risk_acceptance where id = p_acceptance_id for update;
+  if not found then
+    raise exception 'this risk acceptance no longer exists';
+  end if;
+  if not can_access_ticket(a.ticket_id) then
+    raise exception 'this risk acceptance is outside your access';
+  end if;
+
+  if a.end_reason = 'retracted' then
+    -- A retry resolves to the retraction already recorded.
+    select id into entry_id
+    from risk_conversation_entries
+    where sync_key = 'risk-acceptance-ended::' || a.id::text;
+    return jsonb_build_object('acceptance', to_jsonb(a), 'entry_id', entry_id);
+  end if;
+  if a.ended_at is not null then
+    raise exception 'this risk acceptance already ended when the risk became Reduced Risk';
+  end if;
+  if a.decision is distinct from 'accepted' then
+    raise exception 'only an accepted risk can be retracted';
+  end if;
+
+  update risk_acceptance
+  set ended_at = now(), ended_by = auth.uid(), end_reason = 'retracted', end_note = note
+  where id = a.id
+  returning * into a;
+
+  perform set_config('app.ending_risk_acceptance', a.ticket_id::text, true);
+  update tickets set status = 'withdrawn', updated_at = now()
+  where id = a.ticket_id and status = 'accepted';
+  perform set_config('app.ending_risk_acceptance', '', true);
+
+  if a.conversation_id is not null then
+    insert into risk_conversation_entries
+      (conversation_id, kind, author_id, message, metadata, source_ticket_id, sync_key)
+    values (a.conversation_id, 'risk_acceptance_retracted', auth.uid(), note,
+            jsonb_build_object('acceptance_id', a.id), a.ticket_id,
+            'risk-acceptance-ended::' || a.id::text)
+    returning id into entry_id;
+  end if;
+
+  insert into activity_log (actor_id, entity_type, entity_id, action, metadata)
+  values (auth.uid(), 'ticket', a.ticket_id, 'risk_acceptance_retracted',
+          jsonb_build_object('finding_id', a.finding_id));
+
+  return jsonb_build_object('acceptance', to_jsonb(a), 'entry_id', entry_id);
+end;
+$$;
+
+-- Ends a risk's acceptance once its result becomes Reduced Risk and records that in the conversation.
+create function end_risk_acceptance_on_reduced_risk() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  a risk_acceptance;
+begin
+  for a in
+    update risk_acceptance
+    set ended_at = now(), ended_by = new.changed_by, end_reason = 'resolved'
+    where finding_id = new.finding_id and decision = 'accepted' and ended_at is null
+    returning *
+  loop
+    perform set_config('app.ending_risk_acceptance', a.ticket_id::text, true);
+    update tickets set status = 'closed', closed_at = now(), updated_at = now()
+    where id = a.ticket_id and status = 'accepted';
+    perform set_config('app.ending_risk_acceptance', '', true);
+
+    if a.conversation_id is not null then
+      insert into risk_conversation_entries
+        (conversation_id, kind, author_id, metadata, source_ticket_id, sync_key)
+      values (
+        a.conversation_id, 'risk_acceptance_ended', new.changed_by,
+        jsonb_build_object('acceptance_id', a.id, 'previous_status', new.previous_status,
+                           'new_status', new.new_status),
+        a.ticket_id, 'risk-acceptance-ended::' || a.id::text
+      )
+      on conflict (sync_key) where sync_key is not null do nothing;
+    end if;
+  end loop;
+  return null;
+end;
+$$;
+
+comment on function end_risk_acceptance_on_reduced_risk() is
+  'Runs at commit for each finding_history row whose new status is reduced_risk, from an automation result or a security reclassification. A result that stays At Risk or Inconclusive writes no such row, so the acceptance stays in force.';
 
 -- Changes a finding's classification and returns the finding with the conversation entry it recorded.
 create function classify_risk_entry(p_finding_id uuid, p_conversation_id uuid, p_status text, p_reason text) returns jsonb

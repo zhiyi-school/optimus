@@ -3,7 +3,7 @@
  */
 
 import { useState, type FormEvent, type KeyboardEvent } from "react";
-import { Paperclip, RefreshCw, ShieldCheck, X } from "lucide-react";
+import { BadgeCheck, Paperclip, RefreshCw, ShieldCheck, Undo2, X, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Textarea } from "@/components/ui/input";
@@ -23,8 +23,24 @@ const debug = createDebug("components:conversation:conversation-composer");
 
 const ACTION_LABEL: Record<ComposerActionKind, string> = {
   classification: "Change classification",
-  reassessment: "Request reassessment",
+  reassessment: "Request Reassessment",
+  acceptance: "Accept Risk",
+  retraction: "Retract Acceptance",
 };
+
+const ACTION_ICON: Record<ComposerActionKind, LucideIcon> = {
+  classification: ShieldCheck,
+  reassessment: RefreshCw,
+  acceptance: BadgeCheck,
+  retraction: Undo2,
+};
+
+// These actions are decisions on the record, so the message is their required reason.
+const REASON_REQUIRED: ReadonlySet<ComposerActionKind> = new Set([
+  "classification",
+  "acceptance",
+  "retraction",
+]);
 
 export interface ConversationComposerProps {
   currentProfileId: string | undefined;
@@ -60,9 +76,8 @@ export function ConversationComposer({
   const [action, setAction] = useState<ComposerAction | null>(null);
 
   const message = draft.trim();
-  // Classification is an audit decision, so its reason is the message and is required.
   const ready =
-    action?.kind === "classification" ? !!message : action?.kind === "reassessment" || !!message;
+    action && REASON_REQUIRED.has(action.kind) ? !!message : action?.kind === "reassessment" || !!message;
   const retryingAttachment = !!attachmentRetry;
 
   /** Selects an offered action with a default status, leaving the draft and file untouched. */
@@ -76,7 +91,7 @@ export function ConversationComposer({
               CLASSIFICATION_OPTIONS.find((option) => option.value !== offer.currentStatus)
                 ?.value ?? CLASSIFICATION_OPTIONS[0].value,
           }
-        : { kind: "reassessment" },
+        : { kind: offer.kind },
     );
   }
 
@@ -265,6 +280,7 @@ function ComposerOfferBar({
     <div className="mb-2 flex flex-wrap items-start gap-x-3 gap-y-1">
       {available.map((offer) => {
         const noteId = offer.blockedReason ? `composer-${offer.kind}-blocked` : undefined;
+        const Icon = ACTION_ICON[offer.kind];
         return (
           <div key={offer.kind} className="min-w-0">
             <button
@@ -274,11 +290,7 @@ function ComposerOfferBar({
               onClick={() => onSelect(offer)}
               className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {offer.kind === "classification" ? (
-                <ShieldCheck className="h-3.5 w-3.5" />
-              ) : (
-                <RefreshCw className="h-3.5 w-3.5" />
-              )}
+              <Icon className="h-3.5 w-3.5" />
               {ACTION_LABEL[offer.kind]}
             </button>
             {offer.blockedReason && (
@@ -334,8 +346,10 @@ function ComposerActionChip({
               ),
             )}
           </select>
-          <span className="text-xs text-muted-foreground">Your message is the reason.</span>
         </>
+      )}
+      {REASON_REQUIRED.has(action.kind) && (
+        <span className="text-xs text-muted-foreground">Your message is the reason.</span>
       )}
       <button
         type="button"

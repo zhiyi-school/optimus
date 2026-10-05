@@ -126,6 +126,8 @@ events in one feed.
   `has_role('security')`; `message`, `retest_requested`, `remediation_started`,
   `remediation_withdrawn` accept `developer` or `security`. `fix_submitted`
   entries recorded before `0032` stay readable, but no client can insert one.
+  `risk_accepted`, `risk_acceptance_retracted` and `risk_acceptance_ended` are
+  written only by the risk acceptance functions and trigger, never by a client.
   Every authenticated insert must set `author_id = auth.uid()`, so nobody can
   post under another name. Entries with no author come from the sync worker,
   which holds the service-role key and is not subject to these policies.
@@ -203,6 +205,36 @@ policies; `supabase/tests/legacy/0021_application_risk_conversations_rls.sql` co
 the identity, the merge and the historical placement. Both run only in the
 disposable container started by `npm run test:database`, own fixtures and all,
 ending in `rollback`.
+
+## Risk acceptance
+
+- **One acceptance is in force per risk.** An acceptance is in force while
+  `decision = 'accepted'` and `ended_at` is null, and the partial unique index
+  `risk_acceptance_one_active_per_finding` allows one such row per finding.
+  `accept_risk_entry()` also locks the finding, which orders it against a
+  concurrent acceptance or reassessment request.
+- **It records what it accepted and how it ended.** `accepted_run_id` and
+  `accepted_status` copy the finding's latest run and status at acceptance.
+  `end_reason` is `retracted` (with `end_note`, the required reason) or
+  `resolved`; `ended_at`, `ended_by` and `end_reason` are set together, and
+  the `risk_acceptance_end_fields` constraint keeps them consistent.
+- **A retried submission resolves to its acceptance.** `submission_id` and the
+  index on `(conversation_id, requested_by, submission_id)` work as they do for
+  reassessment requests.
+- **Reduced Risk ends an acceptance at commit.** The deferred constraint
+  trigger `trg_end_risk_acceptance_on_reduced_risk` fires for each
+  `finding_history` row whose `new_status` is `reduced_risk`, whether the sync
+  worker or `classify_risk_entry()` wrote it. Running at commit puts the ending
+  after the change that caused it in the conversation.
+- **Accepting stops remediation.** Since `0038`, `accept_risk_entry()` also
+  withdraws the risk's open remediation ticket with the reason "Risk accepted";
+  its approach and progress rows stay. The dashboard reads an acceptance in
+  force from the risk-acceptance ticket in `accepted`, which the functions keep
+  in step with the `risk_acceptance` row.
+- **Clients write only pending requests.** The `risk_acceptance_insert` policy
+  admits a row only with a `pending` decision and no ending; acceptance,
+  retraction and resolution go through the functions above, which run as the
+  owner.
 
 ## Assessment execution
 

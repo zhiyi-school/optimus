@@ -20,6 +20,8 @@ import {
 } from "@/hooks/queries/control-progress";
 import { useControlDetail, useControlSource, usePlaybookRevisionWatch } from "@/hooks/queries/playbook";
 import { useTicket } from "@/hooks/queries/tickets";
+import { useActiveRiskAcceptance } from "@/hooks/queries/risk-acceptance";
+import { RISK_ACCEPTED_REMEDIATION_PAUSED } from "@/domain/remediation/workflow-messages";
 import { createDebug } from "@/lib/debug";
 import { changedSinceCompleted, contentHashes } from "@/domain/remediation/control-content";
 import { liveControls } from "@/domain/remediation/resolve-rules";
@@ -46,6 +48,7 @@ export default function ControlDetail() {
   const steps = useTicketControlSteps(ticketId);
   const source = useControlSource(platform, controlId);
   const setStatus = useSetControlStepStatus(ticketId);
+  const riskAccepted = !!useActiveRiskAcceptance(ticket.data?.finding_id ?? undefined).data;
 
   const playbook = usePlaybookRevisionWatch(platform, !!ticketId);
 
@@ -70,7 +73,7 @@ export default function ControlDetail() {
         (live?.steps ?? []).flatMap((entry) => (entry.row ? [[entry.step.step_key, entry.row]] : [])),
       ),
       needsReview: changedSinceCompleted(live?.steps ?? [], hashesAtLoad.current),
-      editable: can("update_control_progress"),
+      editable: can("update_control_progress") && !riskAccepted,
       pending: setStatus.isPending,
       error: setStatus.isError ? setStatus.error : null,
       setStatus: (stepId, status, note) => {
@@ -84,7 +87,7 @@ export default function ControlDetail() {
         );
       },
     }),
-    [live, can, setStatus],
+    [live, can, setStatus, riskAccepted],
   );
 
   if (ticket.isLoading || control.isLoading) {
@@ -148,9 +151,11 @@ export default function ControlDetail() {
           notes={[
             control.data.status !== "active" &&
               `This control is marked ${control.data.status} and is not counted as required remediation work.`,
-            stepProgress.editable
-              ? "Implement the recommended fix, then verify it. Mark each step complete as you go."
-              : "You are reading this control. Only the developers assigned to this application can record progress against its steps.",
+            riskAccepted
+              ? RISK_ACCEPTED_REMEDIATION_PAUSED
+              : stepProgress.editable
+                ? "Implement the recommended fix, then verify it. Mark each step complete as you go."
+                : "You are reading this control. Only the developers assigned to this application can record progress against its steps.",
           ]}
         />
       }

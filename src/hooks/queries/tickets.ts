@@ -12,7 +12,7 @@ import { ticketData, type TicketFilters } from "@/database/tickets";
 import type { ControlReconciliation, FindingStatus } from "@/database/types";
 import { useInvalidateQueries } from "./invalidation";
 import { conversationInvalidationKeys, ticketLifecycleInvalidationKeys } from "./invalidation-rules";
-import { assessmentKeys, evidenceKeys, ticketKeys } from "@/hooks/queries/keys";
+import { assessmentKeys, evidenceKeys, riskAcceptanceKeys, ticketKeys } from "@/hooks/queries/keys";
 import { createDebug } from "@/lib/debug";
 
 const debug = createDebug("hooks:queries:tickets");
@@ -186,6 +186,7 @@ export function useClassifyRisk(findingId: string | undefined, conversationId: s
         ticketKeys.withRelations(),
         ticketKeys.listPrefix(),
         ticketKeys.metrics(),
+        riskAcceptanceKeys.prefix(),
         ...(conversationId ? conversationInvalidationKeys(conversationId) : []),
       ]),
   });

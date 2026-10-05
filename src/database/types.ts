@@ -60,6 +60,7 @@ export type TicketStatus =
   | "closed";
 
 export type RiskAcceptanceDecision = "pending" | "accepted" | "rejected";
+export type RiskAcceptanceEndReason = "retracted" | "resolved";
 
 export type RetestStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
 
@@ -172,7 +173,10 @@ export type RiskConversationEntryKind =
   | "retest_withdrawn"
   | "remediation_started"
   | "remediation_withdrawn"
-  | "fix_submitted";
+  | "fix_submitted"
+  | "risk_accepted"
+  | "risk_acceptance_retracted"
+  | "risk_acceptance_ended";
 
 export interface RiskConversation {
   id: string;
@@ -259,6 +263,14 @@ export interface RiskAcceptance {
   review_comment: string | null;
   created_at: string;
   reviewed_at: string | null;
+  conversation_id: string | null;
+  accepted_run_id: string | null;
+  accepted_status: FindingStatus | null;
+  submission_id: string | null;
+  ended_at: string | null;
+  ended_by: string | null;
+  end_reason: RiskAcceptanceEndReason | null;
+  end_note: string | null;
 }
 
 export interface TicketControl {

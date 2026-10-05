@@ -8,6 +8,8 @@ import type { Ticket, TicketControl, TicketControlStep, TicketStatus } from "@/d
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+let activeAcceptance: { id: string } | null = null;
+
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
   return { ...actual, useNavigate: () => (to: string) => navigated.push(to) };
@@ -153,6 +155,7 @@ vi.mock("@/hooks/queries/risk-acceptance", async () => await import("@/test-supp
 vi.mock("@/test-support/query-hooks", () => {
   const idle = { data: undefined, isLoading: false, isError: false, refetch: () => {} };
   return {
+    useActiveRiskAcceptance: () => ({ ...idle, data: activeAcceptance }),
     useTicket: (id?: string) => ({
       ...idle,
       data: !id ? undefined : {
@@ -230,6 +233,7 @@ let container: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
+  activeAcceptance = null;
   definitions = [definition()];
   storedSelection = null;
   ticketStatus = "in_progress";
@@ -732,5 +736,54 @@ describe("the remediation view before a remediation exists", () => {
     expect(buttonNamed("Withdraw remediation")).toBeUndefined();
     expect(buttonNamed("Resume remediation")).toBeUndefined();
     expect(text()).toContain("Track your remediation progress here.");
+  });
+});
+
+describe("remediation while the risk is accepted", () => {
+  const paused =
+    "This risk is accepted, so remediation is paused. Retract the acceptance in the conversation to resume remediation.";
+
+  it("keeps the withdrawn remediation's steps visible but offers no Resume", () => {
+    capabilities = [...capabilities, "withdraw_ticket"];
+    ticketStatus = "withdrawn";
+    activeAcceptance = { id: "acceptance-1" };
+    render();
+
+    expect(text()).toContain("Approach one");
+    expect(text()).toContain(paused);
+    expect(buttonNamed("Resume remediation")).toBeUndefined();
+    expect(buttonNamed("Withdraw remediation")).toBeUndefined();
+  });
+
+  it("offers Resume again once the acceptance is retracted", () => {
+    capabilities = [...capabilities, "withdraw_ticket"];
+    ticketStatus = "withdrawn";
+    render();
+
+    expect(text()).not.toContain(paused);
+    expect(buttonNamed("Resume remediation")).not.toBeUndefined();
+  });
+
+  it("does not start a remediation when a control is opened on an accepted risk", async () => {
+    activeAcceptance = { id: "acceptance-1" };
+    renderWithoutTicket();
+
+    expect(text()).toContain(paused);
+    const open = [...container.querySelectorAll("button")].find((button) =>
+      button.getAttribute("aria-label")?.startsWith("View steps for"),
+    );
+    expect(open).toBeUndefined();
+    expect(started).toEqual([]);
+  });
+
+  it("explains that the approach cannot change while the risk is accepted", () => {
+    twoApproaches();
+    activeAcceptance = { id: "acceptance-1" };
+    renderWithoutTicket();
+
+    act(() => buttonNamed("View other approaches (1)")!.click());
+    expect(buttonNamed("Use this approach")?.disabled ?? true).toBe(true);
+    expect(text()).toContain(paused);
+    expect(started).toEqual([]);
   });
 });

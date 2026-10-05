@@ -88,6 +88,9 @@ export const conversationEventConfig: Record<
   remediation_started: { label: "Remediation started", tone: "info" },
   remediation_withdrawn: { label: "Remediation withdrawn", tone: "neutral" },
   fix_submitted: { label: "Fix submitted for review", tone: "info" },
+  risk_accepted: { label: "Risk accepted", tone: "success" },
+  risk_acceptance_retracted: { label: "Risk acceptance retracted", tone: "neutral" },
+  risk_acceptance_ended: { label: "Risk acceptance ended", tone: "info" },
 };
 
 /** Summarises a conversation event from its recorded status values, never by showing raw metadata. */
@@ -95,6 +98,12 @@ export function conversationEventSummary(
   kind: ConversationEventKind,
   metadata: Record<string, unknown> | null | undefined,
 ): string {
+  if (kind === "risk_acceptance_ended") {
+    const to = findingStatusLabelOf(metadata?.new_status);
+    return to
+      ? `Risk acceptance ended: the risk is now ${to}`
+      : conversationEventConfig[kind].label;
+  }
   if (kind !== "classification_changed") return conversationEventConfig[kind].label;
   const to = findingStatusLabelOf(metadata?.new_status);
   if (!to) return conversationEventConfig[kind].label;

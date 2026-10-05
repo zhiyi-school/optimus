@@ -8,6 +8,7 @@ import type {
 } from "@/database/types";
 import {
   SECURITY_FINALISED,
+  acceptedFindingIds,
   activeRemediationTicket,
   canResumeTicket,
   canWithdrawTicket,
@@ -959,5 +960,64 @@ describe("the risk a developer lands on when they open an application", () => {
     expect(preferredDeveloperRisk([finding({ test_id: null })], [])).toBeNull();
     expect(preferredDeveloperRisk([], [])).toBeNull();
     expect(preferredDeveloperRisk(undefined, undefined)).toBeNull();
+  });
+});
+
+describe("accepted risks", () => {
+  const acceptance = (status: TicketStatus, findingId = "finding-1") =>
+    ticket({ id: `acceptance-${status}`, type: "risk_acceptance", status, finding_id: findingId });
+
+  it("counts only accepted risk-acceptance tickets as an acceptance in force", () => {
+    expect(
+      acceptedFindingIds([
+        acceptance("accepted"),
+        acceptance("withdrawn", "finding-2"),
+        acceptance("closed", "finding-3"),
+        ticket({ status: "accepted", finding_id: "finding-4" }),
+      ]),
+    ).toEqual(new Set(["finding-1"]));
+  });
+
+  it("no longer counts an accepted risk as needing action", () => {
+    const summary = summarizeApplication(
+      APP,
+      [finding()],
+      [ticket({ status: "withdrawn" })],
+      [],
+      [],
+      undefined,
+      undefined,
+      new Set(["finding-1"]),
+    );
+
+    expect(summary.findingsRequiringAction).toBe(0);
+    expect(summary.status).toBe("risk_accepted");
+    expect(summary.resolvedFindings).toBe(0);
+  });
+
+  it("still asks for action on the risks that are not accepted", () => {
+    const summary = summarizeApplication(
+      APP,
+      [finding(), finding({ id: "finding-2", test_id: "example-feature-01-risk-02" })],
+      [],
+      [],
+      [],
+      undefined,
+      undefined,
+      new Set(["finding-1"]),
+    );
+
+    expect(summary.findingsRequiringAction).toBe(1);
+    expect(summary.status).toBe("action_required");
+  });
+
+  it("does not land a developer on an accepted risk as the one needing action", () => {
+    const findings = [
+      finding(),
+      finding({ id: "finding-2", test_id: "example-feature-01-risk-02" }),
+    ];
+    expect(preferredDeveloperRisk(findings, [], new Set(["finding-1"]))).toBe(
+      "example-feature-01-risk-02",
+    );
   });
 });

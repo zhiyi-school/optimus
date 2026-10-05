@@ -3,6 +3,7 @@
  */
 
 import { useConversationSubmission } from "@/hooks/conversation/submission";
+import { useActiveRiskAcceptance } from "@/hooks/queries/risk-acceptance";
 import type {
   Application,
   Finding,
@@ -33,7 +34,9 @@ export type ComposerActionOffer =
       blockedReason?: string | null;
       currentStatus?: FindingStatus | null;
     }
-  | { kind: "reassessment"; blockedReason?: string | null };
+  | { kind: "reassessment"; blockedReason?: string | null }
+  | { kind: "acceptance"; blockedReason?: string | null }
+  | { kind: "retraction"; blockedReason?: string | null };
 
 export interface RiskConversationContext {
   conversation: RiskConversation | null | undefined;
@@ -46,7 +49,7 @@ export interface RiskConversationContext {
   profileId: string | undefined;
 }
 
-/** Returns the reader's classification and reassessment offers plus the shared record-then-attach submission. */
+/** Returns the reader's classification, reassessment and acceptance offers plus the shared record-then-attach submission. */
 export function useRiskComposer({
   conversation,
   finding,
@@ -54,13 +57,17 @@ export function useRiskComposer({
   can,
 }: Omit<RiskConversationContext, "application" | "profileId" | "retests">) {
   const conversationId = conversation?.id;
+  const acceptance = useActiveRiskAcceptance(finding?.id);
+  const accepted = acceptance.data ?? null;
   const submission = useConversationSubmission({
     conversationId,
     findingId: finding?.id,
     ticketId: ticket?.id,
+    acceptanceId: accepted?.id,
   });
 
   const mayRequest = can("request_retest");
+  const mayAccept = can("accept_risk");
   const offers: ComposerActionOffer[] = [];
 
   if (can("update_finding")) {
@@ -75,13 +82,37 @@ export function useRiskComposer({
     });
   }
 
-  if (mayRequest) {
+  // An accepted risk is not reassessed until the acceptance is retracted.
+  if (mayRequest && !accepted) {
     offers.push({
       kind: "reassessment",
       blockedReason:
         !conversation || !finding
           ? "No result has been published for this risk yet, so there is nothing to reassess."
           : null,
+    });
+  }
+
+  if (mayAccept && accepted) {
+    offers.push({
+      kind: "retraction",
+      blockedReason: !conversation
+        ? "This conversation has not loaded, so there is nowhere to record the retraction yet."
+        : null,
+    });
+  } else if (mayAccept) {
+    offers.push({
+      kind: "acceptance",
+      blockedReason:
+        !conversation || !finding
+          ? "No result has been published for this risk yet, so there is nothing to accept."
+          : finding.status === "reduced_risk"
+            ? "This risk is already Reduced Risk, so there is nothing to accept."
+            : acceptance.isError
+              ? "Could not check whether this risk is already accepted. Reload to try again."
+              : acceptance.isLoading
+                ? "Checking whether this risk is already accepted…"
+                : null,
     });
   }
 

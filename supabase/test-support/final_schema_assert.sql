@@ -119,4 +119,46 @@ begin
     where table_schema = 'public' and table_name = 'assessment_run_requests'
       and column_name = 'run_id' and data_type = 'text'
   ) then raise exception 'assessment run requests cannot record their run'; end if;
+  if to_regprocedure('public.accept_risk_entry(uuid,uuid,text,uuid)') is null
+     or to_regprocedure('public.retract_risk_acceptance(uuid,text)') is null then
+    raise exception 'the risk acceptance functions are missing';
+  end if;
+  if has_function_privilege('anon', 'public.accept_risk_entry(uuid,uuid,text,uuid)', 'EXECUTE')
+     or has_function_privilege('anon', 'public.retract_risk_acceptance(uuid,text)', 'EXECUTE')
+     or not has_function_privilege('authenticated', 'public.accept_risk_entry(uuid,uuid,text,uuid)', 'EXECUTE')
+     or not has_function_privilege('authenticated', 'public.retract_risk_acceptance(uuid,text)', 'EXECUTE') then
+    raise exception 'the risk acceptance function grants are wrong';
+  end if;
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'risk_conversation_entries_kind_check'
+      and pg_get_constraintdef(oid) like '%risk_accepted%'
+      and pg_get_constraintdef(oid) like '%risk_acceptance_retracted%'
+      and pg_get_constraintdef(oid) like '%risk_acceptance_ended%'
+  ) then raise exception 'risk acceptance events are not a legal conversation kind'; end if;
+  if not exists (
+    select 1 from pg_indexes
+    where schemaname = 'public' and indexname = 'risk_acceptance_one_active_per_finding'
+  ) then raise exception 'a risk can hold more than one acceptance in force'; end if;
+  if not exists (
+    select 1 from pg_trigger
+    where tgname = 'trg_end_risk_acceptance_on_reduced_risk'
+      and tgrelid = 'public.finding_history'::regclass
+      and tgdeferrable and tginitdeferred and not tgisinternal
+  ) then raise exception 'a Reduced Risk result no longer ends an acceptance at commit'; end if;
+  if not exists (
+    select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'enforce_retest_request_permissions'
+      and p.prosrc like '%cannot be reassessed until the acceptance is retracted%'
+  ) then raise exception 'an accepted risk can still be sent for reassessment'; end if;
+  if exists (
+    select 1 from pg_policies
+    where schemaname = 'public' and tablename = 'risk_acceptance'
+      and policyname = 'risk_acceptance_insert' and with_check not like '%pending%'
+  ) then raise exception 'clients can write an accepted risk directly'; end if;
+  if not exists (
+    select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'accept_risk_entry'
+      and p.prosrc like '%withdrawal_reason = withdrawal%'
+  ) then raise exception 'accepting a risk no longer withdraws its remediation'; end if;
 end $$;

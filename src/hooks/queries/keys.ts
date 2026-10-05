@@ -131,3 +131,10 @@ export const ticketKeys = {
   /** Prefix matching every finding retests key. */
   findingRetestsPrefix: () => ["findingRetests"] as const,
 };
+
+export const riskAcceptanceKeys = {
+  /** Key for the acceptance in force for a finding. */
+  activeForFinding: (findingId?: string) => ["riskAcceptance", findingId] as const,
+  /** Prefix matching every risk acceptance key. */
+  prefix: () => ["riskAcceptance"] as const,
+};

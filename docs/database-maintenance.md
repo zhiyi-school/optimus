@@ -123,6 +123,63 @@ them. The baseline already carries them, so retiring changes no schema.
 
 The notes below describe the fixes in `supabase/fixes/`.
 
+### Remediation withdrawn on acceptance (0038)
+
+Fix `0038_withdraw_remediation_on_acceptance.sql` redefines
+`accept_risk_entry()` so that accepting a risk also withdraws its open
+remediation ticket (`open`, `in_progress` or `rejected`, after any reassessment
+cancellation has released it). The withdrawal is recorded as the accepting
+developer, with the reason "Risk accepted", a `remediation_withdrawn`
+conversation event and an activity-log row, through the same ticket guards as a
+developer's own withdrawal. A remediation under security review is unchanged.
+Without it, an accepted risk kept reading "In progress" from its remediation.
+
+It changes no existing rows: remediations of risks accepted under `0037` stay
+open until the risk is accepted again. Grants are kept by `create or replace`.
+The baseline carries the same definition.
+`supabase/tests/0038_withdraw_remediation_on_acceptance_rls.sql` and
+`final_schema_assert.sql` cover it, and the `0037` suite asserts the final
+behavior.
+
+**Rollout order.** Apply `0038` after `0037`, before or with the frontend that
+pauses remediation while a risk is accepted. The backend worker needs no change.
+
+### Developer risk acceptance (0037)
+
+Fix `0037_developer_risk_acceptance.sql` lets a developer accept a risk from
+its conversation and retract that acceptance. It:
+
+- adds `conversation_id`, `accepted_run_id`, `accepted_status`,
+  `submission_id`, `ended_at`, `ended_by`, `end_reason` and `end_note` to
+  `risk_acceptance`, the `risk_acceptance_end_fields` constraint, and unique
+  indexes for one acceptance in force per finding and for submission retries;
+- adds the `risk_accepted`, `risk_acceptance_retracted` and
+  `risk_acceptance_ended` conversation event kinds;
+- adds `accept_risk_entry()` and `retract_risk_acceptance()`, granted to
+  `authenticated` and `service_role`, and the deferred trigger
+  `trg_end_risk_acceptance_on_reduced_risk` on `finding_history`;
+- redefines `enforce_ticket_update_permissions()` to admit the ticket
+  transitions those functions make, and `enforce_retest_request_permissions()`
+  to refuse a reassessment request while the risk is accepted;
+- restricts the `risk_acceptance_insert` policy to `pending` rows.
+
+It changes no rows. Existing `risk_acceptance` rows get null values in the new
+columns; an existing `accepted` row with no ending counts as in force, and the
+one-in-force index cannot be created if a finding already has two. The UI never
+wrote such rows. The workflow is described in
+[roles and workflows](./roles-and-workflows.md#risk-acceptance-workflow) and the
+schema in [the data model](./data-model.md#risk-acceptance).
+
+The baseline carries the same definitions, so a new project needs no fix.
+`supabase/tests/0037_developer_risk_acceptance_rls.sql` and
+`final_schema_assert.sql` cover it.
+
+**Rollout order.** Apply `0037` to every live project before deploying the
+frontend that offers Accept Risk; without it, accepting fails because the
+functions do not exist. The backend worker needs no change. Its
+`finding_history` inserts now also end an acceptance in force when the status
+becomes Reduced Risk, in the same transaction.
+
 ### Run id on run requests (0036)
 
 Fix `0036_assessment_run_request_run_id.sql` adds a nullable
