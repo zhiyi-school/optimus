@@ -979,7 +979,7 @@ begin
 end;
 $$;
 
--- Queues an assessment run for the backend worker, reusing an outstanding request; security only.
+-- Queues an assessment run for the backend worker, reusing an outstanding request and keeping the build version it was started for; security only.
 create function request_assessment_run(p_assessment_id uuid) returns assessment_run_requests
 language plpgsql security definer set search_path = public as $$
 declare
@@ -1027,9 +1027,14 @@ begin
     return existing;
   end if;
 
+  -- A retry tests the same build the assessment was started for.
   insert into assessment_run_requests
-    (assessment_id, application_id, platform, status, requested_by)
-  values (a.id, app.id, app.platform, 'queued', auth.uid())
+    (assessment_id, application_id, platform, status, requested_by, build_version)
+  values (
+    a.id, app.id, app.platform, 'queued', auth.uid(),
+    (select r.build_version from assessment_run_requests r
+     where r.assessment_id = a.id order by r.created_at desc limit 1)
+  )
   returning * into existing;
 
   if a.status = 'failed' then
@@ -1037,6 +1042,54 @@ begin
   end if;
 
   return existing;
+end;
+$$;
+
+-- Starts a new assessment of an application, optionally of one iOS build version, and queues its run; security only.
+create function request_new_assessment(p_application_id uuid, p_build_version text default null) returns assessments
+language plpgsql security definer set search_path = public as $$
+declare
+  app applications;
+  previous assessments;
+  created assessments;
+  version text := nullif(btrim(p_build_version), '');
+begin
+  if auth.uid() is null or not has_role('security') then
+    raise exception 'only the security team can start an assessment';
+  end if;
+
+  -- Locking the application serialises two requests for it, so only one assessment is ever in progress.
+  select * into app from applications where id = p_application_id for update;
+  if not found then
+    raise exception 'this application no longer exists';
+  end if;
+  if not can_access_application(app.id) then
+    raise exception 'this application is outside your access';
+  end if;
+  if version is not null and app.platform <> 'ios' then
+    raise exception 'only iOS assessments test a chosen build version';
+  end if;
+  if exists (
+    select 1 from assessments
+    where application_id = app.id and status in ('queued', 'waiting', 'running')
+  ) then
+    raise exception 'this application already has an assessment in progress';
+  end if;
+
+  select * into previous from assessments
+  where application_id = app.id
+  order by created_at desc
+  limit 1;
+
+  insert into assessments (external_id, application_id, status, total_tests, completed_tests)
+  values ('manual::' || gen_random_uuid(), app.id, 'queued', coalesce(previous.total_tests, 0), 0)
+  returning * into created;
+
+  insert into assessment_run_requests
+    (assessment_id, application_id, platform, status, requested_by, build_version)
+  values (created.id, app.id, app.platform, 'queued', auth.uid(), version);
+
+  return created;
 end;
 $$;
 

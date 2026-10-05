@@ -12,7 +12,7 @@ vi.mock("@/automation-api/endpoints", () => ({
   defaultConfigPath: () => "configs/ios.yaml",
 }));
 
-const { findActiveRun, findPlatformRun, riskProgressInRun, runAndWait } =
+const { findActiveRun, findPlatformRun, riskProgressInRun, runAndWait, testRunPayload } =
   await import("./automation-run");
 
 function record(status: RunRecord["status"], error: string | null = null): RunRecord {
@@ -251,5 +251,27 @@ describe("giving up locally versus the backend failing", () => {
 
     expect(result.outcome).toBe("completed");
     expect(result.dashboardSyncPending).toBe(true);
+  });
+});
+
+describe("rerunning one risk", () => {
+  it("tests the version the assessment tested on iOS", () => {
+    expect(testRunPayload("ios", "example_app", "ios-feature-01-risk-01", "3.9.9")).toEqual({
+      platform: "ios",
+      config_path: "configs/ios.yaml",
+      apps: "example_app",
+      risks: "ios-feature-01-risk-01",
+      build_version: "3.9.9",
+    });
+  });
+
+  it("lets the host choose when the assessment recorded no version", () => {
+    expect(testRunPayload("ios", "example_app", "ios-feature-01-risk-01", null)).not.toHaveProperty("build_version");
+  });
+
+  it("never pins a version on Android", () => {
+    expect(testRunPayload("android", "example_app", "android-feature-01-risk-01", "5.2")).not.toHaveProperty(
+      "build_version",
+    );
   });
 });

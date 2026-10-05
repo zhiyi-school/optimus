@@ -2,7 +2,7 @@
  * Starting and polling automation runs, and locating active runs and a risk's progress within one.
  */
 
-import { assessmentApi } from "@/automation-api/endpoints";
+import { assessmentApi, defaultConfigPath } from "@/automation-api/endpoints";
 import type {
   AutomationPlatform,
   RunProgressEvent,
@@ -27,6 +27,22 @@ export interface RunWaitResult {
   run: RunRecord;
   outcome: RunOutcome;
   dashboardSyncPending: boolean;
+}
+
+/** The request that reruns one risk of an app, testing the iOS build version its assessment tested when known. */
+export function testRunPayload(
+  platform: AutomationPlatform,
+  appExternalId: string,
+  riskId: string,
+  appVersion: string | null | undefined,
+): StartRunRequest {
+  return {
+    platform,
+    config_path: defaultConfigPath(platform),
+    apps: appExternalId,
+    risks: riskId,
+    ...(platform === "ios" && appVersion ? { build_version: appVersion } : {}),
+  };
 }
 
 /** Starts a run and polls until it finishes, the caller cancels, or the poll limit is reached. */

@@ -4,10 +4,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { AlertTriangle, Plus, RefreshCw, SlidersHorizontal, Trash2 } from "lucide-react";
+import { AlertTriangle, PackagePlus, Plus, RefreshCw, SlidersHorizontal, Trash2 } from "lucide-react";
 import { PageHeader, FilterBar, LoadingState, ErrorState, EmptyState } from "@/components/layout/page-blocks";
 import { DataTable, type DataTableColumn, AssessmentStatusBadge } from "@/components/shared/badges-and-table";
 import { AssessmentStatusPanel } from "@/components/assessment/assessment-progress";
+import { NewVersionDialog } from "@/components/assessment/new-version-dialog";
 import { Select } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -32,6 +33,7 @@ import {
 import { useAuth } from "@/auth/auth-context";
 import { ApplicationIcon } from "@/components/shared/application-icon";
 import { latestAssessmentPerApp } from "@/domain/assessment/assessments";
+import { assessmentVersion, canStartNewAssessment } from "@/domain/assessment/build-versions";
 import { createDebug } from "@/lib/debug";
 import { cn, compareByName, errorMessage, formatDate } from "@/lib/utils";
 import type { Assessment, Application } from "@/database/types";
@@ -52,6 +54,7 @@ export default function Assessments() {
   const navigate = useNavigate();
   const { can } = useAuth();
   const [appToDelete, setAppToDelete] = useState<Application | null>(null);
+  const [appToReassess, setAppToReassess] = useState<Application | null>(null);
 
   const { data: assessments, isLoading, isFetching, isError, refetch } = useAssessments({ pollWhileInProgress: true });
   const { data: conversationActivity } = useConversationActivity();
@@ -153,7 +156,7 @@ export default function Assessments() {
           </div>
         ),
       },
-      { key: "version", header: "Version", render: (r) => r.application?.version ?? "—" },
+      { key: "version", header: "Version", render: (r) => assessmentVersion(r, r.application) ?? "—" },
       {
         key: "progress",
         header: "Progress",
@@ -198,24 +201,43 @@ export default function Assessments() {
               header: "",
               render: (r: Row) =>
                 r.application && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      debug("opens delete dialog", { applicationId: r.application?.id });
-                      setAppToDelete(r.application);
-                    }}
-                    className="text-muted-foreground hover:text-danger"
-                    title={`Delete ${r.application.name}`}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  <span className="flex items-center gap-3">
+                    {canStartNewAssessment(
+                      (assessments ?? []).filter((a) => a.application_id === r.application_id),
+                    ) && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          debug("opens new version dialog", { applicationId: r.application?.id });
+                          setAppToReassess(r.application);
+                        }}
+                        className="text-muted-foreground hover:text-primary"
+                        title={`Assess a new version of ${r.application.name}`}
+                        aria-label={`Assess a new version of ${r.application.name}`}
+                      >
+                        <PackagePlus className="h-4 w-4" />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        debug("opens delete dialog", { applicationId: r.application?.id });
+                        setAppToDelete(r.application);
+                      }}
+                      className="text-muted-foreground hover:text-danger"
+                      title={`Delete ${r.application.name}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </span>
                 ),
             },
           ]
         : []),
     ],
-    [canRunTest, conversationActivity],
+    [assessments, canRunTest, conversationActivity],
   );
 
   return (
@@ -388,7 +410,7 @@ export default function Assessments() {
                   {r.application?.name ?? "—"}
                 </span>
                 <span className="mt-0.5 block text-xs text-muted-foreground">
-                  {r.application?.version ? `Version ${r.application.version}` : "Version unknown"} ·{" "}
+                  {assessmentVersion(r, r.application) ? `Version ${assessmentVersion(r, r.application)}` : "Version unknown"} ·{" "}
                   {r.completed_tests} of {r.total_tests} tests
                 </span>
                 <span className="mt-1 block">
@@ -407,6 +429,16 @@ export default function Assessments() {
               <AssessmentStatusPanel assessment={r} canRetry={canRunTest} />
             ) : null
           }
+        />
+      )}
+
+      {appToReassess && (
+        <NewVersionDialog
+          application={appToReassess}
+          open={!!appToReassess}
+          onOpenChange={(open) => {
+            if (!open) setAppToReassess(null);
+          }}
         />
       )}
 

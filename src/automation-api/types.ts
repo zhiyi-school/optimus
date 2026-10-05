@@ -74,6 +74,22 @@ export interface StartRunRequest {
   apps?: string;
   risks?: string;
   out_dir?: string;
+  /** Tests this version of the one selected iOS app instead of its highest intake build. */
+  build_version?: string;
+}
+
+export interface AppBuild {
+  version: string | null;
+  build_number: string | null;
+  file: string;
+  modified_at: number;
+}
+
+/** An iOS app's intake builds, highest version first, and the version a run tests by default. */
+export interface AppBuilds {
+  builds: AppBuild[];
+  default_version: string | null;
+  ambiguous: boolean;
 }
 
 export interface DemonstrationImage {

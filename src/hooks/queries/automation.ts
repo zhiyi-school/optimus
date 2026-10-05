@@ -51,6 +51,23 @@ export function useAppProvisioning(
   });
 }
 
+/** Fetches an iOS app's intake builds, highest version first, while `enabled`. */
+export function useAppBuilds(
+  platform: AutomationPlatform | undefined,
+  appId: string | null | undefined,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: automationKeys.builds(platform, appId),
+    queryFn: async () => {
+      debug("fetches app builds", { platform, appId });
+      return provisioningApi.listBuilds(platform as AutomationPlatform, appId as string);
+    },
+    enabled: enabled && platform === "ios" && !!appId,
+    retry: false,
+  });
+}
+
 const ACTIVE_RUN_POLL_INTERVAL_MS = 5000;
 
 /** Derives the app's in-flight run and any run holding the platform's device from polled run lists. */

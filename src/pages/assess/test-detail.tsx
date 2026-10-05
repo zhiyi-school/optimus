@@ -22,6 +22,7 @@ import { RiskConversationActions } from "@/components/conversation/reassessment-
 import { useRiskComposer } from "@/hooks/conversation/composer";
 import {
   useAssessment,
+  useAssessments,
 } from "@/hooks/queries/assessments";
 import { useFindings } from "@/hooks/queries/evidence";
 import {
@@ -35,11 +36,12 @@ import {
 import { useFindingRetests, useFindingTickets } from "@/hooks/queries/tickets";
 import { useRiskWorkspaceData } from "@/hooks/risk-workspace-data";
 import { DashboardSyncNotice } from "@/components/assessment/dashboard-sync-notice";
-import { assessmentApi, defaultConfigPath } from "@/automation-api/endpoints";
+import { assessmentApi, missingBuildMessage } from "@/automation-api/endpoints";
 import type { RunSyncStatus } from "@/automation-api/types";
 import {
   riskProgressInRun,
   runAndWait,
+  testRunPayload,
   type RiskRunPhase,
   type RunCancelToken,
 } from "@/workflows/automation-run";
@@ -54,6 +56,7 @@ import { nextReassessment } from "@/domain/remediation/reassessments";
 import { activeRemediationTicket, resumableRemediationTicket } from "@/domain/remediation/resolve-rules";
 import { cn, errorMessage, formatDate } from "@/lib/utils";
 import { findingsByTestId } from "@/domain/assessment/assessments";
+import { canStartNewAssessment, newestCompletedAssessment } from "@/domain/assessment/build-versions";
 import { assessmentKeys, automationKeys, evidenceKeys, ticketKeys } from "@/hooks/queries/keys";
 import { retestData } from "@/database/retests";
 
@@ -98,6 +101,14 @@ function TestPage({ watchedRunId, onWatchRun, sync, resync }: TestPageProps) {
   const risk = useMemo(() => risks?.find((r) => r.risk_id === testId), [risks, testId]);
 
   const { data: findings } = useFindings({ applicationId: assessment?.application_id });
+  const { data: allAssessments } = useAssessments();
+  const appAssessments = useMemo(
+    () => (allAssessments ?? []).filter((row) => row.application_id === assessment?.application_id),
+    [allAssessments, assessment?.application_id],
+  );
+  const newestAssessment = useMemo(() => newestCompletedAssessment(appAssessments), [appAssessments]);
+  // Reruns sync onto the newest completed assessment, so only that one offers them.
+  const superseded = !!newestAssessment && newestAssessment.id !== assessmentId;
   const findingByTestId = useMemo(() => findingsByTestId(findings), [findings]);
   const currentFinding = testId ? findingByTestId.get(testId) : undefined;
 
@@ -176,6 +187,10 @@ function TestPage({ watchedRunId, onWatchRun, sync, resync }: TestPageProps) {
 
   /** Runs this risk's automated test, claiming any pending reassessment, and refreshes results when it ends. */
   async function runTest() {
+    if (superseded) {
+      debug("cannot run test on superseded assessment", { assessmentId, newestAssessmentId: newestAssessment?.id });
+      return;
+    }
     if (!platform || !appExternalId || !testId) {
       debug("cannot run test", { hasPlatform: !!platform, hasAppExternalId: !!appExternalId, testId });
       return;
@@ -194,7 +209,8 @@ function TestPage({ watchedRunId, onWatchRun, sync, resync }: TestPageProps) {
         await retestData.startRun(claim.id);
       }
       const { run, outcome } = await runAndWait(
-        { platform, config_path: defaultConfigPath(platform), apps: appExternalId, risks: testId },
+        // A rerun tests the build this assessment tested, not whichever version is now highest.
+        testRunPayload(platform, appExternalId, testId, assessment?.app_version),
         (started) => {
           debug("starts run", { runId: started.run_id, retestId: claim?.id });
           setStartedRunId(started.run_id);
@@ -227,7 +243,7 @@ function TestPage({ watchedRunId, onWatchRun, sync, resync }: TestPageProps) {
       ]);
     } catch (err) {
       debug("fails to run test", { testId, error: err });
-      setRunError(errorMessage(err, "Unable to run this test."));
+      setRunError(missingBuildMessage(err) ?? errorMessage(err, "Unable to run this test."));
     } finally {
       setWatching(false);
     }
@@ -262,6 +278,8 @@ function TestPage({ watchedRunId, onWatchRun, sync, resync }: TestPageProps) {
           risks={risks}
           findingByTestId={findingByTestId}
           activeTestId={testId}
+          appAssessments={appAssessments}
+          canAssessNewVersion={can("run_test") && canStartNewAssessment(appAssessments)}
         />
       }
     >
@@ -309,7 +327,29 @@ function TestPage({ watchedRunId, onWatchRun, sync, resync }: TestPageProps) {
       >
         <div className={cn("grid grid-cols-1 items-stretch gap-3", can("run_test") && "sm:grid-cols-2")}>
           {can("run_test") &&
-            (automated ? (
+            (automated && superseded && newestAssessment ? (
+              <Card className="h-full p-3.5">
+                <div className="flex items-start gap-2.5">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                    <Zap className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-foreground">Run this test again</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      This is an earlier assessment. A rerun updates the app&apos;s newest assessment, so run this
+                      test from there.
+                    </p>
+                    <Link
+                      to={`/assessments/${encodeURIComponent(newestAssessment.id)}/tests/${encodeURIComponent(testId ?? "")}`}
+                      onClick={() => debug("opens newest assessment to rerun", { assessmentId: newestAssessment.id })}
+                      className="mt-2.5 inline-block text-xs font-medium text-primary hover:underline"
+                    >
+                      Open the newest assessment
+                    </Link>
+                  </div>
+                </div>
+              </Card>
+            ) : automated ? (
               <Card className={cn("h-full p-3.5", !busy && "border-primary/50 bg-primary/5")}>
                 <div className="flex items-start gap-2.5">
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">

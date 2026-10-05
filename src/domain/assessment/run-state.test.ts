@@ -32,6 +32,7 @@ function request(
     started_at: null,
     completed_at: null,
     run_id: null,
+    build_version: null,
     ...overrides,
   };
 }

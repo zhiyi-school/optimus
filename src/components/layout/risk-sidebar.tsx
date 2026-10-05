@@ -2,7 +2,7 @@
  * Risk list sidebar shared by the security and developer risk workspaces.
  */
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -35,6 +35,10 @@ interface RiskSidebarProps {
   riskHref: (riskId: string) => string;
   emptyMessage: string;
   heading?: string;
+  /** Version shown under the app name, in place of the application's own. */
+  version?: string | null;
+  /** Rendered below the risk list. */
+  footer?: ReactNode;
 }
 
 /** App summary, progress and navigable risk list, collapsing to an accordion below `lg`. */
@@ -48,6 +52,8 @@ export function RiskSidebar({
   riskHref,
   emptyMessage,
   heading = "Security Tests",
+  version,
+  footer,
 }: RiskSidebarProps) {
   const navigate = useNavigate();
   const [openOnMobile, setOpenOnMobile] = useState(false);
@@ -74,7 +80,7 @@ export function RiskSidebar({
               {application?.name ?? "—"}
             </p>
             <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-              {application?.version ? `Version ${application.version}` : "Version unknown"}
+              {(version ?? application?.version) ? `Version ${version ?? application?.version}` : "Version unknown"}
               {application && <PlatformBadge platform={application.platform} />}
             </p>
           </div>
@@ -172,6 +178,7 @@ export function RiskSidebar({
           </ul>
         )}
       </Card>
+      {footer}
     </div>
   );
 }

@@ -4,6 +4,7 @@
 
 import { automationAssetUrl, automationClient } from "@/automation-api/client";
 import type {
+  AppBuilds,
   AppConfigEntry,
   AppProvisioning,
   AutomationPlatform,
@@ -71,6 +72,12 @@ export function describeAutomationError(err: unknown): string {
   return err instanceof Error ? err.message : "Automation API request failed.";
 }
 
+/** The backend's message for a run refused because the requested build is not in intake, else null. */
+export function missingBuildMessage(err: unknown): string | null {
+  const detail = asApiError(err)?.detail as { blocker_code?: string; message?: string } | null | undefined;
+  return detail?.blocker_code === "app_build_missing" ? (detail.message ?? null) : null;
+}
+
 /** The existing app id from a 409 conflict response, else null. */
 export function conflictingAppId(err: unknown): string | null {
   const apiError = asApiError(err);
@@ -104,6 +111,25 @@ export const provisioningApi = {
     debug("deleting app config", { platform, appId });
     await automationClient.delete(`/config/${platform}/apps/${appId}`);
     debug("deleted app config", { platform, appId });
+  },
+
+  /** Fetches an iOS app's intake builds, highest version first, or null when the endpoint is unavailable. */
+  async listBuilds(platform: AutomationPlatform, appId: string): Promise<AppBuilds | null> {
+    debug("fetching app builds", { platform, appId });
+    try {
+      const { data } = await automationClient.get(
+        `/config/${platform}/apps/${encodeURIComponent(appId)}/builds`,
+      );
+      debug("fetched app builds", { platform, appId, count: data?.builds?.length, default: data?.default_version });
+      return data;
+    } catch (err) {
+      debug("fetching app builds failed", { platform, appId, ...errorSummary(err) });
+      if (isBackendUnavailable(err)) {
+        debug("builds endpoint unavailable; returning null", { platform, appId });
+        return null;
+      }
+      throw err;
+    }
   },
 
   /** Fetches an app's provisioning status, or null when the endpoint is unavailable. */

@@ -269,16 +269,21 @@ rows carry a deterministic `sync_key` with a unique index behind it, so even a
 duplicate worker cannot double-write them.
 
 Assessments are keyed `"<run_timestamp>::<app_id>"`, but a dashboard-created
-one starts as `"manual::<uuid>"`. The first run to sync **adopts that
-placeholder** — same row, re-keyed to the run — so the assessment somebody is
+one starts as `"manual::<uuid>"`. The run its run request started **adopts that
+placeholder**: same row, re-keyed to the run, so the assessment somebody is
 already looking at completes in place instead of a second row appearing beside
-it, and its findings stay attached to the same id. Later runs then get their
-own rows, which is what keeps per-run history. A re-sync of a run that already
-has a row updates it rather than adopting anything.
+it, and its findings stay attached to the same id. A run that no request
+started, such as a risk rerun from a test page or a CLI run, updates the
+assessment that was current when it started, the newest one whose own run is
+not later, instead of adding a row; only an application with no earlier
+assessment gets a new one. Such a run leaves the assessment's `app_version`
+as it is, whatever build it tested. Each assessment records the newest run applied to it
+in `latest_run_id`, and an older run, from a replayed report, leaves it as it
+is. A re-sync of a run updates the same row.
 
 ## Starting tests
 
-Two things start automated testing:
+Three things start automated testing:
 
 1. **The whole assessment, through a durable queue.** Adding an app on
    `/assessments/new` calls the Supabase RPC `request_assessment_run`
@@ -293,7 +298,18 @@ Two things start automated testing:
    the risk has a finding) on `src/pages/assess/test-detail.tsx` first claims
    any pending reassessment for that finding, then calls `runAndWait`
    (`src/workflows/automation-run.ts`), which sends `POST /runs` for that one
-   app and risk and polls `GET /runs/{run_id}` until it ends.
+   app and risk and polls `GET /runs/{run_id}` until it ends. For iOS it sends
+   the assessment's `app_version` as `build_version`, so the rerun tests the
+   build the assessment tested; when that build is no longer in intake, the
+   backend's `app_build_missing` message is shown. Only the app's newest
+   completed assessment offers the rerun, because the sync applies it there;
+   an earlier assessment's test page links to the newest one instead.
+3. **A new assessment of an assessed app.** "Assess a new version" calls
+   `request_new_assessment` (`assessmentRunRequestData.requestNew`), which
+   queues a run through the same durable queue as the first. On iOS the dialog
+   first lists the app's builds with `GET /config/ios/apps/{app_id}/builds`
+   (`provisioningApi.listBuilds`), preselecting the highest version, and the
+   chosen version reaches `POST /runs` through the request's `build_version`.
 
 The queue is drained on the automation host by
 `python -m mobile_playbook.assessment_worker`. Each pass recovers requests whose

@@ -20,6 +20,7 @@ const DEVELOPER = "00000000-0000-0000-0000-000000000001";
 
 let roles: UserRole[] = ["security"];
 let assessmentFound = true;
+let appAssessmentRows: { id: string; application_id: string; status: string; created_at: string }[] = [];
 let entries: RiskConversationEntry[] = [];
 let history: AutomationResultRow[] = [];
 let analysisDocument: unknown = undefined;
@@ -122,6 +123,7 @@ vi.mock("@/test-support/query-hooks", () => {
   };
   return {
     ConversationAttachmentFailure: class ConversationAttachmentFailure extends Error {},
+    useAssessments: () => ({ ...idle, data: appAssessmentRows }),
     useAssessment: () => ({
       ...idle,
       isSuccess: true,
@@ -296,6 +298,7 @@ function historyRun(overrides: Partial<AutomationResultRow> = {}): AutomationRes
 beforeEach(() => {
   roles = ["security"];
   assessmentFound = true;
+  appAssessmentRows = [];
   findingFound = true;
   conversationFound = true;
   conversationFailed = false;
@@ -671,6 +674,30 @@ describe("security", () => {
     expect(buttonLabels()).toContain("Change classification");
     expect(usableButtonLabels()).not.toContain("Change classification");
     expect(text()).toContain("No result has been published for this risk yet");
+  });
+
+  it("reruns from the app's newest assessment", () => {
+    appAssessmentRows = [
+      { id: ASSESSMENT, application_id: "example-app-id", status: "completed", created_at: "2026-02-01T00:00:00Z" },
+      { id: "earlier-id", application_id: "example-app-id", status: "completed", created_at: "2026-01-01T00:00:00Z" },
+      { id: "queued-id", application_id: "example-app-id", status: "queued", created_at: "2026-03-01T00:00:00Z" },
+    ];
+    render();
+
+    expect(buttonLabels()).toContain("Run Again");
+    expect(text()).not.toContain("Open the newest assessment");
+  });
+
+  it("sends a rerun of an earlier assessment to the newest one instead", () => {
+    appAssessmentRows = [
+      { id: ASSESSMENT, application_id: "example-app-id", status: "completed", created_at: "2026-01-01T00:00:00Z" },
+      { id: "newer-id", application_id: "example-app-id", status: "completed", created_at: "2026-02-01T00:00:00Z" },
+    ];
+    render();
+
+    expect(buttonLabels()).not.toContain("Run Again");
+    expect(text()).toContain("A rerun updates the app's newest assessment");
+    expect(links()).toContain(`/assessments/newer-id/tests/${RISK}`);
   });
 
   it("does not offer to request a reassessment of its own work", () => {

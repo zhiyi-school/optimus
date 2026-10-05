@@ -322,6 +322,19 @@ backend's assessment worker claims. See
 and [data-model.md](./data-model.md#manual-assessment-creation) for how it
 interacts with automation sync.
 
+An app that has already been assessed is assessed again from "Assess a new
+version": the action on its row of the Assessments list, or the Assessments card
+below the risk list on its test pages. `NewVersionDialog`
+(`src/components/assessment/new-version-dialog.tsx`) lists the app's iOS builds
+from `GET /config/ios/apps/{app_id}/builds` with the highest version preselected,
+or explains that Android tests the installed version, and calls
+`request_new_assessment` before opening the new row's progress. The card,
+`AssessmentHistory`, lists the app's assessments newest first with the version
+each tested. A risk rerun from a test page sends that assessment's
+`app_version` as `build_version`, so it tests the same build. Only the newest
+completed assessment offers the rerun (`newestCompletedAssessment` in
+`src/domain/assessment/build-versions.ts`); an earlier one links to it.
+
 On submit it returns to the assessments list with the new assessment's row
 expanded (`?expanded=`). An assessment that has not completed has no page of
 its own yet: `/assessments/:assessmentId` redirects to the list with that row

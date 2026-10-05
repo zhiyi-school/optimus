@@ -12,7 +12,7 @@ vi.mock("@/automation-api/client", () => ({
   },
 }));
 
-const { iconApi, syncApi } = await import("./endpoints");
+const { iconApi, missingBuildMessage, provisioningApi, syncApi } = await import("./endpoints");
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -149,5 +149,33 @@ describe("listReports", () => {
     await assessmentApi.listReports({ status: "completed", syncStatus: ["failed"] });
 
     expect(get).toHaveBeenCalledWith("/reports", { params: { status: "completed", sync_status: "failed" } });
+  });
+});
+
+describe("listBuilds", () => {
+  it("asks the backend for the app's intake builds", async () => {
+    get.mockResolvedValue({ data: { builds: [], default_version: null, ambiguous: false } });
+
+    await expect(provisioningApi.listBuilds("ios", "example_app")).resolves.toMatchObject({ builds: [] });
+    expect(get).toHaveBeenCalledWith("/config/ios/apps/example_app/builds");
+  });
+
+  it("treats a backend without the endpoint as no builds", async () => {
+    get.mockRejectedValue(Object.assign(new Error("not found"), { status: 404 }));
+
+    await expect(provisioningApi.listBuilds("ios", "example_app")).resolves.toBeNull();
+  });
+});
+
+describe("missingBuildMessage", () => {
+  it("returns the backend's message for a missing build", () => {
+    const err = { status: 422, detail: { blocker_code: "app_build_missing", message: "No build of Example with version 3.9.9." } };
+
+    expect(missingBuildMessage(err)).toBe("No build of Example with version 3.9.9.");
+  });
+
+  it("is null for any other refusal", () => {
+    expect(missingBuildMessage({ status: 422, detail: "apps did not match" })).toBeNull();
+    expect(missingBuildMessage(new Error("boom"))).toBeNull();
   });
 });

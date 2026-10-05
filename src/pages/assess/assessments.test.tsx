@@ -114,6 +114,8 @@ vi.mock("@/test-support/query-hooks", () => {
     useAppProvisioning: () => ({ ...idle, data: undefined }),
     useRunStatus: () => ({ ...idle, data: undefined }),
     useRunSyncStatus: () => ({ ...idle, data: undefined }),
+    useAppBuilds: () => ({ ...idle, data: { builds: [], default_version: null, ambiguous: false } }),
+    useRequestNewAssessment: () => ({ mutate: () => {}, isPending: false, isError: false, error: undefined }),
     useRunEvents: (runId: unknown, enabled: unknown) => {
       runEventStreams.push({ runId, enabled });
       return { events: runEvents, streamState: "open" };
@@ -558,5 +560,46 @@ describe("the Last Updated column", () => {
   it("shows no time when the application's conversations have no entries", () => {
     render();
     expect(rows()[0].textContent).not.toContain(formatDate("2026-01-01T00:00:00Z"));
+  });
+});
+
+describe("assessing a new version from the list", () => {
+  const newVersionButton = () => container.querySelector("[aria-label='Assess a new version of Example Application']");
+
+  it("offers it on a finished app and opens the version picker", () => {
+    assessments = [assessment({ status: "completed" })];
+    render();
+
+    act(() => (newVersionButton() as HTMLButtonElement).click());
+
+    expect(document.body.textContent).toContain("Assess a new version of Example Application");
+    expect(path()).toBe("/assessments");
+  });
+
+  it("does not offer it while an assessment of the app is in progress", () => {
+    assessments = [
+      assessment({ id: "done", status: "completed", updated_at: "2026-01-01T00:00:00Z" }),
+      assessment({ id: "next", status: "queued", updated_at: "2026-01-02T00:00:00Z" }),
+    ];
+    render();
+
+    expect(newVersionButton()).toBeNull();
+  });
+
+  it("is not offered to a user who cannot run tests", () => {
+    roles = ["developer"];
+    assessments = [assessment({ status: "completed" })];
+    render();
+
+    expect(newVersionButton()).toBeNull();
+  });
+
+  it("shows the version an assessment tested rather than the app's", () => {
+    assessments = [assessment({ status: "completed", app_version: "3.9.9" })];
+    render();
+
+    const cells = [...container.querySelectorAll("tbody td")].map((td) => td.textContent);
+    expect(cells).toContain("3.9.9");
+    expect(cells).not.toContain("1.0");
   });
 });

@@ -10,6 +10,7 @@ revoke all on function
   classify_risk(uuid, uuid, text, text),
   classify_risk_entry(uuid, uuid, text, text),
   request_assessment_run(uuid),
+  request_new_assessment(uuid, text),
   request_reassessment_entry(uuid, uuid, uuid, text, uuid),
   start_reassessment(uuid),
   withdraw_reassessment(uuid, text)
@@ -23,6 +24,7 @@ grant execute on function
   classify_risk(uuid, uuid, text, text),
   classify_risk_entry(uuid, uuid, text, text),
   request_assessment_run(uuid),
+  request_new_assessment(uuid, text),
   request_reassessment_entry(uuid, uuid, uuid, text, uuid),
   start_reassessment(uuid),
   withdraw_reassessment(uuid, text)

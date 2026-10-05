@@ -59,8 +59,16 @@ create table assessments (
   total_tests integer not null default 0,
   completed_tests integer not null default 0,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  app_version text,
+  latest_run_id text
 );
+
+comment on column assessments.app_version is
+  'The app build version this assessment tested, written by the dashboard sync from the run. Null until a run is synced, and on assessments synced before versions were recorded.';
+
+comment on column assessments.latest_run_id is
+  'The newest automation run applied to this assessment: its own run, then any rerun of one of its risks. The dashboard sync skips an older run, so a replayed report never overwrites newer progress. Null until a run is synced.';
 
 create index idx_assessments_application_id on assessments (application_id);
 
@@ -377,11 +385,15 @@ create table assessment_run_requests (
   updated_at timestamptz not null default now(),
   started_at timestamptz,
   completed_at timestamptz,
-  run_id text
+  run_id text,
+  build_version text
 );
 
 comment on column assessment_run_requests.run_id is
   'The automation run the worker started for this request, set when the request completes. Null until a run starts, and on requests that never started one.';
+
+comment on column assessment_run_requests.build_version is
+  'The iOS build version the run must test. Null lets the automation host test the app''s highest version.';
 
 create index idx_assessment_run_requests_assessment on assessment_run_requests (assessment_id);
 create index idx_assessment_run_requests_claimable on assessment_run_requests (status, next_attempt_at);

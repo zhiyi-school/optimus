@@ -258,6 +258,13 @@ and the backend worker in `mobile_playbook/assessment_worker.py` drains it.
 - **Execution does not depend on a page being open.** Creating an assessment
   creates a request; the worker starts the run. Refreshing, leaving, or opening
   the assessment in three tabs changes nothing.
+- **An assessed app is assessed again as a new assessment.**
+  `request_new_assessment()` creates a `queued` assessment and its run request
+  for an application, refusing while another of its assessments is `queued`,
+  `waiting` or `running`. An iOS request can name a `build_version`, the build
+  the run must test; `assessments.app_version` records the version a run
+  actually tested. Findings, tickets and conversations belong to the
+  application, so they carry across its assessments.
 - **One active request per assessment**, enforced by a partial unique index over
   `status in ('queued', 'waiting', 'claimed', 'running')`. `request_assessment_run()`
   returns the request already in flight instead of opening a second one, so a

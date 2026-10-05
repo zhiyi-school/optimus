@@ -3,6 +3,7 @@ import {
   findingsByTestId,
   latestAssessmentPerApp,
   preferredAssessmentRisk,
+  visibleHistory,
   type AssessmentRow,
 } from "@/domain/assessment/assessments";
 import type { Finding, FindingStatus } from "@/database/types";
@@ -149,5 +150,27 @@ describe("one row per application", () => {
     const copy = [...input];
     latestAssessmentPerApp(input);
     expect(input).toEqual(copy);
+  });
+});
+
+describe("visibleHistory", () => {
+  const newestFirst = ["a", "b", "c", "d", "e", "f", "g"].map((id) => ({ id }));
+  const ids = (items: { id: string }[]) => items.map((item) => item.id);
+
+  it("shows the five newest and counts the rest", () => {
+    const { shown, hidden } = visibleHistory(newestFirst, "a", false);
+    expect(ids(shown)).toEqual(["a", "b", "c", "d", "e"]);
+    expect(hidden).toBe(2);
+  });
+
+  it("keeps an older open assessment visible", () => {
+    const { shown, hidden } = visibleHistory(newestFirst, "g", false);
+    expect(ids(shown)).toEqual(["a", "b", "c", "d", "e", "g"]);
+    expect(hidden).toBe(1);
+  });
+
+  it("shows everything when expanded or short enough", () => {
+    expect(visibleHistory(newestFirst, "a", true)).toEqual({ shown: newestFirst, hidden: 0 });
+    expect(visibleHistory(newestFirst.slice(0, 5), "a", false).hidden).toBe(0);
   });
 });

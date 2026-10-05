@@ -60,3 +60,19 @@ export function latestAssessmentPerApp(assessments: AssessmentRow[] | undefined)
     compareByName(a.application?.name, b.application?.name, a.application_id, b.application_id),
   );
 }
+
+export const HISTORY_LIMIT = 5;
+
+/** The assessments a history list shows: all when expanded, else the newest few plus the open one if it is older. */
+export function visibleHistory<T extends { id: string }>(
+  newestFirst: T[],
+  currentId: string,
+  expanded: boolean,
+  limit = HISTORY_LIMIT,
+): { shown: T[]; hidden: number } {
+  if (expanded || newestFirst.length <= limit) return { shown: newestFirst, hidden: 0 };
+  const shown = newestFirst.slice(0, limit);
+  const current = newestFirst.find((item) => item.id === currentId);
+  if (current && !shown.includes(current)) shown.push(current);
+  return { shown, hidden: newestFirst.length - shown.length };
+}

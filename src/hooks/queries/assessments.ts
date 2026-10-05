@@ -82,6 +82,21 @@ export function useAssessmentRunRequest(
   });
 }
 
+/** Starts a new assessment of an application, optionally of one iOS build version, and refreshes the list. */
+export function useRequestNewAssessment() {
+  const invalidate = useInvalidateQueries();
+  return useMutation({
+    mutationFn: ({ applicationId, buildVersion }: { applicationId: string; buildVersion: string | null }) =>
+      assessmentRunRequestData.requestNew(applicationId, buildVersion),
+    onMutate: ({ applicationId, buildVersion }) => debug("requests new assessment", { applicationId, buildVersion }),
+    onError: (error) => debug("request new assessment failed", { error }),
+    onSuccess: (assessment) => {
+      debug("requested new assessment", { assessmentId: assessment.id });
+      return invalidate([assessmentKeys.all(), assessmentKeys.runRequestPrefix()]);
+    },
+  });
+}
+
 /** Requests an automation run and refreshes the assessment's run request, detail and list. */
 export function useRequestAssessmentRun(assessmentId: string | undefined) {
   const invalidate = useInvalidateQueries();

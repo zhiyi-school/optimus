@@ -1,9 +1,11 @@
 /**
- * Assessment workspace sidebar listing tested risks with their finding status.
+ * Assessment workspace sidebar listing tested risks with their finding status, the tested version and the app's assessments.
  */
 
 import { useMemo } from "react";
 import { RiskSidebar, type RiskSidebarEntry } from "@/components/layout/risk-sidebar";
+import { AssessmentHistory } from "@/components/assessment/assessment-history";
+import { assessmentVersion } from "@/domain/assessment/build-versions";
 import type { RiskDefinition } from "@/automation-api/types";
 import type { Application, Assessment, Finding } from "@/database/types";
 
@@ -13,6 +15,9 @@ interface AssessmentSidebarProps {
   risks: RiskDefinition[] | undefined;
   findingByTestId: Map<string, Finding & { application: Application | null }>;
   activeTestId?: string;
+  /** Every assessment of the application; when given, they are listed below the risks. */
+  appAssessments?: Assessment[];
+  canAssessNewVersion?: boolean;
 }
 
 /** Maps the risk catalogue to sidebar entries linked to this assessment's test pages. */
@@ -22,6 +27,8 @@ export function AssessmentSidebar({
   risks,
   findingByTestId,
   activeTestId,
+  appAssessments,
+  canAssessNewVersion = false,
 }: AssessmentSidebarProps) {
   const entries = useMemo<RiskSidebarEntry[]>(
     () =>
@@ -38,6 +45,17 @@ export function AssessmentSidebar({
       backTo="/assessments"
       backLabel="Back to Assessments"
       application={application}
+      version={assessmentVersion(assessment, application)}
+      footer={
+        appAssessments && (
+          <AssessmentHistory
+            application={application}
+            currentAssessmentId={assessment.id}
+            assessments={appAssessments}
+            mayStart={canAssessNewVersion}
+          />
+        )
+      }
       progress={{
         completed: assessment.completed_tests,
         total: assessment.total_tests,

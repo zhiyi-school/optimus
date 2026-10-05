@@ -84,7 +84,7 @@ export async function addApp(input: {
     if (existing && (await assessmentData.findForApplication(existing.id))) {
       debug("app already has an assessment; refusing duplicate", { applicationId: existing.id });
       throw new UserFacingError(
-        `"${input.name}" already exists for ${input.platform === "ios" ? "iOS" : "Android"} — open that assessment instead of adding it again.`,
+        `"${input.name}" already exists for ${input.platform === "ios" ? "iOS" : "Android"}. To test it again, use "Assess a new version" on its row in Assessments.`,
       );
     }
 

@@ -125,6 +125,22 @@ export const assessmentRunRequestData = {
     return data;
   },
 
+  /** Starts a new assessment of an application, optionally of one iOS build version, and queues its run. */
+  async requestNew(applicationId: string, buildVersion: string | null): Promise<Assessment> {
+    debug("rpc request_new_assessment", { applicationId, buildVersion });
+    const { data, error } = await supabase.rpc("request_new_assessment", {
+      p_application_id: applicationId,
+      p_build_version: buildVersion,
+    });
+    if (error) {
+      debug("rpc request_new_assessment failed", { applicationId, code: error.code, message: error.message });
+      throw error;
+    }
+    const assessment = data as Assessment;
+    debug("rpc request_new_assessment returned", { applicationId, assessmentId: assessment?.id });
+    return assessment;
+  },
+
   /** Requests a run; idempotent, since the database returns any request already in flight. */
   async request(assessmentId: string): Promise<AssessmentRunRequest> {
     debug("rpc request_assessment_run", { assessmentId });

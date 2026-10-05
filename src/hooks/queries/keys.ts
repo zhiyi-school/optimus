@@ -43,6 +43,9 @@ export const automationKeys = {
   /** Key for an app's provisioning state on a platform. */
   provisioning: (platform: string | undefined, appId: string | null | undefined) =>
     ["appProvisioning", platform, appId] as const,
+  /** Key for an iOS app's intake builds. */
+  builds: (platform: string | undefined, appId: string | null | undefined) =>
+    ["appBuilds", platform, appId] as const,
   /** Key for a report's run results. */
   runResults: (timestamp: string | undefined) => ["runResults", timestamp] as const,
   /** Key for one test's run history on an app. */

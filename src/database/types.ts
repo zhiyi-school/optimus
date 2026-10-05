@@ -38,6 +38,7 @@ export interface AssessmentRunRequest {
   started_at: string | null;
   completed_at: string | null;
   run_id: string | null;
+  build_version: string | null;
 }
 
 export type FindingStatus = "at_risk" | "reduced_risk" | "inconclusive";
@@ -120,6 +121,7 @@ export interface Assessment {
   completed_tests: number;
   created_at: string;
   updated_at: string;
+  app_version: string | null;
 }
 
 export interface Finding {

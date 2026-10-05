@@ -123,6 +123,61 @@ them. The baseline already carries them, so retiring changes no schema.
 
 The notes below describe the fixes in `supabase/fixes/`.
 
+### Latest run on assessments (0042)
+
+Fix `0042_assessment_latest_run.sql` adds `assessments.latest_run_id`, the
+newest automation run the dashboard sync applied to the assessment: its own
+run, then any risk rerun of it. A rerun that no run request started updates the
+assessment that was current when it ran instead of adding one, so an app keeps
+one assessment per full run of a version. The sync compares an incoming run
+with `latest_run_id` and leaves the assessment unchanged when the run is older,
+so replaying an old report never overwrites newer progress or version. A
+rerun leaves the assessment's `app_version` as it is. Existing
+rows start null, which the sync treats as no run applied yet. No other rows
+change. The baseline carries the same column.
+`supabase/tests/0042_assessment_latest_run_rls.sql` and
+`final_schema_assert.sql` cover it.
+
+Assessments that earlier reruns already created are left as they are; the
+Assessments card on a test page shows the five newest and a "Show all" toggle.
+
+**Rollout order.** Apply `0042`, after `0041`, before deploying the dashboard
+sync worker that writes `latest_run_id`; against an older schema its assessment
+writes are refused.
+
+### Build versions on assessments (0041)
+
+Fix `0041_assessment_build_versions.sql` lets an application that has already
+been assessed be assessed again, of a chosen iOS build version, without
+deleting it. It adds:
+
+- `assessment_run_requests.build_version`, the iOS build version the run must
+  test. The assessment worker passes it to `POST /runs`; null lets the
+  automation host test the app's highest version.
+- `assessments.app_version`, the version the assessment tested, which the
+  dashboard sync writes from the run.
+- `request_new_assessment(p_application_id, p_build_version)`, Security Team
+  only. It locks the application, refuses one outside the caller's access, a
+  version on Android, which tests the installed app, and an application that
+  already has an assessment `queued`, `waiting` or `running`. It then creates a
+  `queued` `manual::` assessment sized like the last one and its run request,
+  and returns the assessment. Earlier assessments are kept; findings, tickets
+  and conversations belong to the application, so they carry over.
+
+It also redefines `request_assessment_run()` so a new request for an assessment
+copies the `build_version` of that assessment's latest request, and a retry
+tests the same build. `create or replace` keeps its grants; the new function is
+granted to `authenticated` and `service_role` and revoked from `anon`. No rows
+change. The baseline carries the same definitions.
+`supabase/tests/0041_assessment_build_versions_rls.sql` and
+`final_schema_assert.sql` cover it.
+
+**Rollout order.** Apply `0041` before deploying the dashboard sync worker that
+writes `app_version`: against an older schema its assessment writes are
+refused. The frontend that calls `request_new_assessment` also needs `0041`;
+until then its "Assess a new version" fails with the missing-function error.
+The assessment worker only reads `build_version`, so it works either way.
+
 ### Test runs in conversation activity (0040)
 
 Fix `0040_test_runs_in_conversation_activity.sql` redefines

@@ -150,6 +150,8 @@ so they run only along the legacy chain at the version their fixtures need:
 | `0034_reconcile_reassessment_internal_only_rls.sql` | signed-in clients refused permission to call `reconcile_reassessment_ticket_state()` directly, the worker role keeping its grant, and the reassessment RPCs that reconcile internally staying callable |
 | `0035_restore_ticket_ownership_guards_rls.sql` | a developer refused when changing a ticket's type, finding, application, creator or assignment, setting `closed_at`, or editing withdrawal details after withdrawing; withdrawing, resuming, choosing an approach and the reassessment RPCs still working; and security still able to reassign and close |
 | `0036_assessment_run_request_run_id_rls.sql` | run requests carrying an optional `run_id` that a new request leaves empty, a developer with access reading the run the worker recorded, a developer outside the application seeing nothing, and neither a developer nor security able to rewrite it |
+| `0041_assessment_build_versions_rls.sql` | only security starting a new assessment of an assessed app, which keeps the earlier one and names the chosen build version on its run request, a second refused while one is in progress, Android refusing a version, a retry of a failed assessment requesting the same version, and anonymous callers refused |
+| `0042_assessment_latest_run_rls.sql` | assessments carrying an optional `latest_run_id`, empty on a new assessment and recorded by the sync worker |
 
 None is part of `npm test` — they need a disposable database. The supported
 runner creates its own isolated PostgreSQL container. Each suite creates its own placeholder fixtures,

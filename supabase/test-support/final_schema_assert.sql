@@ -173,4 +173,21 @@ begin
     select 1 from pg_proc where proname = 'risk_conversation_activity'
       and prosrc like '%from findings f%'
   ) then raise exception 'conversation activity no longer counts synced test runs'; end if;
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'assessments' and column_name = 'app_version'
+  ) or not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'assessment_run_requests' and column_name = 'build_version'
+  ) then raise exception 'assessments cannot record build versions'; end if;
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'assessments' and column_name = 'latest_run_id'
+  ) then raise exception 'assessments cannot record their latest run'; end if;
+  if to_regprocedure('public.request_new_assessment(uuid,text)') is null then
+    raise exception 'request_new_assessment is missing';
+  end if;
+  if has_function_privilege('anon', 'public.request_new_assessment(uuid,text)', 'EXECUTE') then
+    raise exception 'anon unexpectedly has request_new_assessment execute grant';
+  end if;
 end $$;
