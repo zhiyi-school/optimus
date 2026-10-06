@@ -152,6 +152,7 @@ so they run only along the legacy chain at the version their fixtures need:
 | `0036_assessment_run_request_run_id_rls.sql` | run requests carrying an optional `run_id` that a new request leaves empty, a developer with access reading the run the worker recorded, a developer outside the application seeing nothing, and neither a developer nor security able to rewrite it |
 | `0041_assessment_build_versions_rls.sql` | only security starting a new assessment of an assessed app, which keeps the earlier one and names the chosen build version on its run request, a second refused while one is in progress, Android refusing a version, a retry of a failed assessment requesting the same version, and anonymous callers refused |
 | `0042_assessment_latest_run_rls.sql` | assessments carrying an optional `latest_run_id`, empty on a new assessment and recorded by the sync worker |
+| `0043_application_identity_per_platform_rls.sql` | the iOS and Android builds of one app sharing an external id, a second application on the same platform with that id refused, an upsert on external id and platform touching only that platform's row, and applications without an external id left unconstrained |
 
 None is part of `npm test` — they need a disposable database. The supported
 runner creates its own isolated PostgreSQL container. Each suite creates its own placeholder fixtures,

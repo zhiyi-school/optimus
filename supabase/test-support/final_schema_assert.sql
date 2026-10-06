@@ -184,6 +184,14 @@ begin
     select 1 from information_schema.columns
     where table_schema = 'public' and table_name = 'assessments' and column_name = 'latest_run_id'
   ) then raise exception 'assessments cannot record their latest run'; end if;
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.applications'::regclass
+      and conname = 'applications_external_id_platform_key' and contype = 'u'
+  ) or exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.applications'::regclass and conname = 'applications_external_id_key'
+  ) then raise exception 'application identity is not per platform'; end if;
   if to_regprocedure('public.request_new_assessment(uuid,text)') is null then
     raise exception 'request_new_assessment is missing';
   end if;

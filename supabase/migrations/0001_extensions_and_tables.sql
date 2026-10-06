@@ -27,7 +27,7 @@ create index idx_profiles_team_id on profiles (team_id);
 
 create table applications (
   id uuid primary key default gen_random_uuid(),
-  external_id text unique,
+  external_id text,
   name text not null,
   platform text not null check (platform in ('ios', 'android')),
   version text,
@@ -45,7 +45,8 @@ create table applications (
   provisioning_error text,
   artifact_sha256 text check (artifact_sha256 is null or artifact_sha256 ~ '^[0-9a-f]{64}$'),
   icon_ref text check (icon_ref is null or icon_ref ~ '^icons/[0-9a-f]{64}\.png$'),
-  icon_extraction_status text check (icon_extraction_status in ('available', 'unavailable', 'failed'))
+  icon_extraction_status text check (icon_extraction_status in ('available', 'unavailable', 'failed')),
+  constraint applications_external_id_platform_key unique (external_id, platform)
 );
 
 create index idx_applications_developer_team_id on applications (developer_team_id);

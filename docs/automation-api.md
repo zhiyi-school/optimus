@@ -42,8 +42,9 @@ test page (see [Starting tests](#starting-tests)). The platform is the
 application's own (`ios`/`android`) and the config path is never user-entered —
 it's always the backend's standard `configs/<platform>.yaml`
 (`src/automation-api/endpoints.ts#defaultConfigPath`). `POST /runs` carries the
-application's `external_id` as `apps` (matched by the backend against an app's
-`id`, `name`, `package_name`, or `bundle_id`) and that one `risk_id` as `risks`
+application's `external_id` as `apps` (an exact app `id` selects that app alone;
+the backend matches any other value loosely against an app's `id`, `name`,
+`package_name`, or `bundle_id`) and that one `risk_id` as `risks`
 (matched verbatim). Both are comma-separated strings, and leaving one out means
 "all": the assessment worker sends only `apps`, so a whole-assessment run covers
 every risk for that app.
@@ -73,7 +74,8 @@ in — it registers, then asks the backend whether the app is ready:
    opened and the assessment shows setup progress.
 2. **App is already on the backend**, set up ahead of time through the config
    API or by editing YAML. Registration returns `409` naming the existing
-   `app_id`, which is adopted as `external_id`. Provisioning comes back
+   `app_id`, which is adopted as `external_id`. For Android this includes an
+   entry with the same package under a different id. Provisioning comes back
    `ready`, so **no ticket is created** (`addApp` returns `ticket: null`) and
    the assessment is immediately testable.
 
@@ -260,7 +262,8 @@ service-role key, and moving that anywhere a browser can reach would hand every
 visitor a key that bypasses row-level security.
 
 The worker uses stable external IDs (`applications.external_id` = the backend's
-`app_id`; `findings.external_id` = `"<app_id>::<test_id>"`) so re-syncing the
+`app_id`, unique per platform, so the iOS and Android builds of an app may share
+an app id and stay separate applications; `findings.external_id` = `"<app_id>::<test_id>"`) so re-syncing the
 same run never creates duplicate applications, assessments, or findings — it
 updates the existing rows and writes a `finding_history` entry only when the
 status actually changed. A processed ledger keyed by run timestamp and report

@@ -123,6 +123,23 @@ them. The baseline already carries them, so retiring changes no schema.
 
 The notes below describe the fixes in `supabase/fixes/`.
 
+### Application identity per platform (0043)
+
+Fix `0043_application_identity_per_platform.sql` replaces the unique constraint
+on `applications.external_id` with one on `(external_id, platform)`. An
+application's automation identity is its backend app id on its platform, so
+the iOS and Android builds of an app can share an app id and remain separate
+applications. The dashboard sync upserts applications on both columns, so a
+sync of one platform can never merge into the other platform's row. The new
+constraint is looser than the old one, so existing rows always satisfy it and
+none change. Rows without an `external_id` stay unconstrained. The baseline
+carries the same constraint. `supabase/tests/0043_application_identity_per_platform_rls.sql`
+and `final_schema_assert.sql` cover it.
+
+**Rollout order.** Apply `0043`, after `0042`, before deploying the dashboard
+sync worker that upserts on `external_id,platform`; against an older schema its
+application writes are refused because no constraint matches.
+
 ### Latest run on assessments (0042)
 
 Fix `0042_assessment_latest_run.sql` adds `assessments.latest_run_id`, the
