@@ -158,7 +158,7 @@ describe("exactly one current stage", () => {
     expect(spinners()).toHaveLength(0);
     expect(stepMarkers()).toHaveLength(0);
     expect(container.textContent).toContain("Automated testing complete");
-    expect(container.textContent).toContain("4 of 4 security tests run.");
+    expect(container.textContent).not.toContain("security tests run");
   });
 
   it("marks an unresolved backend-unknown stage as unknown, not spinning", () => {
@@ -273,7 +273,7 @@ describe("run-request lifecycle scenarios", () => {
     });
     expect(spinners()).toHaveLength(1);
     expect(container.textContent).toContain("Automated tests are running");
-    expect(container.textContent).toContain("2 of 4 security tests run.");
+    expect(container.textContent).not.toContain("security tests run");
   });
 
   it("waiting, with the next retry time", () => {

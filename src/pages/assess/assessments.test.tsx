@@ -20,8 +20,6 @@ let reportsFailed = false;
 const reportRequests: { filters: unknown; opts: unknown }[] = [];
 const assessmentListOptions: unknown[] = [];
 let runRequest: unknown = null;
-let runEvents: unknown[] = [];
-const runEventStreams: { runId: unknown; enabled: unknown }[] = [];
 
 function application(id: string, name: string, platform: Application["platform"] = "ios"): Application {
   return {
@@ -116,10 +114,6 @@ vi.mock("@/test-support/query-hooks", () => {
     useRunSyncStatus: () => ({ ...idle, data: undefined }),
     useAppBuilds: () => ({ ...idle, data: { builds: [], default_version: null, ambiguous: false } }),
     useRequestNewAssessment: () => ({ mutate: () => {}, isPending: false, isError: false, error: undefined }),
-    useRunEvents: (runId: unknown, enabled: unknown) => {
-      runEventStreams.push({ runId, enabled });
-      return { events: runEvents, streamState: "open" };
-    },
     useTickets: () => ({ ...idle, data: [] }),
   };
 });
@@ -138,8 +132,6 @@ beforeEach(() => {
   reportRequests.length = 0;
   assessmentListOptions.length = 0;
   runRequest = null;
-  runEvents = [];
-  runEventStreams.length = 0;
   conversationActivity = new Map();
   assessments = [assessment({})];
   container = document.createElement("div");
@@ -467,30 +459,15 @@ describe("an assessment that finishes while it is open", () => {
   });
 });
 
-describe("live test progress in the expanded row", () => {
-  const started = { id: "example-request-id", status: "completed", run_id: "example-run-id" };
-  const finished = (risk_id: string) => ({ type: "risk_completed", app_id: "external_example-app-id", risk_id });
-
-  it("counts the tests the started run has finished", () => {
-    runRequest = started;
-    runEvents = [
-      { type: "risk_started", app_id: "external_example-app-id", risk_id: "risk-a" },
-      finished("risk-a"),
-      finished("risk-b"),
-    ];
-    assessments = [assessment({ id: "example-assessment-id", status: "running" })];
-    render("/assessments?expanded=example-assessment-id");
-
-    expect(container.textContent).toContain("2 of 4 security tests run.");
-    expect(runEventStreams.at(-1)).toEqual({ runId: "example-run-id", enabled: true });
-  });
-
-  it("shows the stored count when no run has been started", () => {
+describe("a running assessment in the expanded row", () => {
+  it("says tests are running without a test count", () => {
+    runRequest = { id: "example-request-id", status: "completed", run_id: "example-run-id" };
     assessments = [assessment({ id: "example-assessment-id", status: "running", completed_tests: 1 })];
     render("/assessments?expanded=example-assessment-id");
 
-    expect(container.textContent).toContain("1 of 4 security tests run.");
-    expect(runEventStreams.at(-1)).toEqual({ runId: undefined, enabled: false });
+    const panel = container.querySelector("tbody tr + tr")!;
+    expect(panel.textContent).toContain("Tests are running on the backend.");
+    expect(panel.textContent).not.toContain("security tests run");
   });
 });
 
