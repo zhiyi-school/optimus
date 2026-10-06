@@ -325,7 +325,16 @@ another run already holds that platform's device (one run per platform at a
 time) — puts the request back to `waiting` with a `blocker_code` and a
 `next_attempt_at`. The delay starts at 30s and doubles to a 900s ceiling, and
 the request fails after 20 attempts; a non-retryable blocker such as incomplete
-configuration fails it straight away. Once the run has started the request is
+configuration fails it straight away. An Android app that is not installed on
+the test device (`app_not_installed`) is installed from the Play Store first.
+Only free apps are installed; a paid app (`app_paid`), an app the store does not
+offer (`app_unavailable`), a Play Store account prompt
+(`store_account_action_required`) or an unrecognised Play Store screen
+(`store_screen_unrecognised`) fails the request with that code and its message,
+and **Retry now** stays available for after someone has dealt with it on the
+device. A slow or failed install (`app_install_timeout`, `app_install_failed`)
+waits and retries. `assessmentRunState` (`src/domain/assessment/run-state.ts`)
+gives each code a short label. Once the run has started the request is
 closed, and the dashboard sync worker, not the queue, later moves the assessment
 to `completed` or `failed`. The backend's operations guide covers running and
 monitoring the worker.

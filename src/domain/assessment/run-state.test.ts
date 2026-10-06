@@ -73,6 +73,32 @@ describe("what to tell someone about an assessment", () => {
     }
   });
 
+  it("names the Play Store install outcomes, keeping Retry for after a person has acted", () => {
+    for (const [blocker, label] of [
+      ["app_install_timeout", "Waiting to retry installing the app"],
+      ["app_install_failed", "Waiting to retry installing the app"],
+    ] as const) {
+      const state = assessmentRunState({ status: "waiting" }, request("waiting", { blocker_code: blocker }));
+      expect(state.label, blocker).toBe(label);
+      expect(state.autoRetry, blocker).toBe(true);
+    }
+    for (const [blocker, label] of [
+      ["app_paid", "Paid app must be installed by a person"],
+      ["app_unavailable", "App is not available from the Play Store"],
+      ["store_account_action_required", "Play Store account needs attention"],
+      ["store_screen_unrecognised", "Play Store screen was not recognised"],
+    ] as const) {
+      const state = assessmentRunState(
+        { status: "failed" },
+        request("failed", { blocker_code: blocker, last_error: "Someone must act on the device." }),
+      );
+      expect(state.label, blocker).toBe(label);
+      expect(state.tone, blocker).toBe("danger");
+      expect(state.detail, blocker).toBe("Someone must act on the device.");
+      expect(state.canRetry, blocker).toBe(true);
+    }
+  });
+
   it("says the environment is being prepared once a worker has it", () => {
     const state = assessmentRunState({ status: "queued" }, request("claimed"));
 
