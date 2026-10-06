@@ -134,6 +134,15 @@ describe("one row per application", () => {
     ]);
   });
 
+  it("keeps the iOS and Android builds of one app together, Android first", () => {
+    const rows = latestAssessmentPerApp([
+      row({ id: "a", application_id: "app-1", application: { name: "Example App", platform: "ios" } as never }),
+      row({ id: "b", application_id: "app-3", application: { name: "Other App", platform: "android" } as never }),
+      row({ id: "c", application_id: "app-2", application: { name: "Example App", platform: "android" } as never }),
+    ]);
+    expect(rows.map((entry) => entry.id)).toEqual(["c", "a", "b"]);
+  });
+
   it("breaks a tie on missing names deterministically by application id", () => {
     const rows = latestAssessmentPerApp([
       row({ id: "a", application_id: "app-b", application: null }),

@@ -48,7 +48,7 @@ export function findingsByTestId<T extends Pick<Finding, "test_id">>(
   return map;
 }
 
-/** Keeps each application's most recently updated assessment, sorted by application name. */
+/** Keeps each application's most recently updated assessment, sorted by application name then platform. */
 export function latestAssessmentPerApp(assessments: AssessmentRow[] | undefined): AssessmentRow[] {
   const latestByApp = new Map<string, AssessmentRow>();
   for (const a of assessments ?? []) {
@@ -57,7 +57,12 @@ export function latestAssessmentPerApp(assessments: AssessmentRow[] | undefined)
   }
   debug("keeps latest assessment per app", { assessmentCount: assessments?.length ?? 0, appCount: latestByApp.size });
   return [...latestByApp.values()].sort((a, b) =>
-    compareByName(a.application?.name, b.application?.name, a.application_id, b.application_id),
+    compareByName(
+      a.application?.name,
+      b.application?.name,
+      `${a.application?.platform ?? ""}:${a.application_id}`,
+      `${b.application?.platform ?? ""}:${b.application_id}`,
+    ),
   );
 }
 

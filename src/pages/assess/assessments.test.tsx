@@ -23,12 +23,12 @@ let runRequest: unknown = null;
 let runEvents: unknown[] = [];
 const runEventStreams: { runId: unknown; enabled: unknown }[] = [];
 
-function application(id: string, name: string): Application {
+function application(id: string, name: string, platform: Application["platform"] = "ios"): Application {
   return {
     id,
     external_id: `external_${id}`,
     name,
-    platform: "ios",
+    platform,
     version: "1.0",
     identifier: null,
     developer_team_id: null,
@@ -183,7 +183,9 @@ function rows() {
 }
 
 function rowNames() {
-  return [...container.querySelectorAll("tbody tr td:first-child")].map((td) => td.textContent?.trim());
+  return [...container.querySelectorAll("tbody tr td:first-child span.font-medium.text-foreground")].map((name) =>
+    name.textContent?.trim(),
+  );
 }
 
 function click(element: Element) {
@@ -221,7 +223,60 @@ describe("alphabetical ordering", () => {
     const options = [...container.querySelectorAll("select")[0].querySelectorAll("option")].map(
       (o) => o.textContent,
     );
-    expect(options).toEqual(["All applications", "Apple App", "Zebra App"]);
+    expect(options).toEqual(["All applications", "Apple App (iOS)", "Zebra App (iOS)"]);
+  });
+});
+
+describe("the same app on both platforms", () => {
+  beforeEach(() => {
+    assessments = [
+      assessment({ id: "a1", status: "completed", application: application("app-ios", "Example Application", "ios") }),
+      assessment({
+        id: "a2",
+        status: "completed",
+        application: application("app-android", "Example Application", "android"),
+      }),
+    ];
+  });
+
+  it("labels each row with its platform, Android before iOS", () => {
+    render();
+    const platforms = [...container.querySelectorAll("tbody tr td:first-child")].map((td) =>
+      td.textContent?.replace("Example Application", "").trim(),
+    );
+    expect(rowNames()).toEqual(["Example Application", "Example Application"]);
+    expect(platforms).toEqual(["Android", "iOS"]);
+  });
+
+  it("names the platform in each row's accessible label", () => {
+    render();
+    expect(rows().map((row) => row.getAttribute("aria-label"))).toEqual([
+      "Open the assessment for Example Application (Android)",
+      "Open the assessment for Example Application (iOS)",
+    ]);
+  });
+
+  it("names the platform in the application filter", () => {
+    render();
+    const filtersButton = [...container.querySelectorAll("button")].find((b) =>
+      b.textContent?.includes("Filters"),
+    )!;
+    click(filtersButton);
+    const options = [...container.querySelectorAll("select")[0].querySelectorAll("option")].map(
+      (o) => o.textContent,
+    );
+    expect(options).toEqual([
+      "All applications",
+      "Example Application (Android)",
+      "Example Application (iOS)",
+    ]);
+  });
+
+  it("names the platform in the delete confirmation", () => {
+    render();
+    const del = container.querySelector("[title='Delete Example Application (Android)']") as HTMLButtonElement;
+    act(() => del.click());
+    expect(document.body.textContent).toContain("Delete Example Application (Android)?");
   });
 });
 
@@ -279,7 +334,7 @@ describe("an incomplete assessment row", () => {
     expect(row.getAttribute("tabindex")).toBe("0");
     expect(row.getAttribute("aria-expanded")).toBe("false");
     expect(row.getAttribute("aria-label")).toBe(
-      "View setup and testing status for Example Application",
+      "View setup and testing status for Example Application (iOS)",
     );
   });
 
@@ -564,7 +619,8 @@ describe("the Last Updated column", () => {
 });
 
 describe("assessing a new version from the list", () => {
-  const newVersionButton = () => container.querySelector("[aria-label='Assess a new version of Example Application']");
+  const newVersionButton = () =>
+    container.querySelector("[aria-label='Assess a new version of Example Application (iOS)']");
 
   it("offers it on a finished app and opens the version picker", () => {
     assessments = [assessment({ status: "completed" })];
@@ -572,7 +628,7 @@ describe("assessing a new version from the list", () => {
 
     act(() => (newVersionButton() as HTMLButtonElement).click());
 
-    expect(document.body.textContent).toContain("Assess a new version of Example Application");
+    expect(document.body.textContent).toContain("Assess a new version of Example Application (iOS)");
     expect(path()).toBe("/assessments");
   });
 

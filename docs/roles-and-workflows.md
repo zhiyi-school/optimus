@@ -703,6 +703,11 @@ may be unplugged. Those are reported separately, so an assessment whose setup is
 complete but whose device is missing shows **Waiting for a compatible test
 device** rather than a completed setup or a raw error.
 
+The iOS and Android builds of an app are separate applications with their own
+assessments, so the assessments list shows one row for each, labelled with its
+platform and sorted next to each other. The application filter and the row
+actions name the platform too.
+
 A queued, waiting or failed assessment stays open and readable from the
 assessments list — the row navigates, and the chevron beside it expands setup
 progress without taking navigation away. Where an assessment is stuck for a

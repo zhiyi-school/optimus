@@ -13,6 +13,7 @@ import {
   severityToneOf,
   testRunStatusConfig,
   assessmentStatusConfig,
+  platformLabel,
 } from "@/domain/status-labels";
 import type { FindingStatus, Platform } from "@/database/types";
 
@@ -35,7 +36,7 @@ export function PlatformBadge({ platform }: { platform: Platform | string }) {
   return (
     <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground">
       <Icon className="h-3.5 w-3.5" />
-      {platform === "ios" ? "iOS" : "Android"}
+      {platformLabel(platform)}
     </span>
   );
 }

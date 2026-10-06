@@ -17,6 +17,7 @@ import { Select } from "@/components/ui/input";
 import { useAppBuilds } from "@/hooks/queries/automation";
 import { useRequestNewAssessment } from "@/hooks/queries/assessments";
 import { buildOptionLabel, selectableVersions } from "@/domain/assessment/build-versions";
+import { applicationLabel } from "@/domain/status-labels";
 import { createDebug } from "@/lib/debug";
 import { errorMessage } from "@/lib/utils";
 import type { AppBuild } from "@/automation-api/types";
@@ -66,7 +67,7 @@ export function NewVersionDialog({ application, open, onOpenChange }: NewVersion
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Assess a new version of {application.name}</DialogTitle>
+          <DialogTitle>Assess a new version of {applicationLabel(application)}</DialogTitle>
           <DialogDescription>
             Runs every security test again as a new assessment. Findings, tickets and conversations carry
             over, and earlier assessments stay on the app&apos;s page.

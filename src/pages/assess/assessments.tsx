@@ -6,7 +6,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { AlertTriangle, PackagePlus, Plus, RefreshCw, SlidersHorizontal, Trash2 } from "lucide-react";
 import { PageHeader, FilterBar, LoadingState, ErrorState, EmptyState } from "@/components/layout/page-blocks";
-import { DataTable, type DataTableColumn, AssessmentStatusBadge } from "@/components/shared/badges-and-table";
+import {
+  DataTable,
+  type DataTableColumn,
+  AssessmentStatusBadge,
+  PlatformBadge,
+} from "@/components/shared/badges-and-table";
 import { AssessmentStatusPanel } from "@/components/assessment/assessment-progress";
 import { NewVersionDialog } from "@/components/assessment/new-version-dialog";
 import { Select } from "@/components/ui/input";
@@ -34,6 +39,7 @@ import { useAuth } from "@/auth/auth-context";
 import { ApplicationIcon } from "@/components/shared/application-icon";
 import { latestAssessmentPerApp } from "@/domain/assessment/assessments";
 import { assessmentVersion, canStartNewAssessment } from "@/domain/assessment/build-versions";
+import { applicationLabel } from "@/domain/status-labels";
 import { createDebug } from "@/lib/debug";
 import { cn, compareByName, errorMessage, formatDate } from "@/lib/utils";
 import type { Assessment, Application } from "@/database/types";
@@ -60,7 +66,10 @@ export default function Assessments() {
   const { data: conversationActivity } = useConversationActivity();
   const { data: applications } = useApplications();
   const sortedApplications = useMemo(
-    () => [...(applications ?? [])].sort((a, b) => compareByName(a.name, b.name, a.id, b.id)),
+    () =>
+      [...(applications ?? [])].sort((a, b) =>
+        compareByName(a.name, b.name, `${a.platform}:${a.id}`, `${b.platform}:${b.id}`),
+      ),
     [applications],
   );
 
@@ -152,7 +161,10 @@ export default function Assessments() {
         render: (r) => (
           <div className="flex items-center gap-3">
             <ApplicationIcon application={r.application} />
-            <span className="font-medium text-foreground">{r.application?.name ?? "—"}</span>
+            <span className="flex flex-col">
+              <span className="font-medium text-foreground">{r.application?.name ?? "—"}</span>
+              {r.application && <PlatformBadge platform={r.application.platform} />}
+            </span>
           </div>
         ),
       },
@@ -168,7 +180,7 @@ export default function Assessments() {
             <div
               className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
               role="progressbar"
-              aria-label={`${r.application?.name ?? "Application"} security tests completed`}
+              aria-label={`${r.application ? applicationLabel(r.application) : "Application"} security tests completed`}
               aria-valuemin={0}
               aria-valuemax={r.total_tests}
               aria-valuenow={r.completed_tests}
@@ -213,8 +225,8 @@ export default function Assessments() {
                           setAppToReassess(r.application);
                         }}
                         className="text-muted-foreground hover:text-primary"
-                        title={`Assess a new version of ${r.application.name}`}
-                        aria-label={`Assess a new version of ${r.application.name}`}
+                        title={`Assess a new version of ${applicationLabel(r.application)}`}
+                        aria-label={`Assess a new version of ${applicationLabel(r.application)}`}
                       >
                         <PackagePlus className="h-4 w-4" />
                       </button>
@@ -227,7 +239,7 @@ export default function Assessments() {
                         setAppToDelete(r.application);
                       }}
                       className="text-muted-foreground hover:text-danger"
-                      title={`Delete ${r.application.name}`}
+                      title={`Delete ${applicationLabel(r.application)}`}
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -349,7 +361,7 @@ export default function Assessments() {
             <option value="">All applications</option>
             {sortedApplications.map((app) => (
               <option key={app.id} value={app.id}>
-                {app.name}
+                {applicationLabel(app)}
               </option>
             ))}
           </Select>
@@ -397,10 +409,10 @@ export default function Assessments() {
             debug("opens assessment", { assessmentId: r.id, status: r.status });
             navigate(`/assessments/${r.id}`);
           }}
-          rowLabel={(r) => `Open the assessment for ${r.application?.name ?? "this application"}`}
+          rowLabel={(r) => `Open the assessment for ${r.application ? applicationLabel(r.application) : "this application"}`}
           rowActivation={(r) => (r.status === "completed" ? "navigate" : "expand")}
           expandLabel={(r) =>
-            `View setup and testing status for ${r.application?.name ?? "this application"}`
+            `View setup and testing status for ${r.application ? applicationLabel(r.application) : "this application"}`
           }
           renderCard={(r) => (
             <span className="flex items-center gap-3">
@@ -409,6 +421,11 @@ export default function Assessments() {
                 <span className="block truncate text-sm font-medium text-foreground">
                   {r.application?.name ?? "—"}
                 </span>
+                {r.application && (
+                  <span className="mt-0.5 block">
+                    <PlatformBadge platform={r.application.platform} />
+                  </span>
+                )}
                 <span className="mt-0.5 block text-xs text-muted-foreground">
                   {assessmentVersion(r, r.application) ? `Version ${assessmentVersion(r, r.application)}` : "Version unknown"} ·{" "}
                   {r.completed_tests} of {r.total_tests} tests
@@ -452,7 +469,7 @@ export default function Assessments() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete {appToDelete?.name}?</DialogTitle>
+            <DialogTitle>Delete {appToDelete && applicationLabel(appToDelete)}?</DialogTitle>
             <DialogDescription>
               This permanently deletes the application along with every assessment, finding, and
               ticket (and their messages/history) tied to it. This can&apos;t be undone.

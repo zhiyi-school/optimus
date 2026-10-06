@@ -1,10 +1,11 @@
 /**
- * Labels and tones for finding, severity, test run, ticket, conversation and assessment statuses.
+ * Labels and tones for finding, severity, test run, ticket, conversation and assessment statuses, and platform labels.
  */
 
 import type { RiskVerdict } from "@/automation-api/types";
 import type {
   FindingStatus,
+  Platform,
   RiskConversationEntryKind,
 } from "@/database/types";
 
@@ -129,3 +130,13 @@ export const assessmentStatusConfig: Record<
   completed: { label: "Completed", tone: "success" },
   failed: { label: "Failed", tone: "danger" },
 };
+
+/** The display name of a platform. */
+export function platformLabel(platform: Platform | string): string {
+  return platform === "ios" ? "iOS" : "Android";
+}
+
+/** An application's name qualified by its platform, telling apart the iOS and Android builds of one app. */
+export function applicationLabel(application: { name: string; platform: Platform | string }): string {
+  return `${application.name} (${platformLabel(application.platform)})`;
+}
