@@ -123,6 +123,38 @@ them. The baseline already carries them, so retiring changes no schema.
 
 The notes below describe the fixes in `supabase/fixes/`.
 
+### Remediation reopened on retraction (0044)
+
+Fix `0044_reopen_remediation_on_retraction.sql` makes retracting a risk
+acceptance undo the pause that accepting it caused. Before it,
+`retract_risk_acceptance()` ended the acceptance but left the remediation that
+`accept_risk_entry()` had withdrawn as `withdrawn`, so the risk read
+"Withdrawn by developer" instead of needing action again. It:
+
+- adds `restore_remediation_paused_by_acceptance()`, which reopens as `open`
+  the remediation a retracted acceptance withdrew, identified by that
+  acceptance's `remediation_withdrawn` conversation event and the reason
+  "Risk accepted". It does nothing while another acceptance is in force, while
+  another remediation on the risk is active, or once the risk is Reduced Risk.
+  Withdrawal details stay on the ticket as history, as they do on resume, and an
+  activity-log row `remediation_restored` names the retracting developer.
+  Clients cannot execute it;
+- calls it from `retract_risk_acceptance()`;
+- adds a guard to `enforce_ticket_update_permissions` that admits only that
+  `withdrawn` → `open` change, for the one ticket being restored;
+- backfills: every acceptance already retracted is passed through the same
+  function, so remediations left withdrawn by earlier retractions reopen. A
+  remediation a developer withdrew themselves is unchanged.
+
+The baseline carries the same definitions and grant.
+`supabase/tests/0044_reopen_remediation_on_retraction_rls.sql` and
+`final_schema_assert.sql` cover it. The `0038` suite, which asserted that a
+retraction left the remediation withdrawn, now runs only on the legacy chain
+from `supabase/tests/legacy/`.
+
+**Rollout order.** Apply `0044` after `0043`. The frontend labels a withdrawn
+remediation **Action required** either way; the backend worker needs no change.
+
 ### Application identity per platform (0043)
 
 Fix `0043_application_identity_per_platform.sql` replaces the unique constraint
@@ -261,7 +293,7 @@ Without it, an accepted risk kept reading "In progress" from its remediation.
 It changes no existing rows: remediations of risks accepted under `0037` stay
 open until the risk is accepted again. Grants are kept by `create or replace`.
 The baseline carries the same definition.
-`supabase/tests/0038_withdraw_remediation_on_acceptance_rls.sql` and
+`supabase/tests/legacy/0038_withdraw_remediation_on_acceptance_rls.sql` and
 `final_schema_assert.sql` cover it, and the `0037` suite asserts the final
 behavior.
 

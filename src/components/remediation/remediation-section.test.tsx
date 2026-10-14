@@ -667,7 +667,7 @@ describe("the simplified remediation view", () => {
     render();
 
     expect(buttonNamed("Resume remediation")).not.toBeUndefined();
-    expect(text()).toContain("Withdrawn by developer");
+    expect(text()).toContain("Remediation withdrawn");
   });
 
   it("points at the conversation for the reassessment, by its new name", () => {

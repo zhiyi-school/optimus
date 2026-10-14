@@ -384,7 +384,7 @@ describe("developer withdrawal, end to end", () => {
     expect(state.ticket.status).toBe("withdrawn");
     expect(state.ticket.closed_at).toBeNull();
     expect(state.finding.status).toBe("at_risk");
-    expect(developerTicketLabel(state.ticket.status)?.label).toBe("Withdrawn by developer");
+    expect(developerTicketLabel(state.ticket.status)?.label).toBe("Action required");
 
     expect(state.controls).toHaveLength(1);
     expect(state.steps.filter((step) => step.status === "completed")).toHaveLength(1);

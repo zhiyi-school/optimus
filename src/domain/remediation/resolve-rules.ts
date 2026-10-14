@@ -31,7 +31,7 @@ export const developerTicketLabels: Record<TicketStatus, { label: string; tone: 
   closed: { label: "Resolved", tone: "success" },
   rejected: { label: "Changes requested", tone: "danger" },
   accepted: { label: "Risk accepted", tone: "success" },
-  withdrawn: { label: "Withdrawn by developer", tone: "neutral" },
+  withdrawn: { label: "Action required", tone: "danger" },
 };
 
 /** The finding ids whose risk acceptance is in force, from accepted risk-acceptance tickets. */

@@ -913,8 +913,19 @@ describe("the accepted risk's status on the risk page", () => {
     render();
 
     expect(text()).toContain("Risk accepted");
-    expect(text()).not.toContain("Withdrawn by developer");
+    expect(text()).not.toContain("Action required");
     expect(text()).not.toContain("In progress");
+  });
+
+  it("shows Action required for a withdrawn remediation once the acceptance is retracted", () => {
+    tickets = [
+      ticket({ status: "withdrawn", withdrawn_at: "2026-01-02T00:00:00Z" }),
+      { ...acceptanceTicket(), status: "withdrawn" } as Ticket,
+    ];
+    render();
+
+    expect(text()).toContain("Action required");
+    expect(text()).not.toContain("Risk accepted");
   });
 
   it("shows the remediation's status again once the acceptance is no longer in force", () => {

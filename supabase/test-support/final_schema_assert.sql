@@ -136,6 +136,16 @@ begin
       and pg_get_constraintdef(oid) like '%risk_acceptance_retracted%'
       and pg_get_constraintdef(oid) like '%risk_acceptance_ended%'
   ) then raise exception 'risk acceptance events are not a legal conversation kind'; end if;
+  if to_regprocedure('public.restore_remediation_paused_by_acceptance(uuid)') is null
+     or has_function_privilege('authenticated',
+          'public.restore_remediation_paused_by_acceptance(uuid)', 'EXECUTE')
+     or not exists (
+       select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+       where n.nspname = 'public' and p.proname = 'retract_risk_acceptance'
+         and p.prosrc like '%perform restore_remediation_paused_by_acceptance(a.id)%'
+     ) then
+    raise exception 'retracting a risk acceptance no longer reopens its remediation';
+  end if;
   if not exists (
     select 1 from pg_indexes
     where schemaname = 'public' and indexname = 'risk_acceptance_one_active_per_finding'

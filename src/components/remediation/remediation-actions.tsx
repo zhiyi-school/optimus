@@ -321,7 +321,7 @@ export function WithdrawalNotice({
   return (
     <div className="rounded-md border border-border bg-muted/40 p-3">
       <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        Withdrawn by developer
+        Remediation withdrawn
       </p>
       <p className="mt-1 text-sm text-foreground">
         {ticket.withdrawal_reason || "No reason was recorded."}

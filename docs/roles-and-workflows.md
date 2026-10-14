@@ -466,7 +466,7 @@ for permissions and persisted transitions.
 | editable remediation with a live selected approach | owning developer | Record step progress | step row status changes | live definition matched by stable control/step keys; missing/new steps are incomplete | progress RLS and ticket access |
 | the risk has a result; no ticket, approach or progress needed; earlier requests may be outstanding | developer with `request_retest` on the owning team | Request Reassessment in the conversation | retest `queued`, one `retest_requested` event; a linked remediation ticket reconciles to `retest_requested` | conversation and result loaded, and the capability — neither a ticket, an approach, progress nor an outstanding request is consulted | `enforce_retest_request_permissions` requires a linked ticket to be a remediation ticket opened against this risk; a unique index permits one *running* run per risk, and another deduplicates a retried submission |
 | the risk has an At Risk or Inconclusive result and no acceptance in force | developer with `accept_risk` on the owning team | **Accept Risk** in the conversation, with a reason | acceptance in force, `risk_acceptance` ticket `accepted`, `risk_accepted` event; every queued or running reassessment `cancelled` with a `retest_withdrawn` event; the open remediation `withdrawn` ("Risk accepted") with a `remediation_withdrawn` event | capability, result loaded and not Reduced Risk, acceptance state known | `accept_risk_entry()` verifies role, access, reason and result; one acceptance in force per risk; a retried submission resolves to the acceptance it made |
-| acceptance in force | developer with `accept_risk` on the owning team | **Retract Acceptance** in the conversation, with a reason | acceptance ended as `retracted`, its ticket `withdrawn`, `risk_acceptance_retracted` event; reassessment and acceptance offered again | capability and an acceptance in force | `retract_risk_acceptance()` verifies role, access and reason; a retry resolves to the retraction already recorded |
+| acceptance in force | developer with `accept_risk` on the owning team | **Retract Acceptance** in the conversation, with a reason | acceptance ended as `retracted`, its ticket `withdrawn`, `risk_acceptance_retracted` event; the remediation the acceptance withdrew reopened as `open`; reassessment and acceptance offered again | capability and an acceptance in force | `retract_risk_acceptance()` verifies role, access and reason; a retry resolves to the retraction already recorded |
 | acceptance in force; a later result or reclassification makes the risk Reduced Risk | sync worker or security | none; it follows from the result | acceptance ended as `resolved`, its ticket `closed`, `risk_acceptance_ended` event | refreshes after sync and on new conversation entries | `trg_end_risk_acceptance_on_reduced_risk` on `finding_history`, at commit |
 | acceptance in force | anyone | no reassessment request | refused | Request Reassessment is not offered | `enforce_retest_request_permissions` refuses a request on an accepted risk |
 | queued reassessment | requester (work in progress, not wired into the UI) | no dashboard withdrawal; `withdraw_reassessment()` and `retestData.withdraw()` are intentionally unused | run `cancelled`, ticket restored to its recorded prior state once nothing else is outstanding, `retest_withdrawn` event | none | `withdraw_reassessment()` locks and verifies requester, reason, access, run and ticket state |
@@ -550,7 +550,7 @@ The Resolve workspace renames every ticket status for a developer audience:
 | `closed` | Resolved |
 | `rejected` | Changes requested |
 | `accepted` | Risk accepted |
-| `withdrawn` | Withdrawn by developer |
+| `withdrawn` | Action required |
 
 ### Who may do what
 
@@ -670,8 +670,10 @@ An acceptance ends in one of two ways, and stays on the record either way:
 | `retracted` | any developer on the team uses **Retract Acceptance**, with a reason | `withdrawn` | **Risk acceptance retracted**, with the reason |
 | `resolved` | a later automation result, or a security reclassification, makes the risk Reduced Risk | `closed` | **Risk acceptance ended: the risk is now Reduced Risk** |
 
-Retracting leaves the remediation withdrawn; the developer chooses whether to
-use **Resume remediation**, which carries on with its progress intact. A later
+Retracting reopens the remediation the acceptance withdrew as `open`, with its
+approach and progress intact, so the risk reads **Action required** again. A
+remediation the developer withdrew themselves stays withdrawn, and a withdrawn
+remediation also reads **Action required** while its risk is not accepted. A later
 result that is still At Risk or Inconclusive leaves the acceptance in force. Once ended, an acceptance never comes back: if the risk later reads At
 Risk again, a developer accepts it again. Acceptances have no expiry.
 

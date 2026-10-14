@@ -43,3 +43,7 @@ grant execute on function
   recover_expired_assessment_run_leases(),
   reconcile_reassessment_ticket_state(uuid)
 to service_role;
+
+-- Restoring a paused remediation is internal to retract_risk_acceptance(), which runs as the owner.
+revoke all on function restore_remediation_paused_by_acceptance(uuid)
+from public, anon, authenticated;

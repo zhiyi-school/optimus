@@ -238,6 +238,12 @@ ending in `rollback`.
   its approach and progress rows stay. The dashboard reads an acceptance in
   force from the risk-acceptance ticket in `accepted`, which the functions keep
   in step with the `risk_acceptance` row.
+- **Retracting resumes remediation.** Since `0044`,
+  `retract_risk_acceptance()` reopens the remediation ticket that the
+  acceptance withdrew as `open`, found through its
+  `remediation-withdrawn::<acceptance>::<ticket>` conversation event. Its
+  withdrawal details stay as history. It is left withdrawn when another
+  remediation is active or the risk is now Reduced Risk.
 - **Clients write only pending requests.** The `risk_acceptance_insert` policy
   admits a row only with a `pending` decision and no ending; acceptance,
   retraction and resolution go through the functions above, which run as the

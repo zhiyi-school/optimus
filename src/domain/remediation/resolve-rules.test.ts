@@ -74,7 +74,7 @@ describe("developer labels", () => {
       closed: "Resolved",
       rejected: "Changes requested",
       accepted: "Risk accepted",
-      withdrawn: "Withdrawn by developer",
+      withdrawn: "Action required",
     };
     for (const [status, label] of Object.entries(expected)) {
       expect(developerTicketLabels[status as TicketStatus].label, status).toBe(label);
@@ -782,11 +782,9 @@ describe("withdrawal gates", () => {
     expect(canResumeTicket(ticket({ type: "risk_acceptance", status: "withdrawn" }))).toBe(false);
   });
 
-  it("labels a withdrawn ticket as the developer's own decision, not a resolution", () => {
-    const label = developerTicketLabels.withdrawn;
-    expect(label.label).toBe("Withdrawn by developer");
-    expect(label.label).not.toBe(developerTicketLabels.closed.label);
-    expect(label.tone).not.toBe("success");
+  it("labels a withdrawn ticket as still needing action, the same as an open one", () => {
+    expect(developerTicketLabels.withdrawn).toEqual(developerTicketLabels.open);
+    expect(developerTicketLabels.withdrawn.label).not.toBe(developerTicketLabels.closed.label);
   });
 });
 

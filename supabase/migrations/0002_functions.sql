@@ -228,6 +228,20 @@ begin
     return new;
   end if;
 
+  if coalesce(current_setting('app.restoring_remediation', true), '') = old.id::text
+    and old.type = 'remediation'
+    and old.status = 'withdrawn'
+    and new.status = 'open'
+    and new.type is not distinct from old.type
+    and new.finding_id is not distinct from old.finding_id
+    and new.application_id is not distinct from old.application_id
+    and new.withdrawn_at is not distinct from old.withdrawn_at
+    and new.withdrawn_by is not distinct from old.withdrawn_by
+    and new.withdrawal_reason is not distinct from old.withdrawal_reason
+    and new.closed_at is not distinct from old.closed_at then
+    return new;
+  end if;
+
   if has_role('security') or has_role('admin') then
     return new;
   end if;
@@ -805,6 +819,59 @@ begin
 end;
 $$;
 
+-- Reopens the remediation a retracted acceptance withdrew, so the risk needs action again.
+create function restore_remediation_paused_by_acceptance(p_acceptance_id uuid) returns integer
+language plpgsql security definer set search_path = public as $$
+declare
+  a risk_acceptance;
+  remediation_id uuid;
+begin
+  select * into a from risk_acceptance where id = p_acceptance_id;
+  if not found or a.end_reason is distinct from 'retracted' then
+    return 0;
+  end if;
+  if exists (
+    select 1 from risk_acceptance
+    where finding_id = a.finding_id and decision = 'accepted' and ended_at is null
+  ) or exists (
+    select 1 from findings where id = a.finding_id and status = 'reduced_risk'
+  ) or exists (
+    select 1 from tickets
+    where finding_id = a.finding_id
+      and type = 'remediation'
+      and status not in ('closed', 'accepted', 'withdrawn')
+  ) then
+    return 0;
+  end if;
+
+  -- Only a ticket this acceptance withdrew; a developer's own withdrawal stays withdrawn.
+  select t.id into remediation_id
+  from tickets t
+  join risk_conversation_entries e
+    on e.sync_key = 'remediation-withdrawn::' || a.id::text || '::' || t.id::text
+  where t.finding_id = a.finding_id
+    and t.type = 'remediation'
+    and t.status = 'withdrawn'
+    and t.withdrawal_reason = 'Risk accepted'
+  order by t.updated_at desc, t.id
+  limit 1;
+  if remediation_id is null then
+    return 0;
+  end if;
+
+  perform set_config('app.restoring_remediation', remediation_id::text, true);
+  update tickets set status = 'open', updated_at = now() where id = remediation_id;
+  perform set_config('app.restoring_remediation', '', true);
+
+  insert into activity_log (actor_id, entity_type, entity_id, action, metadata, sync_key)
+  values (a.ended_by, 'ticket', remediation_id, 'remediation_restored',
+          jsonb_build_object('acceptance_id', a.id),
+          'remediation-restored::' || a.id::text || '::' || remediation_id::text)
+  on conflict (sync_key) where sync_key is not null do nothing;
+  return 1;
+end;
+$$;
+
 -- Retracts a risk acceptance for the developer's team and records the reason in the conversation.
 create function retract_risk_acceptance(p_acceptance_id uuid, p_reason text) returns jsonb
 language plpgsql security definer set search_path = public as $$
@@ -857,6 +924,8 @@ begin
   update tickets set status = 'withdrawn', updated_at = now()
   where id = a.ticket_id and status = 'accepted';
   perform set_config('app.ending_risk_acceptance', '', true);
+
+  perform restore_remediation_paused_by_acceptance(a.id);
 
   if a.conversation_id is not null then
     insert into risk_conversation_entries
