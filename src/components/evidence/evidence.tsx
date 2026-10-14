@@ -9,8 +9,10 @@ import {
   File as FileIcon,
   FileText,
   Image as ImageIcon,
+  Maximize2,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/layout/page-blocks";
 import { createDebug } from "@/lib/debug";
 import { downloadFile } from "@/lib/download";
@@ -23,6 +25,52 @@ const debug = createDebug("components:evidence:evidence");
 
 /** How many rail items are shown before the reader asks for the rest. */
 export const RAIL_COLLAPSED_ITEMS = 5;
+
+/**
+ * Fits a screenshot whole inside one square bound, never enlarging it: portrait and landscape
+ * captures come out at the same scale whatever their resolution, and small images keep their size.
+ * The width cap sits on the card, because a card sized to its content ignores the image's
+ * percentage cap and would stretch to a wide image's full file width.
+ */
+const EVIDENCE_IMAGE_CARD = "w-fit min-w-[12rem] max-w-[min(100%,40rem,75vh)]";
+const EVIDENCE_IMAGE_FIT = "h-auto w-auto max-h-[min(40rem,75vh)] max-w-full object-contain";
+
+/** Opens an evidence screenshot in a dialog, as large as the window allows. */
+function ImagePreview({ item, onClose }: { item: EvidenceItem | null; onClose: () => void }) {
+  return (
+    <Dialog
+      open={item !== null}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      {item?.url && (
+        // w-max: a fixed panel offset by left-1/2 would otherwise shrink to half the window.
+        <DialogContent className="w-max max-w-[95vw]">
+          <DialogTitle className="mb-3 pr-6 text-sm">{item.name}</DialogTitle>
+          <img
+            src={item.url}
+            alt={item.name}
+            className="mx-auto h-auto max-h-[calc(90vh-5rem)] w-auto max-w-[calc(95vw-2.5rem)] object-contain"
+          />
+        </DialogContent>
+      )}
+    </Dialog>
+  );
+}
+
+/** Tracks which evidence screenshot, if any, is open in the preview dialog. */
+function usePreview() {
+  const [previewing, setPreviewing] = useState<EvidenceItem | null>(null);
+
+  /** Opens the item's screenshot in the preview dialog. */
+  function open(item: EvidenceItem) {
+    debug("previews evidence", { id: item.id });
+    setPreviewing(item);
+  }
+
+  return { previewing, open, close: () => setPreviewing(null) };
+}
 
 /** Icon for an evidence kind: image, text-like or generic file. */
 function iconFor(kind: string) {
@@ -93,6 +141,7 @@ function DownloadButton({
 /** Narrow evidence list for the rail, collapsed to the first few items until expanded. */
 export function EvidenceList({ items }: { items: EvidenceItem[] }) {
   const { busy, failed, start } = useDownload();
+  const preview = usePreview();
   const [expanded, setExpanded] = useState(false);
   const listId = useId();
 
@@ -112,11 +161,18 @@ export function EvidenceList({ items }: { items: EvidenceItem[] }) {
             <li key={item.id} className="py-2">
               <div className="flex items-center gap-2.5">
                 {item.kind === "image" && item.url ? (
-                  <img
-                    src={item.url}
-                    alt={item.name}
-                    className="h-9 w-9 shrink-0 rounded border border-border object-cover"
-                  />
+                  <button
+                    type="button"
+                    onClick={() => preview.open(item)}
+                    aria-label={`Preview ${item.name}`}
+                    className="shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                  >
+                    <img
+                      src={item.url}
+                      alt=""
+                      className="h-9 w-9 rounded border border-border object-cover"
+                    />
+                  </button>
                 ) : (
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded border border-border bg-muted/40">
                     <Icon className="h-4 w-4 text-muted-foreground" />
@@ -132,7 +188,16 @@ export function EvidenceList({ items }: { items: EvidenceItem[] }) {
                       .join(" · ")}
                   </span>
                 </span>
-                {item.url && (
+                {item.kind === "image" && item.url ? (
+                  <button
+                    type="button"
+                    onClick={() => preview.open(item)}
+                    aria-label={`View ${item.name}`}
+                    className="shrink-0 rounded text-muted-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                  >
+                    <Maximize2 className="h-3.5 w-3.5" />
+                  </button>
+                ) : item.url && (
                   <a
                     href={item.url}
                     target="_blank"
@@ -181,20 +246,22 @@ export function EvidenceList({ items }: { items: EvidenceItem[] }) {
             : `Show ${hidden} more artifact${hidden === 1 ? "" : "s"}`}
         </button>
       )}
+      <ImagePreview item={preview.previewing} onClose={preview.close} />
     </>
   );
 }
 
-/** Two-column grid of evidence cards with image previews, text excerpts and downloads. */
+/** Evidence cards: screenshots sized to fit, opening full size, beside text excerpts and downloads. */
 export function EvidenceViewer({ items }: { items: EvidenceItem[] }) {
   const { busy, failed, start } = useDownload();
+  const preview = usePreview();
 
   if (items.length === 0) {
     return <EmptyState title="No evidence recorded yet." />;
   }
 
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+    <div className="flex flex-wrap items-start gap-3">
       {items.map((item) => {
         const Icon = iconFor(item.kind);
         const meta = [item.source, item.sizeBytes ? formatBytes(item.sizeBytes) : null]
@@ -204,27 +271,29 @@ export function EvidenceViewer({ items }: { items: EvidenceItem[] }) {
 
         if (item.kind === "image" && item.url) {
           return (
-            <Card key={item.id} className="overflow-hidden">
-              <a
-                href={item.url}
-                target="_blank"
-                rel="noreferrer"
+            <Card key={item.id} className={`${EVIDENCE_IMAGE_CARD} overflow-hidden`}>
+              <button
+                type="button"
+                onClick={() => preview.open(item)}
                 aria-label={`View ${item.name}`}
-                onClick={() => debug("opens evidence", { id: item.id, kind: item.kind })}
+                className="flex w-full justify-center bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40"
               >
-                <img src={item.url} alt={item.name} className="h-28 w-full object-cover" />
-              </a>
-              <div className="flex items-center justify-between gap-2 px-3 py-2 text-xs text-muted-foreground">
-                <span className="min-w-0 truncate">{item.name}</span>
-                <DownloadButton item={item} busy={busy === item.id} onDownload={start} />
+                <img src={item.url} alt={item.name} loading="lazy" className={EVIDENCE_IMAGE_FIT} />
+              </button>
+              {/* w-0 min-w-full: the caption wraps to the image's width instead of widening the card. */}
+              <div className="w-0 min-w-full border-t border-border/70">
+                <div className="flex items-center justify-between gap-2 px-3 py-2 text-xs text-muted-foreground">
+                  <span className="min-w-0 truncate">{item.name}</span>
+                  <DownloadButton item={item} busy={busy === item.id} onDownload={start} />
+                </div>
+                {meta && <p className="px-3 pb-2 text-xs text-muted-foreground">{meta}</p>}
+                {error && <p className="px-3 pb-2 text-xs text-danger">{error}</p>}
               </div>
-              {meta && <p className="px-3 pb-2 text-xs text-muted-foreground">{meta}</p>}
-              {error && <p className="px-3 pb-2 text-xs text-danger">{error}</p>}
             </Card>
           );
         }
         return (
-          <Card key={item.id} className="flex items-start gap-3 p-3">
+          <Card key={item.id} className="flex w-full items-start gap-3 p-3 sm:w-[calc(50%-0.375rem)]">
             <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium text-foreground">{item.name}</p>
@@ -240,6 +309,7 @@ export function EvidenceViewer({ items }: { items: EvidenceItem[] }) {
           </Card>
         );
       })}
+      <ImagePreview item={preview.previewing} onClose={preview.close} />
     </div>
   );
 }

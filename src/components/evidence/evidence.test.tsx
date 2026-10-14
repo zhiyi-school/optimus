@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { EvidenceList } from "@/components/evidence/evidence";
+import { EvidenceList, EvidenceViewer } from "@/components/evidence/evidence";
 import type { EvidenceItem } from "@/domain/evidence/evidence-types";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -193,5 +193,67 @@ describe("the evidence rail", () => {
     expect(names()).toHaveLength(9);
     expect(container.textContent).toContain("Reviewer note");
     expect(container.textContent).toContain("Signed approval");
+  });
+});
+
+function screenshot(name = "Target screen"): EvidenceItem {
+  return {
+    id: `run:ref-${name}`,
+    name,
+    kind: "image",
+    url: `/example/run?ref=ref-${encodeURIComponent(name)}`,
+    downloadName: "target_screen.png",
+    sizeBytes: 2048,
+    source: "Automated test",
+  };
+}
+
+function buttonLabelled(label: string) {
+  return container.querySelector<HTMLButtonElement>(`button[aria-label='${label}']`);
+}
+
+function dialog() {
+  return document.querySelector<HTMLElement>("[role='dialog']");
+}
+
+describe("evidence screenshots", () => {
+  it("fit whole inside the same square bound instead of a cropped strip", () => {
+    act(() => root.render(<EvidenceViewer items={[screenshot()]} />));
+    const image = container.querySelector("img")!;
+
+    expect(image.className).toContain("object-contain");
+    expect(image.className).not.toContain("object-cover");
+    expect(image.className).not.toMatch(/(^|\s)(h-28|w-full)(\s|$)/);
+    expect(image.className).toContain("max-h-[min(40rem,75vh)]");
+    expect(image.closest("button")?.parentElement?.className).toContain("max-w-[min(100%,40rem,75vh)]");
+  });
+
+  it("open full size in a dialog from a run card, not in a new tab", () => {
+    act(() => root.render(<EvidenceViewer items={[screenshot(), ...artifacts(1)]} />));
+    expect(container.querySelector("a[target='_blank'] img")).toBeNull();
+    expect(dialog()).toBeNull();
+
+    act(() => buttonLabelled("View Target screen")!.click());
+
+    expect(dialog()?.textContent).toContain("Target screen");
+    expect(dialog()?.querySelector("img")?.getAttribute("src")).toBe("/example/run?ref=ref-Target%20screen");
+  });
+
+  it("open in the same dialog from the rail's thumbnail and view button", () => {
+    render([screenshot()]);
+
+    act(() => buttonLabelled("Preview Target screen")!.click());
+    expect(dialog()?.querySelector("img")?.getAttribute("src")).toBe("/example/run?ref=ref-Target%20screen");
+
+    act(() => dialog()!.querySelector<HTMLButtonElement>("button")!.click());
+    expect(dialog()).toBeNull();
+
+    act(() => buttonLabelled("View Target screen")!.click());
+    expect(dialog()).not.toBeNull();
+  });
+
+  it("leave other evidence opening in a new tab", () => {
+    render(artifacts(1));
+    expect(container.querySelector("a[aria-label='View file-0.json']")?.getAttribute("target")).toBe("_blank");
   });
 });
