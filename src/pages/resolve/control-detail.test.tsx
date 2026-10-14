@@ -377,6 +377,15 @@ describe("the guided remediation steps", () => {
     expect(linkNamed("Done")?.getAttribute("href")).toBe(target);
   });
 
+  it("names the platform the steps apply to under the title", () => {
+    render();
+    expect(container.querySelector("h1")?.parentElement?.textContent).toContain("iOS");
+
+    ticketRow = ticket({ finding: { platform: "android", test_id: RISK } });
+    render();
+    expect(container.querySelector("h1")?.parentElement?.textContent).toContain("Android");
+  });
+
   it("url-encodes a risk id that needs it", () => {
     ticketRow = ticket({ finding: { platform: "ios", test_id: "example risk/01" } });
     render();

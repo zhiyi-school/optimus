@@ -5,6 +5,7 @@
 import { useState, type ReactNode } from "react";
 import { FileText } from "lucide-react";
 import { ErrorState } from "@/components/layout/page-blocks";
+import { PlatformBadge } from "@/components/shared/badges-and-table";
 import { EstimatedTime, GuidedSteps, type GuidedStep } from "@/components/playbook/guided-steps";
 import {
   ControlStepBody,
@@ -22,6 +23,8 @@ type ControlStepsViewProps = { backTo: string } & (
   | { control?: undefined; children: ReactNode }
   | {
       control: ControlDetail;
+      /** The platform the control's playbook belongs to. */
+      platform?: string;
       tip: ReactNode;
       supporting: ReactNode;
       notice?: ReactNode;
@@ -71,6 +74,7 @@ export function ControlStepsView(props: ControlStepsViewProps) {
     <GuidedSteps
       icon={FileText}
       title={`Remediation Steps — ${control.title}`}
+      badges={props.platform && <PlatformBadge platform={props.platform} />}
       description={controlSummary(control)}
       notice={props.notice}
       tipLabel="Tip"

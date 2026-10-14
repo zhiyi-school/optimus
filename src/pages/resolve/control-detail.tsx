@@ -136,6 +136,7 @@ export default function ControlDetail() {
     <ControlStepsView
       backTo={backTo}
       control={control.data}
+      platform={platform}
       notice={
         playbook.updated ? (
           <PlaybookUpdatedNotice

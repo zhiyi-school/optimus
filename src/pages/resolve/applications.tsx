@@ -6,7 +6,7 @@ import { useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { RefreshCw } from "lucide-react";
 import { PageHeader, LoadingState, ErrorState, EmptyState } from "@/components/layout/page-blocks";
-import { DataTable, type DataTableColumn } from "@/components/shared/badges-and-table";
+import { DataTable, PlatformBadge, type DataTableColumn } from "@/components/shared/badges-and-table";
 import { ApplicationIcon } from "@/components/shared/application-icon";
 import { ProgressBar, ToneBadge } from "@/components/shared/progress-display";
 import { useApplications, useTeams } from "@/hooks/queries/reference";
@@ -98,7 +98,10 @@ export default function Resolve() {
         render: (row) => (
           <div className="flex items-center gap-3">
             <ApplicationIcon application={row.application} />
-            <span className="font-medium text-foreground">{row.application.name}</span>
+            <span className="flex flex-col">
+              <span className="font-medium text-foreground">{row.application.name}</span>
+              <PlatformBadge platform={row.application.platform} />
+            </span>
           </div>
         ),
       },
@@ -192,6 +195,9 @@ export default function Resolve() {
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium text-foreground">
                     {row.application.name}
+                  </span>
+                  <span className="mt-0.5 block">
+                    <PlatformBadge platform={row.application.platform} />
                   </span>
                   <span className="mt-0.5 block text-xs text-muted-foreground">
                     {row.application.version

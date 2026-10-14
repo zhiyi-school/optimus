@@ -98,6 +98,7 @@ export default function ControlPreview() {
     <ControlStepsView
       backTo={backTo}
       control={control.data}
+      platform={platform}
       tip={
         <ControlGuidance
           notes={[

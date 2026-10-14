@@ -26,6 +26,8 @@ export interface GuidedStep {
 interface GuidedStepsProps {
   icon: LucideIcon;
   title: string;
+  /** Short labels under the title, e.g. the platform the steps apply to. */
+  badges?: ReactNode;
   description?: string;
   tip?: ReactNode;
   tipLabel?: string;
@@ -49,6 +51,7 @@ interface GuidedStepsProps {
 export function GuidedSteps({
   icon: Icon,
   title,
+  badges,
   description,
   tip,
   tipLabel,
@@ -95,6 +98,7 @@ export function GuidedSteps({
             </div>
             <div className="min-w-0">
               <h1 className="text-lg font-semibold tracking-tight text-foreground">{title}</h1>
+              {badges && <span className="mt-1 flex flex-wrap items-center gap-2">{badges}</span>}
               {description && (
                 <p className="mt-1 text-sm text-muted-foreground">{description}</p>
               )}

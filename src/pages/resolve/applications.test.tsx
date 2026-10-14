@@ -25,12 +25,12 @@ let isFetching = false;
 let iosCatalogue: { risk_id: string }[] = [{ risk_id: RISK }, { risk_id: "example-feature-02-risk-01" }];
 const androidCatalogue: { risk_id: string }[] = [];
 
-function application(id: string, name: string, version: string | null) {
+function application(id: string, name: string, version: string | null, platform = "ios") {
   return {
     id,
     external_id: `external_${id}`,
     name,
-    platform: "ios",
+    platform,
     version,
     app_type: null,
     icon_ref: null,
@@ -308,8 +308,8 @@ describe("the Resolve list", () => {
     ];
     renderList();
 
-    const names = [...container.querySelectorAll("tbody tr td:first-child")].map((td) =>
-      td.textContent?.trim(),
+    const names = [...container.querySelectorAll("tbody tr td:first-child .font-medium.text-foreground")].map(
+      (name) => name.textContent?.trim(),
     );
     expect(names).toEqual(["Alpha Application", "Zebra Application"]);
   });
@@ -322,8 +322,8 @@ describe("the Resolve list", () => {
     findings = [];
     renderList();
 
-    const names = [...container.querySelectorAll("tbody tr td:first-child")].map((td) =>
-      td.textContent?.trim(),
+    const names = [...container.querySelectorAll("tbody tr td:first-child .font-medium.text-foreground")].map(
+      (name) => name.textContent?.trim(),
     );
     expect(names).toEqual(["App 2", "app 10"]);
   });
@@ -347,6 +347,25 @@ describe("the Resolve list", () => {
     const cards = container.querySelectorAll("ul.md\\:hidden > li > button");
     expect(cards).toHaveLength(1);
     expect(cards[0].textContent).toContain("Example Application");
+  });
+
+  it("shows under each name whether the application is iOS or Android", () => {
+    applications = [
+      application(APP, "Example Application", "1.4.2"),
+      application(OTHER_APP, "Example Application", "1.4.2", "android"),
+    ];
+    renderList();
+
+    const rows = [...container.querySelectorAll("tbody tr")].map((row) => row.textContent ?? "");
+    expect(rows).toHaveLength(2);
+    expect(rows.filter((row) => row.includes("iOS"))).toHaveLength(1);
+    expect(rows.filter((row) => row.includes("Android"))).toHaveLength(1);
+
+    const cards = [...container.querySelectorAll("ul.md\\:hidden > li > button")].map(
+      (card) => card.textContent ?? "",
+    );
+    expect(cards.filter((card) => card.includes("iOS"))).toHaveLength(1);
+    expect(cards.filter((card) => card.includes("Android"))).toHaveLength(1);
   });
 });
 
