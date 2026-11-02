@@ -27,6 +27,7 @@ import {
 import { useFindings } from "@/hooks/queries/evidence";
 import {
   useRiskCatalogue,
+  useAppProvisioning,
   useActiveRun,
   useResyncRun,
   useRunEvents,
@@ -113,6 +114,9 @@ function TestPage({ watchedRunId, onWatchRun, sync, resync }: TestPageProps) {
   const currentFinding = testId ? findingByTestId.get(testId) : undefined;
 
   const appExternalId = assessment?.application?.external_id ?? undefined;
+  const { data: provisioning } = useAppProvisioning(platform, appExternalId);
+  const enabledRisks = provisioning?.enabled_risks;
+  const disabledForApp = !!testId && !!enabledRisks && !enabledRisks.includes(testId);
   const canComment = can("comment_risk_conversation");
   const {
     conversation,
@@ -189,6 +193,10 @@ function TestPage({ watchedRunId, onWatchRun, sync, resync }: TestPageProps) {
   async function runTest() {
     if (superseded) {
       debug("cannot run test on superseded assessment", { assessmentId, newestAssessmentId: newestAssessment?.id });
+      return;
+    }
+    if (disabledForApp) {
+      debug("cannot run test disabled for this app", { appExternalId, testId });
       return;
     }
     if (!platform || !appExternalId || !testId) {
@@ -350,7 +358,7 @@ function TestPage({ watchedRunId, onWatchRun, sync, resync }: TestPageProps) {
                 </div>
               </Card>
             ) : automated ? (
-              <Card className={cn("h-full p-3.5", !busy && "border-primary/50 bg-primary/5")}>
+              <Card className={cn("h-full p-3.5", !busy && !disabledForApp && "border-primary/50 bg-primary/5")}>
                 <div className="flex items-start gap-2.5">
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
                     <Zap className="h-4 w-4" />
@@ -360,16 +368,18 @@ function TestPage({ watchedRunId, onWatchRun, sync, resync }: TestPageProps) {
                       {currentFinding ? "Run this test again" : "Run automated test"}
                     </p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      {queued
-                        ? "This test is part of a run already under way — it starts as soon as the tests ahead of it finish."
-                        : deviceBusy
-                          ? "The test device is busy with a run in progress. It drives one test at a time, so this has to wait for that run to finish."
-                          : currentFinding
-                            ? "Re-runs only this security test and updates its result."
-                            : "The environment is already set up — this starts running straight away."}
+                      {disabledForApp
+                        ? "Disabled in this app's configuration."
+                        : queued
+                          ? "This test is part of a run already under way — it starts as soon as the tests ahead of it finish."
+                          : deviceBusy
+                            ? "The test device is busy with a run in progress. It drives one test at a time, so this has to wait for that run to finish."
+                            : currentFinding
+                              ? "Re-runs only this security test and updates its result."
+                              : "The environment is already set up — this starts running straight away."}
                     </p>
                     <div className="mt-2.5 flex items-center gap-2">
-                      <Button size="sm" onClick={() => void runTest()} disabled={busy}>
+                      <Button size="sm" onClick={() => void runTest()} disabled={busy || disabledForApp}>
                         {executing
                           ? "Running…"
                           : queued

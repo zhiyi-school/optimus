@@ -306,7 +306,11 @@ Three things start automated testing:
    build the assessment tested; when that build is no longer in intake, the
    backend's `app_build_missing` message is shown. Only the app's newest
    completed assessment offers the rerun, because the sync applies it there;
-   an earlier assessment's test page links to the newest one instead.
+   an earlier assessment's test page links to the newest one instead. The
+   button is disabled, with the note "Disabled in this app's configuration",
+   for a risk missing from the provisioning response's `enabled_risks`; its
+   past results stay on the page. The backend refuses such a run with
+   `risk_disabled`.
 3. **A new assessment of an assessed app.** "Assess a new version" calls
    `request_new_assessment` (`assessmentRunRequestData.requestNew`), which
    queues a run through the same durable queue as the first. On iOS the dialog

@@ -36,6 +36,7 @@ let createRequested: boolean | undefined;
 let conversationOwner: { applicationId?: string; originAssessmentId?: string | null } = {};
 let activeRuns: Record<string, { run_id: string; status: string }> = {};
 let watchedRunStatus = "running";
+let enabledRisks: string[] | undefined = [RISK];
 const runEventCalls: unknown[] = [];
 const syncStatusCalls: { runId: unknown; enabled: unknown }[] = [];
 let navigateTo: NavigateFunction | undefined;
@@ -144,6 +145,7 @@ vi.mock("@/test-support/query-hooks", () => {
         },
       ],
     }),
+    useAppProvisioning: () => ({ ...idle, data: { enabled_risks: enabledRisks } }),
     useFindings: () => ({ ...idle, data: findingFound ? [finding] : [] }),
     useProfiles: () => ({ ...idle, data: [{ id: DEVELOPER, display_name: "Example Person", email: "person@example.test", roles }] }),
     useRiskConversation: (
@@ -313,6 +315,7 @@ beforeEach(() => {
   conversationOwner = {};
   activeRuns = {};
   watchedRunStatus = "running";
+  enabledRisks = [RISK];
   runEventCalls.length = 0;
   syncStatusCalls.length = 0;
   navigateTo = undefined;
@@ -686,6 +689,25 @@ describe("security", () => {
 
     expect(buttonLabels()).toContain("Run Again");
     expect(text()).not.toContain("Open the newest assessment");
+  });
+
+  it("greys out the rerun of a risk this app's configuration disables, keeping its result", () => {
+    enabledRisks = ["example-feature-01-risk-02"];
+    history = [historyRun()];
+    render();
+
+    expect(buttonLabels()).toContain("Run Again");
+    expect(usableButtonLabels()).not.toContain("Run Again");
+    expect(text()).toContain("Disabled in this app's configuration.");
+    expect(text()).toContain("The example check did not pass.");
+  });
+
+  it("offers the rerun when the backend does not report enabled risks", () => {
+    enabledRisks = undefined;
+    render();
+
+    expect(usableButtonLabels()).toContain("Run Again");
+    expect(text()).not.toContain("Disabled in this app's configuration.");
   });
 
   it("sends a rerun of an earlier assessment to the newest one instead", () => {

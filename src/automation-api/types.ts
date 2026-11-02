@@ -199,6 +199,7 @@ export interface AppProvisioning {
   blocker_code?: string | null;
   retryable?: boolean;
   detail?: string | null;
+  enabled_risks?: string[];
 }
 
 export interface EvidenceRef {

@@ -188,7 +188,7 @@ The dashboard's expectations are encoded in `src/automation-api/types.ts` and
 | `/config/{platform}/apps` | GET | — | array of `{id, name, bundle_id?, package_name?}` | 200 |
 | `/config/{platform}/apps` | POST | `{name, version?, bundle_id?, package_name?, artifact?, risks?}` | `{id}` | 201, 409 with `{detail:{app_id}}` on duplicate |
 | `/config/{platform}/apps/{app_id}` | DELETE | — | — | 204; used only to roll back a registration whose dashboard rows could not be saved |
-| `/config/{platform}/apps/{app_id}/provisioning` | GET | — | `{app_id, platform, bundle_id, status, stages[], error}` | 200, 404 |
+| `/config/{platform}/apps/{app_id}/provisioning` | GET | — | `{app_id, platform, bundle_id, status, stages[], error, enabled_risks[]}` | 200, 404 |
 | `/config/{platform}/apps/{app_id}/icon` | GET | — | `image/png`; `ETag`/`Cache-Control` optional | 200, 404 for unknown app **and** for no icon |
 | `/runs` | GET | — | array of run records | 200 |
 | `/runs` | POST | `{platform, config_path, apps?, risks?, out_dir?}` | `{run_id, platform, status}` | **202**, 409 busy, 422 unknown app/risk |
