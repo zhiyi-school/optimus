@@ -379,9 +379,41 @@ describe("the developer feature-risk workspace", () => {
     expect(container.querySelectorAll("textarea")).toHaveLength(1);
   });
 
-  it("says so plainly when security has not raised this risk", () => {
+  it("lists every catalogue risk in the sidebar, untested ones as Not Tested, as Assess does", () => {
+    findings = [finding()];
+    render();
+
+    const rows = [...container.querySelectorAll("ul li button")].map((button) =>
+      button.textContent?.trim() ?? "",
+    );
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toContain("Example Risk");
+    expect(rows[0]).toContain("At Risk");
+    expect(rows[1]).toContain("Example Second Risk");
+    expect(rows[1]).toContain("Not Tested");
+    expect(text()).toContain("Security Tests");
+  });
+
+  it("lists the catalogue even before security records any finding", () => {
+    findings = [];
+    render();
+
+    expect([...container.querySelectorAll("ul li button")]).toHaveLength(2);
+    expect(text()).toContain("0 of 2 risks tested");
+  });
+
+  it("opens an untested risk with its description and no remediation or conversation", () => {
     render(OTHER_RISK);
-    expect(text()).toContain("Security has not raised this risk");
+    expect(text()).toContain("Example Second Risk");
+    expect(text()).toContain("Another risk.");
+    expect(text()).toContain("Not tested yet");
+    expect(text()).not.toContain("remediation:");
+    expect(container.querySelector("[role='log']")).toBeNull();
+  });
+
+  it("says so plainly when the risk is not one of the application's security tests", () => {
+    render("example-feature-09-risk-01");
+    expect(text()).toContain("This risk is not one of this application's security tests");
     expect(container.querySelector("[role='log']")).toBeNull();
   });
 

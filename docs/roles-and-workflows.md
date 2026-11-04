@@ -595,6 +595,12 @@ is a separate call that refuses an empty reason, and `updateStatus()` rejects
 /resolve/tickets/:ticketId/controls/:controlId          one control's ordered steps, writable
 ```
 
+The feature-risk page's sidebar lists every risk in the platform's catalogue,
+in catalogue order, the same list security sees in Assess
+(`developerRiskRows()` in `src/domain/remediation/resolve-rules.ts`). A risk
+with no finding shows as **Not Tested**; opening it shows its description and
+no remediation, evidence or conversation until security records a result.
+
 Progress is reported with two formulas, both computed in `src/domain/remediation/resolve-rules.ts`:
 
 ```text

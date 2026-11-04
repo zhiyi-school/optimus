@@ -26,7 +26,7 @@ import { PlaintextLiteralsCard } from "@/components/evidence/plaintext-literals"
 import {
   acceptedFindingIds,
   activeRemediationTicket,
-  developerRiskOrder,
+  developerRiskRows,
   developerTicketLabel,
   resumableRemediationTicket,
   testingProgress,
@@ -41,7 +41,7 @@ export default function ResolveRisk() {
   return <RiskPage key={riskId} />;
 }
 
-/** Shows a risk's finding, evidence, remediation and conversation, with a sidebar of raised risks. */
+/** Shows a risk's finding, evidence, remediation and conversation, with a sidebar of every security test. */
 function RiskPage() {
   const { applicationId, riskId } = useParams<{ applicationId: string; riskId: string }>();
   const { profile, can } = useAuth();
@@ -52,7 +52,8 @@ function RiskPage() {
   const tickets = useTickets({ type: "remediation", applicationId });
   const acceptanceTickets = useTickets({ type: "risk_acceptance", status: "accepted", applicationId });
   const accepted = useMemo(() => acceptedFindingIds(acceptanceTickets.data), [acceptanceTickets.data]);
-  const { data: risks } = useRiskCatalogue(application?.platform);
+  const riskCatalogue = useRiskCatalogue(application?.platform);
+  const risks = riskCatalogue.data;
 
   const finding = useMemo(
     () => (findings.data ?? []).find((candidate) => candidate.test_id === riskId),
@@ -98,16 +99,19 @@ function RiskPage() {
 
   const sidebarRisks = useMemo<RiskSidebarEntry[]>(
     () =>
-      developerRiskOrder(risks, findings.data).map((finding) => {
+      developerRiskRows(risks, findings.data).map((row) => {
+        const name =
+          risks?.find((entry) => entry.risk_id === row.riskId)?.name ?? row.finding?.title ?? row.riskId;
+        if (!row.finding) return { riskId: row.riskId, name };
         const related =
-          activeRemediationTicket(finding.id, tickets.data) ??
-          resumableRemediationTicket(finding.id, tickets.data);
+          activeRemediationTicket(row.finding.id, tickets.data) ??
+          resumableRemediationTicket(row.finding.id, tickets.data);
         // An acceptance in force is the risk's state, whatever its remediation ticket says.
-        const label = developerTicketLabel(accepted.has(finding.id) ? "accepted" : related?.status);
+        const label = developerTicketLabel(accepted.has(row.finding.id) ? "accepted" : related?.status);
         return {
-          riskId: finding.test_id as string,
-          name: risks?.find((entry) => entry.risk_id === finding.test_id)?.name ?? finding.title,
-          status: finding.status,
+          riskId: row.riskId,
+          name,
+          status: row.finding.status,
           note: label ? { label: label.label, tone: label.tone } : undefined,
         };
       }),
@@ -149,8 +153,7 @@ function RiskPage() {
           risks={sidebarRisks}
           activeRiskId={riskId}
           riskHref={(id) => `/resolve/applications/${applicationId}/risks/${id}`}
-          emptyMessage="No findings need your attention on this application."
-          heading="Findings"
+          emptyMessage="No security tests are listed for this application's platform."
         />
       }
     >
@@ -164,10 +167,25 @@ function RiskPage() {
             void findings.refetch();
           }}
         />
+      ) : !finding && risk ? (
+        <>
+          <RiskHeader
+            icon={RiskIcon}
+            name={risk.name}
+            description={risk.description || "No description recorded."}
+            badges={<PlatformBadge platform={application.platform} />}
+          />
+          <EmptyState
+            title="Not tested yet"
+            description="Security has not recorded a result for this risk on this application. Its evidence, remediation and conversation appear here once one is recorded."
+          />
+        </>
+      ) : !finding && riskCatalogue.isLoading ? (
+        <LoadingState label="Loading security tests…" />
       ) : !finding ? (
         <EmptyState
-          title="Security has not raised this risk on this application"
-          description="Choose a finding from the list to start or continue remediation."
+          title="This risk is not one of this application's security tests"
+          description="Choose a risk from the list to see its result or continue remediation."
         />
       ) : (
         <>

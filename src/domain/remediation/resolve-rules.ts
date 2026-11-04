@@ -431,18 +431,31 @@ export function resumableRemediationTicket(
     .at(-1);
 }
 
-/** Orders an app's risk findings as the catalogue does; risks it does not list keep their order at the end. */
-export function developerRiskOrder(
+export interface DeveloperRiskRow {
+  riskId: string;
+  /** The application's finding for the risk; absent while the risk is untested. */
+  finding?: Finding;
+}
+
+/** Lists every catalogue risk in catalogue order with its finding, as Assess does; findings for risks the catalogue does not list follow at the end. */
+export function developerRiskRows(
   risks: { risk_id: string }[] | undefined,
   findings: Finding[] | undefined,
-): Finding[] {
-  const linked = (findings ?? []).filter((finding) => finding.test_id);
-  const rank = new Map((risks ?? []).map((risk, index) => [risk.risk_id, index]));
-  return [...linked].sort((a, b) => {
-    const left = rank.get(a.test_id as string) ?? Number.MAX_SAFE_INTEGER;
-    const right = rank.get(b.test_id as string) ?? Number.MAX_SAFE_INTEGER;
-    return left !== right ? left - right : linked.indexOf(a) - linked.indexOf(b);
-  });
+): DeveloperRiskRow[] {
+  const byRisk = new Map<string, Finding>();
+  for (const finding of findings ?? []) {
+    // The first finding wins, matching the one the risk page opens.
+    if (finding.test_id && !byRisk.has(finding.test_id)) byRisk.set(finding.test_id, finding);
+  }
+  const rows: DeveloperRiskRow[] = (risks ?? []).map((risk) => ({
+    riskId: risk.risk_id,
+    finding: byRisk.get(risk.risk_id),
+  }));
+  const listed = new Set(rows.map((row) => row.riskId));
+  for (const [riskId, finding] of byRisk) {
+    if (!listed.has(riskId)) rows.push({ riskId, finding });
+  }
+  return rows;
 }
 
 /** The risk a developer lands on: first needing action, else one being remediated, else the first; null if none. */

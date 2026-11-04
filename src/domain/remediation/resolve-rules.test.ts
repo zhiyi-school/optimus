@@ -28,7 +28,7 @@ import {
   developerTicketLabels,
   findingProgress,
   testingProgress,
-  developerRiskOrder,
+  developerRiskRows,
   preferredDeveloperRisk,
   summarizeApplication,
 } from "@/domain/remediation/resolve-rules";
@@ -857,7 +857,7 @@ describe("withdrawn tickets in the dashboard", () => {
   });
 });
 
-describe("the order Resolve lists an application's risks in", () => {
+describe("the risks Resolve lists for an application", () => {
   const catalogue = [
     { risk_id: "example-feature-01-risk-01" },
     { risk_id: "example-feature-02-risk-01" },
@@ -867,54 +867,77 @@ describe("the order Resolve lists an application's risks in", () => {
   const second = finding({ id: "f2", test_id: "example-feature-02-risk-01" });
   const third = finding({ id: "f3", test_id: "example-feature-03-risk-01" });
 
+  /** Each row's risk and the id of its finding, or null while untested. */
+  function summary(rows: ReturnType<typeof developerRiskRows>) {
+    return rows.map((row) => [row.riskId, row.finding?.id ?? null]);
+  }
+
   it("follows the playbook catalogue, not the order findings came back in", () => {
-    expect(
-      developerRiskOrder(catalogue, [third, first, second]).map((row) => row.test_id),
-    ).toEqual([
-      "example-feature-01-risk-01",
-      "example-feature-02-risk-01",
-      "example-feature-03-risk-01",
+    expect(summary(developerRiskRows(catalogue, [third, first, second]))).toEqual([
+      ["example-feature-01-risk-01", "f1"],
+      ["example-feature-02-risk-01", "f2"],
+      ["example-feature-03-risk-01", "f3"],
     ]);
   });
 
-  it("lists only the risks this application actually has findings for", () => {
-    expect(developerRiskOrder(catalogue, [third, first]).map((row) => row.test_id)).toEqual([
-      "example-feature-01-risk-01",
-      "example-feature-03-risk-01",
+  it("lists every catalogue risk, untested ones without a finding, as Assess does", () => {
+    expect(summary(developerRiskRows(catalogue, [third, first]))).toEqual([
+      ["example-feature-01-risk-01", "f1"],
+      ["example-feature-02-risk-01", null],
+      ["example-feature-03-risk-01", "f3"],
     ]);
   });
 
-  it("drops a finding that is not linked to a playbook risk", () => {
+  it("lists the whole catalogue as untested when the application has no findings", () => {
+    expect(summary(developerRiskRows(catalogue, undefined))).toEqual([
+      ["example-feature-01-risk-01", null],
+      ["example-feature-02-risk-01", null],
+      ["example-feature-03-risk-01", null],
+    ]);
+  });
+
+  it("ignores a finding that is not linked to a playbook risk", () => {
     const unlinked = finding({ id: "f4", test_id: null });
-    expect(developerRiskOrder(catalogue, [unlinked, first])).toHaveLength(1);
+    expect(summary(developerRiskRows(catalogue, [unlinked, first]))).toEqual([
+      ["example-feature-01-risk-01", "f1"],
+      ["example-feature-02-risk-01", null],
+      ["example-feature-03-risk-01", null],
+    ]);
   });
 
   it("keeps a finding the catalogue no longer lists, at the end", () => {
     const retired = finding({ id: "f5", test_id: "example-feature-09-risk-01" });
-    expect(developerRiskOrder(catalogue, [retired, second]).map((row) => row.test_id)).toEqual([
-      "example-feature-02-risk-01",
+    expect(summary(developerRiskRows(catalogue, [retired, second])).at(-1)).toEqual([
       "example-feature-09-risk-01",
+      "f5",
     ]);
   });
 
+  it("lists a risk once, with the first finding the page would open", () => {
+    const duplicate = finding({ id: "f6", test_id: "example-feature-01-risk-01" });
+    const rows = developerRiskRows(catalogue, [first, duplicate]);
+    expect(rows).toHaveLength(3);
+    expect(rows[0].finding?.id).toBe("f1");
+  });
+
   it("keeps the findings' own order when the catalogue is unavailable", () => {
-    expect(developerRiskOrder(undefined, [third, first]).map((row) => row.test_id)).toEqual([
-      "example-feature-03-risk-01",
-      "example-feature-01-risk-01",
+    expect(summary(developerRiskRows(undefined, [third, first]))).toEqual([
+      ["example-feature-03-risk-01", "f3"],
+      ["example-feature-01-risk-01", "f1"],
     ]);
   });
 
   it("does not mutate the findings it was given", () => {
     const findings = [third, first];
-    developerRiskOrder(catalogue, findings);
+    developerRiskRows(catalogue, findings);
     expect(findings.map((row) => row.test_id)).toEqual([
       "example-feature-03-risk-01",
       "example-feature-01-risk-01",
     ]);
   });
 
-  it("has nothing to list without findings", () => {
-    expect(developerRiskOrder(catalogue, undefined)).toEqual([]);
+  it("has nothing to list without a catalogue or findings", () => {
+    expect(developerRiskRows(undefined, undefined)).toEqual([]);
   });
 });
 
