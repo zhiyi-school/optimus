@@ -12,6 +12,7 @@ import type {
   ControlProgressStatus,
   ControlReconciliation,
   Finding,
+  FindingStatus,
   Ticket,
   TicketControl,
   TicketControlStep,
@@ -46,6 +47,19 @@ export function acceptedFindingIds(tickets: Ticket[] | undefined): Set<string> {
 /** The developer-facing label and tone for a ticket status. */
 export function developerTicketLabel(status: TicketStatus | undefined) {
   return status ? developerTicketLabels[status] : undefined;
+}
+
+/** A risk's developer label: Risk accepted, else Action required while At Risk, else its ticket's progress label. */
+export function developerRiskLabel(
+  findingStatus: FindingStatus,
+  ticketStatus: TicketStatus | undefined,
+  isAccepted: boolean,
+) {
+  if (isAccepted) return developerTicketLabels.accepted;
+  if (findingStatus === "at_risk") return developerTicketLabels.open;
+  // Action required belongs to an unaccepted At Risk result, never to an open or withdrawn ticket alone.
+  if (ticketStatus === "open" || ticketStatus === "withdrawn") return undefined;
+  return developerTicketLabel(ticketStatus);
 }
 
 export const controlStatusLabels: Record<ControlProgressStatus, { label: string; tone: Tone }> = {

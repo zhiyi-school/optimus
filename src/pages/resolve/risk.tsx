@@ -27,7 +27,7 @@ import {
   acceptedFindingIds,
   activeRemediationTicket,
   developerRiskRows,
-  developerTicketLabel,
+  developerRiskLabel,
   resumableRemediationTicket,
   testingProgress,
 } from "@/domain/remediation/resolve-rules";
@@ -106,13 +106,11 @@ function RiskPage() {
         const related =
           activeRemediationTicket(row.finding.id, tickets.data) ??
           resumableRemediationTicket(row.finding.id, tickets.data);
-        // An acceptance in force is the risk's state, whatever its remediation ticket says.
-        const label = developerTicketLabel(accepted.has(row.finding.id) ? "accepted" : related?.status);
         return {
           riskId: row.riskId,
           name,
           status: row.finding.status,
-          note: label ? { label: label.label, tone: label.tone } : undefined,
+          note: developerRiskLabel(row.finding.status, related?.status, accepted.has(row.finding.id)),
         };
       }),
     [findings.data, risks, tickets.data, accepted],
@@ -138,9 +136,9 @@ function RiskPage() {
   }
 
   const RiskIcon = riskIcon(risk?.name ?? finding?.title ?? "");
-  const ticketLabel = developerTicketLabel(
-    finding && accepted.has(finding.id) ? "accepted" : ticket?.status,
-  );
+  const riskLabel = finding
+    ? developerRiskLabel(finding.status, ticket?.status, accepted.has(finding.id))
+    : undefined;
 
   return (
     <RiskWorkspace
@@ -198,7 +196,7 @@ function RiskPage() {
                 <SeverityBadge severity={finding.severity} />
                 <StatusBadge status={finding.status} />
                 <PlatformBadge platform={application.platform} />
-                {ticketLabel && <ToneBadge tone={ticketLabel.tone} label={ticketLabel.label} />}
+                {riskLabel && <ToneBadge tone={riskLabel.tone} label={riskLabel.label} />}
               </>
             }
           />

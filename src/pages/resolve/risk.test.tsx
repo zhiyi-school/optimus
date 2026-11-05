@@ -311,14 +311,59 @@ describe("the developer feature-risk workspace", () => {
     expect(paragraph!.textContent).toBe("The first paragraph.\n\nThe second paragraph.");
   });
 
-  it("shows the related ticket state alongside the risk", () => {
+  it("shows Action required for an At Risk risk even while its remediation is in progress", () => {
     render();
-    expect(text()).toContain("In progress");
+    expect(text()).toContain("Action required");
+    expect(text()).not.toContain("In progress");
+  });
+
+  it("shows the remediation's state once the risk is no longer At Risk", () => {
+    findings = [finding({ status: "inconclusive" })];
+    tickets = [ticket({ status: "retest_requested" })];
+    render();
+    expect(text()).toContain("Awaiting reassessment");
+    expect(text()).not.toContain("Action required");
   });
 
   it("embeds the remediation for the ticket this risk already has", () => {
     render();
     expect(text()).toContain("remediation:example-ticket-id");
+  });
+
+  it("shows Action required for an At Risk finding before any remediation is started", () => {
+    tickets = [];
+    render();
+    expect(text()).toContain("Action required");
+  });
+
+  it("marks a sidebar risk Action required when it is At Risk and has no remediation", () => {
+    findings = [finding(), finding({ id: "second-finding-id", test_id: OTHER_RISK })];
+    render();
+
+    const other = [...container.querySelectorAll("#risk-sidebar-list button")].find(
+      (entry) => entry.getAttribute("aria-current") !== "page",
+    );
+    expect(other?.textContent).toContain("Action required");
+  });
+
+  it("gives an Inconclusive finding with an open or withdrawn remediation no Action required label", () => {
+    findings = [finding({ status: "inconclusive" })];
+    tickets = [ticket({ status: "open" })];
+    render();
+    expect(text()).not.toContain("Action required");
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    tickets = [ticket({ status: "withdrawn", withdrawn_at: "2026-01-02T00:00:00Z" })];
+    render();
+    expect(text()).not.toContain("Action required");
+  });
+
+  it("gives a Reduced Risk finding with no remediation no Action required label", () => {
+    findings = [finding({ status: "reduced_risk" })];
+    tickets = [];
+    render();
+    expect(text()).not.toContain("Action required");
   });
 
   it("shows the remediation panel with no ticket, and never a Start remediation button", () => {
@@ -762,13 +807,12 @@ describe("the reassessment actions in the developer's conversation", () => {
     expect(reassessmentInputs[0].ticketId).toBe("example-ticket-id");
   });
 
-  it("offers the requester no withdrawal, only the queued state", () => {
+  it("offers the requester no withdrawal", () => {
     tickets = [ticket({ status: "retest_requested" })];
     retests = [retest()];
     render();
 
     expect(buttonLabelled("Withdraw reassessment")).toBeUndefined();
-    expect(text()).toContain("Awaiting reassessment");
   });
 
   it("offers no withdrawal to a developer who did not request it either", () => {
@@ -960,14 +1004,14 @@ describe("the accepted risk's status on the risk page", () => {
     expect(text()).not.toContain("Risk accepted");
   });
 
-  it("shows the remediation's status again once the acceptance is no longer in force", () => {
+  it("shows Action required again once the acceptance is no longer in force", () => {
     tickets = [
       ticket({ status: "in_progress" }),
       { ...acceptanceTicket(), status: "withdrawn" } as Ticket,
     ];
     render();
 
-    expect(text()).toContain("In progress");
+    expect(text()).toContain("Action required");
     expect(text()).not.toContain("Risk accepted");
   });
 });

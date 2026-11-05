@@ -24,6 +24,7 @@ import {
   selectedControlReconciliationPlan,
   selectionWasReplaced,
   selectedApproachComplete,
+  developerRiskLabel,
   developerTicketLabel,
   developerTicketLabels,
   findingProgress,
@@ -83,6 +84,41 @@ describe("developer labels", () => {
 
   it("has no label for a status that was never set", () => {
     expect(developerTicketLabel(undefined)).toBeUndefined();
+  });
+});
+
+describe("developerRiskLabel", () => {
+  it("labels every unaccepted At Risk finding Action required, whatever its remediation state", () => {
+    for (const status of [undefined, ...Object.keys(developerTicketLabels)] as (TicketStatus | undefined)[]) {
+      expect(developerRiskLabel("at_risk", status, false)?.label, String(status)).toBe("Action required");
+    }
+  });
+
+  it("gives Reduced Risk and Inconclusive findings with no remediation no label", () => {
+    expect(developerRiskLabel("reduced_risk", undefined, false)).toBeUndefined();
+    expect(developerRiskLabel("inconclusive", undefined, false)).toBeUndefined();
+  });
+
+  it("never labels a finding that is not At Risk Action required", () => {
+    for (const findingStatus of ["reduced_risk", "inconclusive"] as const) {
+      for (const status of [undefined, ...Object.keys(developerTicketLabels)] as (TicketStatus | undefined)[]) {
+        expect(developerRiskLabel(findingStatus, status, false)?.label, `${findingStatus}/${status}`).not.toBe(
+          "Action required",
+        );
+      }
+    }
+    expect(developerRiskLabel("inconclusive", "open", false)).toBeUndefined();
+    expect(developerRiskLabel("inconclusive", "withdrawn", false)).toBeUndefined();
+  });
+
+  it("uses the remediation ticket's label once the finding is no longer At Risk", () => {
+    expect(developerRiskLabel("reduced_risk", "closed", false)?.label).toBe("Resolved");
+    expect(developerRiskLabel("inconclusive", "retest_requested", false)?.label).toBe("Awaiting reassessment");
+  });
+
+  it("shows Risk accepted over any remediation state while the acceptance is in force", () => {
+    expect(developerRiskLabel("at_risk", undefined, true)?.label).toBe("Risk accepted");
+    expect(developerRiskLabel("at_risk", "withdrawn", true)?.label).toBe("Risk accepted");
   });
 });
 

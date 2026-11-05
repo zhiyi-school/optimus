@@ -538,7 +538,16 @@ of it intact and the withdrawal still on the record.
 
 ### Developer-facing status labels
 
-The Resolve workspace renames every ticket status for a developer audience:
+On a Resolve risk page and in its sidebar, each risk carries one label, chosen
+in this order:
+
+1. **Risk accepted** while a risk acceptance is in force.
+2. **Action required** while the latest result is At Risk, whether or not a
+   remediation has been started and whatever its ticket status.
+3. Otherwise, the remediation ticket's status, renamed for a developer
+   audience. A risk with no remediation ticket, or one that is `open` or
+   `withdrawn`, has no label, so only an unaccepted At Risk result reads
+   **Action required** there.
 
 | Internal status | Displayed as |
 |---|---|
@@ -677,9 +686,8 @@ An acceptance ends in one of two ways, and stays on the record either way:
 | `resolved` | a later automation result, or a security reclassification, makes the risk Reduced Risk | `closed` | **Risk acceptance ended: the risk is now Reduced Risk** |
 
 Retracting reopens the remediation the acceptance withdrew as `open`, with its
-approach and progress intact, so the risk reads **Action required** again. A
-remediation the developer withdrew themselves stays withdrawn, and a withdrawn
-remediation also reads **Action required** while its risk is not accepted. A later
+approach and progress intact, so an At Risk risk reads **Action required**
+again. A remediation the developer withdrew themselves stays withdrawn. A later
 result that is still At Risk or Inconclusive leaves the acceptance in force. Once ended, an acceptance never comes back: if the risk later reads At
 Risk again, a developer accepts it again. Acceptances have no expiry.
 
