@@ -77,7 +77,7 @@ Stack: React 18, TypeScript, Vite, React Router, TanStack Query 5, Tailwind 3, R
 
 ## Verification
 
-Use npm with the committed lockfile (`npm ci` when needed). CI runs every check below on each push and pull request; locally, run what your change touches, starting with the affected tests.
+Use npm with the committed lockfile (`npm ci` when needed). CI runs every check below on each pull request and each push to `main` (see [testing](docs/testing.md#continuous-integration)); locally, run what your change touches, starting with the affected tests.
 
 | Change | Run |
 | --- | --- |
