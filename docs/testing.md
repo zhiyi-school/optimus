@@ -105,6 +105,12 @@ and assert on the calls, so they exercise the real service code without a
 network. Match the real error shape — the client's interceptor always attaches
 `status`, and code paths depend on that.
 
+No test loads the real Supabase client, so the suite needs no `.env`.
+`src/test-support/database-client-mock.ts`, a Vitest setup file, mocks
+`@/database/client` for every test; its `supabase` throws on any use, so a test
+that queries Supabase declares its own `vi.mock("@/database/client")`, which
+takes precedence.
+
 Query hook behavior is implemented in `src/hooks/queries/`. Tests import or
 mock the owning domain module. Tests that exercise several page domains share a
 mock registry under `src/test-support/`; it is not a production compatibility
