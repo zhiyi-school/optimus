@@ -329,7 +329,7 @@ through a finding's remediation. They hold **workflow state only**.
   the instruction's own text. Either way it survives rewording (declared) or
   reordering (both), which is what lets progress stay attached to the right
   instruction. See
-  [the backend's playbook guide](../../playbook/mobile_playbook_automation/docs/developer-playbook.md).
+  [the backend's playbook guide](https://github.com/zhiyi-school/mobile_playbook_automation/blob/main/docs/developer-playbook.md).
 - **Reconciliation only adds, and only for the selected approach.** Opening a
   ticket inserts a row for the approach named by `tickets.selected_control_id`
   and for that approach's current steps, when the ticket does not yet have
