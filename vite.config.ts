@@ -1,7 +1,8 @@
 /**
- * Vite build and dev-server config: React plugin, the dev-only debug log file, vendor chunking and the `@` alias.
+ * Vite build, dev-server and Vitest config: React plugin, the dev-only debug log file, vendor chunking, the `@` alias and test setup.
  */
 
+/// <reference types="vitest/config" />
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "node:path";
@@ -31,5 +32,8 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+  },
+  test: {
+    setupFiles: ["./src/test-support/database-client-mock.ts"],
   },
 });
