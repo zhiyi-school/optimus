@@ -166,6 +166,8 @@ async function submit() {
   goToReview();
   await act(async () => {
     buttonNamed("Confirm & Create Assessment")?.click();
+    // TanStack Query hands mutation results to observers in a setTimeout(0) batch.
+    await new Promise((resolve) => setTimeout(resolve, 0));
   });
 }
 
