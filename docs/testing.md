@@ -268,11 +268,21 @@ repository, needing no device, network or Supabase project. See its
 
 ## Continuous integration
 
-Both repository remotes are GitHub-hosted, so `.github/workflows/verify.yml`
-uses GitHub Actions. The frontend workflow has separate jobs for documentation/dependency consistency,
-the full test/lint/build sequence, focused contracts, and the guarded disposable
-database suite. Every job has read-only repository permission; none receives
-secrets, deploys, applies a live migration, or contacts an automation host.
+`.github/workflows/verify.yml` runs on GitHub Actions for every pull request
+and every push to `main`. A newer run on the same branch or pull request
+cancels the one still in progress; runs on `main` always finish. It has four
+jobs:
+
+| Job | Runs |
+| --- | --- |
+| `documentation-and-dependencies` | `npm run check:dependencies`, `npm run check:docs`, `npm run test:maintenance` |
+| `frontend` | `npm test`, `npm run lint`, `npm run build` |
+| `contracts` | `npm run test:contract` |
+| `database` | `npm run test:database`, in a disposable Docker container (see [database maintenance](database-maintenance.md)) |
+
+Every job has read-only repository permission and needs no `.env`, Supabase
+project or credentials; tests get a default Supabase client mock instead. None
+deploys, applies a live migration, or contacts an automation host.
 
 The frontend and backend workflows validate their committed sides of the
 contract independently. GitHub Actions cannot assume credentials for the other
