@@ -59,7 +59,17 @@ let rows: (Assessment & { application: Application | null })[] = [];
 vi.mock("@/database/client", () => ({
   ATTACHMENTS_BUCKET: "ticket-attachments",
   EVIDENCE_BUCKET: "evidence",
-  supabase: { from: () => ({}), auth: {}, storage: { from: () => ({}) } },
+  supabase: {
+    from: () => ({}),
+    auth: {},
+    storage: { from: () => ({}) },
+    rpc: (name: string, params: { p_assessment_id?: string }) =>
+      Promise.resolve(
+        name === "request_assessment_run"
+          ? { data: { id: "example-run-request-id", assessment_id: params.p_assessment_id, status: "queued" }, error: null }
+          : { data: null, error: { code: "PGRST202", message: `Unexpected rpc ${name}` } },
+      ),
+  },
 }));
 
 let addApp: () => Promise<unknown>;
@@ -166,8 +176,17 @@ async function submit() {
   goToReview();
   await act(async () => {
     buttonNamed("Confirm & Create Assessment")?.click();
-    // TanStack Query hands mutation results to observers in a setTimeout(0) batch.
-    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+
+// TanStack Query hands a mutation's error to observers in a later setTimeout(0)
+// batch, so keep flushing until the failure has rendered.
+async function waitForCreationError() {
+  await vi.waitFor(async () => {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(text()).toContain("Unable to add app.");
   });
 }
 
@@ -551,6 +570,7 @@ describe("where a created assessment leaves you", () => {
   it("stays on the form and shows the error when creation fails", async () => {
     addApp = () => Promise.reject(new Error("Example backend refused the request."));
     await submit();
+    await waitForCreationError();
 
     expect(text()).not.toContain("landed:");
     expect(text()).toContain("Unable to add app.");
@@ -560,6 +580,7 @@ describe("where a created assessment leaves you", () => {
   it("does not navigate away from a failure, so nothing created is stranded", async () => {
     addApp = () => Promise.reject(new Error("Example backend refused the request."));
     await submit();
+    await waitForCreationError();
 
     expect(container.querySelector("h1")?.textContent).toBe("Review & Confirm");
   });
